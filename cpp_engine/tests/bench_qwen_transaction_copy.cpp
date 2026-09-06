@@ -31,7 +31,7 @@ struct Buffers {
     std::vector<uint8_t*> state_copy;
     std::vector<uint8_t*> tail_copy;
     uint8_t* packed = nullptr;
-    dsv4::QwenCopyRegion* descriptors = nullptr;
+    pocket::QwenCopyRegion* descriptors = nullptr;
 
     Buffers() {
         state.resize(kLayers);
@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
     }
 
     Buffers buffers;
-    std::vector<dsv4::QwenCopyRegion> host_descriptors;
+    std::vector<pocket::QwenCopyRegion> host_descriptors;
     host_descriptors.reserve(kLayers * 2);
     uint64_t packed_bytes = 0;
     uint64_t total_blocks = 0;
@@ -131,14 +131,14 @@ int main(int argc, char** argv) {
         for (auto item : {
                  std::pair<uint8_t*, size_t>{buffers.state[layer], kStateBytes},
                  std::pair<uint8_t*, size_t>{buffers.tail[layer], kTailBytes}}) {
-            dsv4::QwenCopyRegion descriptor;
+            pocket::QwenCopyRegion descriptor;
             descriptor.device_address = reinterpret_cast<uint64_t>(item.first);
             descriptor.packed_offset = packed_bytes;
             descriptor.bytes = item.second;
             descriptor.first_block = total_blocks;
             host_descriptors.push_back(descriptor);
             packed_bytes += item.second;
-            total_blocks += dsv4::qwen_copy_region_blocks(item.second);
+            total_blocks += pocket::qwen_copy_region_blocks(item.second);
         }
     }
     check(cudaMalloc(&buffers.packed, packed_bytes), "malloc packed");
@@ -175,12 +175,12 @@ int main(int argc, char** argv) {
         return true;
     };
     auto gather = [&]() {
-        return dsv4::qwen_gather_copy_regions(
+        return pocket::qwen_gather_copy_regions(
             buffers.descriptors, static_cast<int>(host_descriptors.size()),
             buffers.packed, total_blocks);
     };
     auto scatter = [&]() {
-        return dsv4::qwen_scatter_copy_regions(
+        return pocket::qwen_scatter_copy_regions(
             buffers.descriptors, static_cast<int>(host_descriptors.size()),
             buffers.packed, total_blocks);
     };

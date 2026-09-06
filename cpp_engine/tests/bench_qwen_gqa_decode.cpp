@@ -85,7 +85,7 @@ struct Args {
 
 void run_reference(void* raw) {
     const Args& a = *static_cast<Args*>(raw);
-    if (!dsv4::qwen_gqa_decode_attention_f16(
+    if (!pocket::qwen_gqa_decode_attention_f16(
             a.q, a.k, a.v, a.out, a.scratch, a.q_heads, a.kv_heads, a.head_dim,
             a.context_len, a.max_context)) {
         std::fprintf(stderr, "[FAIL] reference decode launch\n");
@@ -95,7 +95,7 @@ void run_reference(void* raw) {
 
 void run_fused(void* raw) {
     const Args& a = *static_cast<Args*>(raw);
-    if (!dsv4::qwen_gqa_decode_attention_f16_fused_cuda(
+    if (!pocket::qwen_gqa_decode_attention_f16_fused_cuda(
             a.q, a.k, a.v, a.out, a.scratch, a.q_heads, a.kv_heads, a.head_dim,
             a.context_len, a.max_context, 0, 0)) {
         std::fprintf(stderr, "[FAIL] fused decode launch\n");
@@ -145,7 +145,7 @@ int main(int argc, char** argv) {
     const size_t scratch_elements =
         static_cast<size_t>(q_heads) * max_context +
         static_cast<size_t>(q_heads) *
-            dsv4::qwen_gqa_decode_split_count(
+            pocket::qwen_gqa_decode_split_count(
                 max_context, kv_heads, tensor_core_shape) *
             (head_dim + 2);
     check(cudaMalloc(&scratch, scratch_elements * sizeof(float)), "malloc scratch");

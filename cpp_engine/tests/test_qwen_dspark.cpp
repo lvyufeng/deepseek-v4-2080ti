@@ -21,19 +21,19 @@ int main(int argc, char** argv) {
     }
     try {
         const std::string checkpoint = argv[1];
-        const dsv4::QwenDSparkConfig config =
-            dsv4::QwenDSparkConfig::from_directory(checkpoint);
+        const pocket::QwenDSparkConfig config =
+            pocket::QwenDSparkConfig::from_directory(checkpoint);
         config.validate_for_target(5120, 248320, 64);
         require(config.block_size == 7, "unexpected DSpark block size");
         require(config.target_layer_ids ==
                     std::vector<int>({4, 16, 28, 40, 52}),
                 "unexpected target taps");
 
-        const dsv4::SafeTensorsIndex index =
-            dsv4::SafeTensorsIndex::from_single_file(checkpoint);
+        const pocket::SafeTensorsIndex index =
+            pocket::SafeTensorsIndex::from_single_file(checkpoint);
         require(index.tensor_count() == 62, "unexpected DSpark tensor count");
-        const dsv4::QwenDSparkWeightMap rank0(index, config, 4, 0);
-        const dsv4::QwenDSparkWeightMap rank3(index, config, 4, 3);
+        const pocket::QwenDSparkWeightMap rank0(index, config, 4, 0);
+        const pocket::QwenDSparkWeightMap rank3(index, config, 4, 3);
         require(rank0.tensor_count() == 62, "weight map missed tensors");
         require(rank0.markov_w2().local_shape ==
                     std::vector<uint64_t>({62080, 256}),
@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
                 "replicated draft exceeds expected device budget");
 
         const std::vector<float> frequencies =
-            dsv4::qwen_dspark_yarn_inv_freqs(config);
+            pocket::qwen_dspark_yarn_inv_freqs(config);
         require(frequencies.size() == 64, "bad YaRN frequency count");
         require(std::abs(config.rope.attention_factor -
                          (0.1 * std::log(32.0) + 1.0)) < 1.0e-9,

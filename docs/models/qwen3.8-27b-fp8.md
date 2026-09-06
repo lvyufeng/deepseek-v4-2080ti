@@ -4,7 +4,7 @@
 
 **Validated native C++/CUDA TP4 text runtime.** PocketLLM detects the nested Qwen3.5 text configuration, maps rank-local Safetensors weights, converts BF16 scales/non-FP8 tensors to FP16 for Turing where required, and keeps local FP8 weights resident on each GPU.
 
-The current integration supports text prompt/token-ID smoke and timed greedy generation through `dsv4_cpp_engine`. It does not execute the checkpoint's vision tower and is not connected to the OpenAI-compatible server.
+The current integration supports text prompt/token-ID smoke and timed greedy generation through `pocketllm_engine`. It does not execute the checkpoint's vision tower and is not connected to the OpenAI-compatible server.
 
 ## Model specification
 
@@ -47,7 +47,7 @@ The root config also contains a vision tower, but PocketLLM deliberately dispatc
 - Exact single-request prefix reuse: the position-indexed GQA KV cache and the DeltaNet recurrent state are retained across sequential `prefill()` calls. Appended prompts execute only their uncached suffix; diverging or compressed prompts restore a device-resident recurrent snapshot at the longest safe common prefix.
 - FP16 KV cache by default, plus explicit opt-in FP8 E4M3 cache with per-token/KV-head FP16 scales over 64-channel blocks.
 - Decode-only fused FP8 gate/up projection plus SwiGLU.
-- Opt-in exact FP16 GQA kernels: tiled prefill and split-context fused decode with compact online-softmax partials. Enable with `DSV4_QWEN_GQA_OPTIMIZED=1`; the default remains the reference full-attention path.
+- Opt-in exact FP16 GQA kernels: tiled prefill and split-context fused decode with compact online-softmax partials. Enable with `POCKETLLM_QWEN_GQA_OPTIMIZED=1`; the default remains the reference full-attention path.
 - Opt-in FP16 sink-plus-sliding-window attention through `--qwen-attention-window N` and optional `--qwen-attention-sink-tokens N`. This changes full-attention semantics and is not part of exact parity or default performance claims; FP8 cache is intentionally rejected for this mode.
 - TP4 NCCL reductions and global greedy top-1 selection.
 - Opt-in native one-layer MTP loading and greedy speculative generation through `--qwen-mtp-tokens K`. The MTP layer reuses the target embedding/LM head, recursively proposes drafts, and verifies `[current_token, draft_1, ..., draft_K]` in one multi-row target forward. Partial rejection restores DeltaNet state/convolution tails and replays only the committed input prefix. MTP remains disabled by default.
@@ -225,24 +225,24 @@ Real TP4, full-model, FP16-target-KV A/B results with serial plain-then-DFlash2 
 
 Decode-phase speedup lands inside upstream's published 2.67–3.43x band on all three synthetic lengths. Upstream defines speedup as a per-token decoding latency ratio, so a full-request wall ratio is not the same metric: prefill is shared identically by both modes and caps the 8,192 case at 1.95x regardless of drafter quality.
 
-GSM8K acceptance is far lower (0.55–0.71 per-draft rate) and per-prompt wall speedup tracks it directly, from 1.13x to 1.57x. Verify cost is roughly linear in block width because the 48 gated-delta layers recur sequentially over rows, so a full-width block pays for and discards the rejected tail. `DSV4_DFLASH2_ADAPTIVE_WIDTH=1` tracks an EWMA of accepted count and verifies `ewma + 1.5` rows with a floor of two, which keeps the fully-accepted synthetic cases at width 8 while lifting the low-acceptance GSM8K case. A fixed width cannot serve both: at width 7 GSM8K regresses to 0.86x, and at width 2 the synthetic gains are discarded.
+GSM8K acceptance is far lower (0.55–0.71 per-draft rate) and per-prompt wall speedup tracks it directly, from 1.13x to 1.57x. Verify cost is roughly linear in block width because the 48 gated-delta layers recur sequentially over rows, so a full-width block pays for and discards the rejected tail. `POCKETLLM_DFLASH2_ADAPTIVE_WIDTH=1` tracks an EWMA of accepted count and verifies `ewma + 1.5` rows with a floor of two, which keeps the fully-accepted synthetic cases at width 8 while lifting the low-acceptance GSM8K case. A fixed width cannot serve both: at width 7 GSM8K regresses to 0.86x, and at width 2 the synthetic gains are discarded.
 
 Four flags are opt-in and all four were enabled for the results above:
 
 | Flag | Effect |
 | --- | --- |
-| `DSV4_DFLASH2_CUBLAS_FP32=1` | Routes the target LM head through cuBLAS FP32; the head is 55% of draft cost and this makes it ~10x faster |
-| `DSV4_DFLASH2_ADAPTIVE_WIDTH=1` | EWMA-driven verify width, as above |
-| `DSV4_DFLASH2_SPLIT_TOPK=1` | Partitions each row's local top-16 shard and merges with the identical comparator |
-| `DSV4_QWEN_GQA_OPTIMIZED=1` | Selects the tiled GQA prefill kernel; long prefill is 64% full-attention, not FP8 GEMM |
+| `POCKETLLM_DFLASH2_CUBLAS_FP32=1` | Routes the target LM head through cuBLAS FP32; the head is 55% of draft cost and this makes it ~10x faster |
+| `POCKETLLM_DFLASH2_ADAPTIVE_WIDTH=1` | EWMA-driven verify width, as above |
+| `POCKETLLM_DFLASH2_SPLIT_TOPK=1` | Partitions each row's local top-16 shard and merges with the identical comparator |
+| `POCKETLLM_QWEN_GQA_OPTIMIZED=1` | Selects the tiled GQA prefill kernel; long prefill is 64% full-attention, not FP8 GEMM |
 
-`DSV4_DFLASH2_VITERBI_SELECTOR=1` computes an exact MAP over the selector chain instead of greedy argmax. It scores higher but accepts worse (3.02 to 2.95 accept length, 0.555 to 0.279 rate), so draft search is not an acceptance lever.
+`POCKETLLM_DFLASH2_VITERBI_SELECTOR=1` computes an exact MAP over the selector chain instead of greedy argmax. It scores higher but accepts worse (3.02 to 2.95 accept length, 0.555 to 0.279 rate), so draft search is not an acceptance lever.
 
 Reproduce the synthetic serial A/B with:
 
 ```bash
-DSV4_DFLASH2_CUBLAS_FP32=1 DSV4_DFLASH2_ADAPTIVE_WIDTH=1 \
-DSV4_DFLASH2_SPLIT_TOPK=1 DSV4_QWEN_GQA_OPTIMIZED=1 \
+POCKETLLM_DFLASH2_CUBLAS_FP32=1 POCKETLLM_DFLASH2_ADAPTIVE_WIDTH=1 \
+POCKETLLM_DFLASH2_SPLIT_TOPK=1 POCKETLLM_QWEN_GQA_OPTIMIZED=1 \
 /path/to/deepseek/bin/python scripts/bench_qwen_dflash2.py \
   --ckpt /path/to/Qwen3.8-27B-FP8 \
   --dflash2 /path/to/Qwen3.8-27B-DFlash2 \
@@ -253,8 +253,8 @@ DSV4_DFLASH2_SPLIT_TOPK=1 DSV4_QWEN_GQA_OPTIMIZED=1 \
 And the dataset-shaped single-request workload, which matches upstream's aggregate-completion protocol rather than a fixed-token microbenchmark:
 
 ```bash
-DSV4_DFLASH2_CUBLAS_FP32=1 DSV4_DFLASH2_ADAPTIVE_WIDTH=1 \
-DSV4_DFLASH2_SPLIT_TOPK=1 DSV4_QWEN_GQA_OPTIMIZED=1 \
+POCKETLLM_DFLASH2_CUBLAS_FP32=1 POCKETLLM_DFLASH2_ADAPTIVE_WIDTH=1 \
+POCKETLLM_DFLASH2_SPLIT_TOPK=1 POCKETLLM_QWEN_GQA_OPTIMIZED=1 \
 /path/to/deepseek/bin/python scripts/bench_qwen_dflash2_upstream.py \
   --ckpt /path/to/Qwen3.8-27B-FP8 \
   --dflash2 /path/to/Qwen3.8-27B-DFlash2 \
@@ -367,7 +367,7 @@ Build the C++ engine, then start four ranks with one shared NCCL ID file:
 rm -f /tmp/pocketllm_qwen_nccl.id
 for rank in 0 1 2 3; do
   CUDA_VISIBLE_DEVICES=$rank \
-  build/cpp_engine/dsv4_cpp_engine \
+  build/cpp_engine/pocketllm_engine \
     --ckpt /path/to/Qwen3.8-27B-FP8 \
     --tp-world 4 --tp-rank $rank --device 0 \
     --nccl-id-path /tmp/pocketllm_qwen_nccl.id \
@@ -396,7 +396,7 @@ python scripts/bench_qwen_long_context.py \
 
 The harness persists one log per rank, records rank-local timing and memory fields, checks greedy-token parity across TP ranks, and writes `results.json` after every successful context length. FP16-versus-FP8 cache parity is a separate comparison of the generated sequences from two serial runs.
 
-For the exact optimized FP16 GQA path, set `DSV4_QWEN_GQA_OPTIMIZED=1` around the engine command or benchmark process. It keeps full attention and uses a tiled prefill kernel. The engine uses compact split-context fused decode partials from context 16,384 onward on SM75; shorter contexts retain the reference score/value decode path because it is faster there. A clean TP4 run with 24 generated tokens measured the following opt-in results, with token parity at every length:
+For the exact optimized FP16 GQA path, set `POCKETLLM_QWEN_GQA_OPTIMIZED=1` around the engine command or benchmark process. It keeps full attention and uses a tiled prefill kernel. The engine uses compact split-context fused decode partials from context 16,384 onward on SM75; shorter contexts retain the reference score/value decode path because it is faster there. A clean TP4 run with 24 generated tokens measured the following opt-in results, with token parity at every length:
 
 | Prompt | Reference prefill / decode | Optimized prefill / decode |
 | ---: | ---: | ---: |
@@ -413,7 +413,7 @@ Sparse experiments require an explicit `--qwen-attention-window N` and may add `
 Audit only the rank-local weight mapping:
 
 ```bash
-build/cpp_engine/dsv4_cpp_engine \
+build/cpp_engine/pocketllm_engine \
   --ckpt /path/to/Qwen3.8-27B-FP8 \
   --tp-world 4 --tp-rank 0 \
   --qwen-audit
@@ -422,10 +422,9 @@ build/cpp_engine/dsv4_cpp_engine \
 ## Known limitations
 
 - Text-only: no image/video preprocessing or vision-tower execution.
-- CLI/smoke integration only: Qwen is explicitly rejected by the current DSV4 OpenAI server path.
+- CLI/smoke integration only: Qwen is explicitly rejected by the current DeepSeek-V4 OpenAI server path.
 - Greedy generation only in the current Qwen engine API.
 - The model limit is 262,144 positions; with four generated tokens, the longest valid benchmark prompt is 262,140 tokens. This boundary is validated with both the default FP16 KV cache and the explicit FP8 cache mode; FP8 uses less memory but is slower on this RTX 2080 Ti setup.
-- The executable and internal C++ namespace retain DSV4 compatibility names.
 - CUDA Graph and a decode megakernel remain future work; neither is included in the reported TPS.
 - Native MTP is opt-in. Parity-safe high-acceptance cases accelerate decode by 1.67x at 4K, 2.47x at 8K, and 3.21x at 32K; 65–71% acceptance gives only 1.18–1.37x on 512-token varied prompts. Persistent exact-prefix workloads are the intended use case; `--qwen-mtp-adaptive` starts at K=1 and limits but does not eliminate low-acceptance overhead.
 - External Qwen DSpark is opt-in and always uses its fixed seven-draft/eight-row transaction. It accelerates high-draft-match decode by 1.61–1.92x in measured 512/8K/32K cases, while a bare greedy stress prompt achieved only 31/182 draft matches and regressed to about 17.4 tok/s. This draft-match ratio excludes bonus tokens and is not comparable to the model card's bonus-inclusive `spec_accept_length=3.39` sampled-workload mean. Confidence is telemetry only; no unvalidated threshold is used to gate transactions.

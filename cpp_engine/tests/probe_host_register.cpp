@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
         return 2;
     }
     // Open the file (read-only mmap) but never cudaHostRegister it.
-    dsv4::GGUFFile gguf(argv[1]);
+    pocket::GGUFFile gguf(argv[1]);
     const size_t bytes = gguf.file_size();
     std::printf("gguf size = %.2f GB\n", bytes / (1024.0 * 1024.0 * 1024.0));
     std::printf("whole-GGUF cudaHostRegister is BANNED; probe is a no-op guard.\n");

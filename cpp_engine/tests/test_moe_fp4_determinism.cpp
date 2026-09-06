@@ -8,7 +8,7 @@
 // a token's routes in router-slot order, which is fixed.
 //
 // The test runs the same grouped MoE call repeatedly on identical inputs and
-// compares bitwise. With DSV4_CPP_MOE_DETERMINISTIC_REDUCE=1 (the default) every
+// compares bitwise. With POCKETLLM_CPP_MOE_DETERMINISTIC_REDUCE=1 (the default) every
 // run must be identical for every topk -- that is the guard.
 //
 // Setting it to 0 restores the atomic path, and the test then requires that at
@@ -20,7 +20,7 @@
 // either way -- two addends admit only one order.
 //
 //   test_moe_fp4_determinism            # the guard: all topk bitwise stable
-//   DSV4_CPP_MOE_DETERMINISTIC_REDUCE=0 test_moe_fp4_determinism   # must still see the bug
+//   POCKETLLM_CPP_MOE_DETERMINISTIC_REDUCE=0 test_moe_fp4_determinism   # must still see the bug
 //
 // Weights are random bytes rather than a real checkpoint: reduction order does
 // not care what the numbers mean, and this keeps the test free of checkpoint
@@ -113,7 +113,7 @@ int run_topk(int topk, DeviceBuffers& buf, std::mt19937& rng, int& routes_out) {
     check_cuda(cudaMemcpy(buf.x, h_x.data(), h_x.size() * sizeof(float), cudaMemcpyHostToDevice),
                "copy x");
 
-    if (!dsv4::moe_group_routes_cuda(buf.indices, buf.weights, buf.route_tokens,
+    if (!pocket::moe_group_routes_cuda(buf.indices, buf.weights, buf.route_tokens,
                                      buf.route_weights, buf.seg_starts, buf.counts, buf.offsets,
                                      buf.total_routes, kTokens, topk, 0, kExperts,
                                      buf.slot_routes)) {
@@ -132,7 +132,7 @@ int run_topk(int topk, DeviceBuffers& buf, std::mt19937& rng, int& routes_out) {
     int max_count = 0;
     for (int c : h_counts) max_count = std::max(max_count, c);
 
-    dsv4::MoePrefillFp4GroupedWorkspace ws;
+    pocket::MoePrefillFp4GroupedWorkspace ws;
     // The standalone moe_prefill_fp4_grouped_cuda wrapper hardcodes
     // d_token_slot_routes=nullptr and so can never take the deterministic path;
     // this test has to build the workspace itself to pass the slot map through.
@@ -160,7 +160,7 @@ int run_topk(int topk, DeviceBuffers& buf, std::mt19937& rng, int& routes_out) {
 
     for (int iter = 0; iter < kIters; ++iter) {
         check_cuda(cudaMemset(buf.y, 0, first.size() * sizeof(float)), "memset y");
-        if (!dsv4::moe_prefill_fp4_grouped_cuda_with_workspace(
+        if (!pocket::moe_prefill_fp4_grouped_cuda_with_workspace(
                 buf.x, buf.route_tokens, buf.route_weights, buf.seg_starts, buf.w1q, buf.w1s,
                 buf.w2q, buf.w2s, buf.w3q, buf.w3s, buf.y, kTokens, topk, routes, kExperts,
                 max_count, kDim, kInterDim, 6.0f, ws, buf.slot_routes)) {
@@ -188,11 +188,11 @@ int run_topk(int topk, DeviceBuffers& buf, std::mt19937& rng, int& routes_out) {
 }  // namespace
 
 int main() {
-    const char* env = std::getenv("DSV4_CPP_MOE_DETERMINISTIC_REDUCE");
+    const char* env = std::getenv("POCKETLLM_CPP_MOE_DETERMINISTIC_REDUCE");
     // Matches the default in fp4_ops.cu: unset means on.
     const bool deterministic = (env == nullptr) || (std::atoi(env) != 0);
 
-    std::cout << "DSV4_CPP_MOE_DETERMINISTIC_REDUCE=" << (env ? env : "(unset)")
+    std::cout << "POCKETLLM_CPP_MOE_DETERMINISTIC_REDUCE=" << (env ? env : "(unset)")
               << "  -> expecting " << (deterministic ? "fixed-order reduction" : "atomics")
               << "\n";
 

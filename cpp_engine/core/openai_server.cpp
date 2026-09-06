@@ -13,7 +13,7 @@
 #include <sstream>
 #include <string>
 
-namespace dsv4 {
+namespace pocket {
 
 namespace {
 
@@ -463,4 +463,4 @@ OpenAIServer::~OpenAIServer() = default;
 void OpenAIServer::run() { impl_->run(); }
 void OpenAIServer::stop() { impl_->stop(); }
 
-}  // namespace dsv4
+}  // namespace pocket

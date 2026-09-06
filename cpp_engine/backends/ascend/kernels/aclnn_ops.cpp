@@ -49,7 +49,7 @@
 #include <cstring>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 using ascend::ok;
@@ -741,4 +741,4 @@ bool qwen_split_q_gate_f16_ascend(const uint16_t* d_q_proj_fp16,
         s);
 }
 
-}  // namespace dsv4
+}  // namespace pocket

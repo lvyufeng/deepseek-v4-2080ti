@@ -51,7 +51,7 @@ and server launcher.
 The native runtime was primarily CLI-oriented:
 
 ```bash
-./dsv4 --serve --port 8000 --model /path/to/checkpoint --tp-world 4
+./pocketllm_engine --serve --port 8000 --model /path/to/checkpoint --tp-world 4
 ```
 
 `QwenEngine` and `PersistentEngine` were C++ classes for native callers, not a supported Python
@@ -128,8 +128,9 @@ This made per-instance configuration and discoverability difficult.
 - speculative-decoding method and token count.
 
 Backend-specific tuning remains in `backend_options`. `EngineArgs.from_env()` is a compatibility
-bridge; existing `DSV4_*`, `QWEN_*`, and related variables are not removed or globally rewritten.
-Explicit API and CLI values take precedence over this bridge.
+bridge; runtime variables are named `POCKETLLM_*` (renamed from `DSV4_*` — see
+[the migration note](migration/dsv4-to-pocket-rename.md)), while `QWEN_*` and related names are
+unchanged. Explicit API and CLI values take precedence over this bridge.
 
 **Remaining gap:** not every model-specific tuning switch has a portable typed field, by design.
 Kernel and scheduler tuning remains backend- and hardware-specific.
@@ -241,7 +242,7 @@ data-plane rewrite.
 Phase 1 preserves:
 
 - existing `src.*` imports and environment variables;
-- `dsv4_cpp_engine` executable and legacy CLI/server commands;
+- `pocketllm_engine` executable and legacy CLI/server commands;
 - TP worker-loop behavior;
 - speculative-decoding and quantized kernel implementations;
 - validated single-request latency paths and hardware-specific tuning.

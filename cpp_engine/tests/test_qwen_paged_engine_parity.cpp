@@ -34,20 +34,20 @@ constexpr int kMaxContext = 8192;
 constexpr int kSlots = 8;
 constexpr int kBlockSize = 256;
 
-dsv4::QwenEngineOptions base_options() {
-    dsv4::QwenEngineOptions options;
+pocket::QwenEngineOptions base_options() {
+    pocket::QwenEngineOptions options;
     options.tp_world = 1;
     options.tp_rank = 0;
     options.device = 0;
     options.prefill_chunk_tokens = 1024;
-    options.kv_cache_dtype = dsv4::QwenKvCacheDType::Fp16;
+    options.kv_cache_dtype = pocket::QwenKvCacheDType::Fp16;
     options.prefix_cache = false;
     options.max_batch_size = kSlots;
     return options;
 }
 
-dsv4::QwenEngineOptions paged_options() {
-    dsv4::QwenEngineOptions options = base_options();
+pocket::QwenEngineOptions paged_options() {
+    pocket::QwenEngineOptions options = base_options();
     options.kv_paged = true;
     options.kv_block_size = kBlockSize;
     return options;
@@ -61,8 +61,8 @@ std::vector<int> prompt_for(int seq, int length) {
     return tokens;
 }
 
-void compare(const dsv4::QwenForwardResult& contiguous,
-             const dsv4::QwenForwardResult& paged, const std::string& label) {
+void compare(const pocket::QwenForwardResult& contiguous,
+             const pocket::QwenForwardResult& paged, const std::string& label) {
     require(contiguous.top_token == paged.top_token,
             label + " top_token mismatch: contiguous " +
                 std::to_string(contiguous.top_token) + " vs paged " +
@@ -90,9 +90,9 @@ void test_prefill_decode_parity(const std::string& dir) {
     const std::vector<int> slots = {1, 3, 6};
     const int decode_steps = 600;  // Crosses at least two 256-token blocks.
 
-    dsv4::QwenEngine contiguous(dir, base_options(), 2, kMaxContext);
+    pocket::QwenEngine contiguous(dir, base_options(), 2, kMaxContext);
     contiguous.allocate_batch_slots(kSlots);
-    dsv4::QwenEngine paged(dir, paged_options(), 2, kMaxContext);
+    pocket::QwenEngine paged(dir, paged_options(), 2, kMaxContext);
     paged.allocate_batch_slots(kSlots);
 
     require(paged.runtime_telemetry().kv_paged_blocks > 0,
@@ -135,9 +135,9 @@ void test_batched_decode_parity(const std::string& dir) {
     const std::vector<int> slots = {1, 3, 5, 6};
     const int steps = 40;
 
-    dsv4::QwenEngine contiguous(dir, base_options(), 2, kMaxContext);
+    pocket::QwenEngine contiguous(dir, base_options(), 2, kMaxContext);
     contiguous.allocate_batch_slots(kSlots);
-    dsv4::QwenEngine paged(dir, paged_options(), 2, kMaxContext);
+    pocket::QwenEngine paged(dir, paged_options(), 2, kMaxContext);
     paged.allocate_batch_slots(kSlots);
 
     for (size_t seq = 0; seq < prompt_lens.size(); ++seq) {
@@ -152,9 +152,9 @@ void test_batched_decode_parity(const std::string& dir) {
         for (size_t seq = 0; seq < slots.size(); ++seq) {
             tokens[seq] = (static_cast<int>(seq) * 13 + step * 7 + 42) % 64;
         }
-        const std::vector<dsv4::QwenForwardResult> reference =
+        const std::vector<pocket::QwenForwardResult> reference =
             contiguous.batch_decode_tokens(tokens, slots);
-        const std::vector<dsv4::QwenForwardResult> actual =
+        const std::vector<pocket::QwenForwardResult> actual =
             paged.batch_decode_tokens(tokens, slots);
         require(reference.size() == actual.size(),
                 "batch result count mismatch");
@@ -175,13 +175,13 @@ void test_batched_decode_parity(const std::string& dir) {
 // second request and reservation fails.
 // ============================================================================
 void test_block_reuse(const std::string& dir) {
-    dsv4::QwenEngineOptions options = paged_options();
+    pocket::QwenEngineOptions options = paged_options();
     // Room for roughly one max-context sequence, so the second request can only
     // succeed by reusing the first's blocks.
     const int elements_per_token = 4 * 128;  // kv_heads * head_dim in the fixture
     options.kv_cache_bytes = static_cast<uint64_t>(kMaxContext + kBlockSize) *
                              elements_per_token * sizeof(uint16_t) * 2;
-    dsv4::QwenEngine engine(dir, options, 2, kMaxContext);
+    pocket::QwenEngine engine(dir, options, 2, kMaxContext);
     engine.allocate_batch_slots(kSlots);
 
     const int blocks = engine.runtime_telemetry().kv_paged_blocks;
@@ -191,7 +191,7 @@ void test_block_reuse(const std::string& dir) {
     const int slot_a = engine.allocate_slot(1001);
     require(slot_a >= 0, "could not acquire first slot");
     const std::vector<int> long_prompt = prompt_for(0, 6000);
-    const dsv4::QwenForwardResult first = engine.prefill(long_prompt, slot_a);
+    const pocket::QwenForwardResult first = engine.prefill(long_prompt, slot_a);
     require(first.position == 6000, "first prefill position");
     engine.free_slot(1001);
 
@@ -199,7 +199,7 @@ void test_block_reuse(const std::string& dir) {
     // this throws, since 6000 more tokens do not fit alongside the first.
     const int slot_b = engine.allocate_slot(1002);
     require(slot_b >= 0, "could not acquire second slot");
-    const dsv4::QwenForwardResult second = engine.prefill(long_prompt, slot_b);
+    const pocket::QwenForwardResult second = engine.prefill(long_prompt, slot_b);
     require(second.position == 6000, "second prefill position");
     // Same prompt, same weights, different slot: the result must not depend on
     // which physical blocks happened to back it.
@@ -215,11 +215,11 @@ void test_block_reuse(const std::string& dir) {
 // the latter.
 // ============================================================================
 void test_undersized_pool_rejected(const std::string& dir) {
-    dsv4::QwenEngineOptions options = paged_options();
+    pocket::QwenEngineOptions options = paged_options();
     options.kv_cache_bytes = 64 * 1024;  // Far below one sequence.
     bool threw = false;
     try {
-        dsv4::QwenEngine engine(dir, options, 2, kMaxContext);
+        pocket::QwenEngine engine(dir, options, 2, kMaxContext);
     } catch (const std::exception&) {
         threw = true;
     }
@@ -227,11 +227,11 @@ void test_undersized_pool_rejected(const std::string& dir) {
 
     // A quantized cache cannot be paged, and saying so beats silently running
     // contiguous.
-    dsv4::QwenEngineOptions fp8 = paged_options();
-    fp8.kv_cache_dtype = dsv4::QwenKvCacheDType::Fp8;
+    pocket::QwenEngineOptions fp8 = paged_options();
+    fp8.kv_cache_dtype = pocket::QwenKvCacheDType::Fp8;
     threw = false;
     try {
-        dsv4::QwenEngine engine(dir, fp8, 2, kMaxContext);
+        pocket::QwenEngine engine(dir, fp8, 2, kMaxContext);
     } catch (const std::exception&) {
         threw = true;
     }
@@ -242,7 +242,7 @@ void test_undersized_pool_rejected(const std::string& dir) {
 }  // namespace
 
 int main() {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::cout << "[SKIP] test_qwen_paged_engine_parity requires CUDA\n";
         return 0;
     }

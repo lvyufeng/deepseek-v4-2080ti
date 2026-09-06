@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 struct EncodeRequest {
     std::string messages_json;        // JSON array of {role, content, ...}
@@ -61,4 +61,4 @@ private:
     std::mutex mu_;
 };
 
-}  // namespace dsv4
+}  // namespace pocket

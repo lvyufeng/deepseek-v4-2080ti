@@ -11,7 +11,7 @@
 #include <variant>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 using MetadataValue = std::variant<int64_t, uint64_t, double, bool, std::string, std::vector<int64_t>, std::vector<uint64_t>, std::vector<double>, std::vector<bool>, std::vector<std::string>>;
 
@@ -98,4 +98,4 @@ DType ggml_type_to_dtype(uint32_t ggml_type);
 uint64_t ggml_tensor_nbytes(uint32_t ggml_type, const std::vector<uint64_t>& shape);
 std::string metadata_value_to_string(const MetadataValue& value, size_t max_items = 8);
 
-}  // namespace dsv4
+}  // namespace pocket

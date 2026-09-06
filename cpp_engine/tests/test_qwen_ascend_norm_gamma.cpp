@@ -63,20 +63,20 @@ float half_to_float(uint16_t h) {
 // Apply the policy to one tensor and hand back the resulting FP16 words.
 std::vector<uint16_t> apply(const std::string& name,
                             const std::vector<uint16_t>& gamma,
-                            dsv4::SafeDType device_dtype) {
-    dsv4::QwenTensorRef ref;
+                            pocket::SafeDType device_dtype) {
+    pocket::QwenTensorRef ref;
     ref.name = name;
-    dsv4::QwenHostTensor host;
+    pocket::QwenHostTensor host;
     host.device_dtype = device_dtype;
     host.bytes.resize(gamma.size() * sizeof(uint16_t));
     std::memcpy(host.bytes.data(), gamma.data(), host.bytes.size());
-    dsv4::qwen_apply_norm_gamma_policy(ref, host);
+    pocket::qwen_apply_norm_gamma_policy(ref, host);
     std::vector<uint16_t> out(gamma.size());
     std::memcpy(out.data(), host.bytes.data(), host.bytes.size());
     return out;
 }
 
-const bool folds = dsv4::device_backend() == dsv4::DeviceBackend::Ascend;
+const bool folds = pocket::device_backend() == pocket::DeviceBackend::Ascend;
 
 // Which names the predicate claims. Getting this wrong is silent: a norm that
 // misses the fold is scaled by gamma instead of 1+gamma, which for the usual
@@ -91,7 +91,7 @@ void test_name_coverage() {
         "mtp.norm.weight",
     };
     for (const char* name : folded) {
-        expect(dsv4::qwen_is_one_plus_norm_gamma(name),
+        expect(pocket::qwen_is_one_plus_norm_gamma(name),
                std::string("expected the fold for ") + name);
     }
 
@@ -107,7 +107,7 @@ void test_name_coverage() {
         "lm_head.weight",
     };
     for (const char* name : untouched) {
-        expect(!dsv4::qwen_is_one_plus_norm_gamma(name),
+        expect(!pocket::qwen_is_one_plus_norm_gamma(name),
                std::string("expected no fold for ") + name);
     }
 }
@@ -118,15 +118,15 @@ void test_dtype_and_name_guards() {
     const std::vector<uint16_t> gamma = {0x3000u, 0xB000u, 0x0000u};
     const std::string norm = "model.language_model.norm.weight";
 
-    expect(apply(norm, gamma, dsv4::SafeDType::F32) == gamma,
+    expect(apply(norm, gamma, pocket::SafeDType::F32) == gamma,
            "an F32 device tensor is left alone");
     expect(apply("model.language_model.layers.0.linear_attn.norm.weight", gamma,
-                 dsv4::SafeDType::F16) == gamma,
+                 pocket::SafeDType::F16) == gamma,
            "the gated norm weight is left alone");
     expect(apply("model.language_model.layers.0.mlp.up_proj.weight", gamma,
-                 dsv4::SafeDType::F16) == gamma,
+                 pocket::SafeDType::F16) == gamma,
            "a projection weight is left alone");
-    expect((apply(norm, gamma, dsv4::SafeDType::F16) != gamma) == folds,
+    expect((apply(norm, gamma, pocket::SafeDType::F16) != gamma) == folds,
            "the fold fires exactly on the Ascend backend");
 }
 
@@ -149,7 +149,7 @@ void test_precision_bound() {
         }
     }
     const std::vector<uint16_t> folded =
-        apply("model.language_model.norm.weight", gamma, dsv4::SafeDType::F16);
+        apply("model.language_model.norm.weight", gamma, pocket::SafeDType::F16);
 
     double worst_absolute = 0.0;
     int over_half_ulp = 0;
@@ -194,14 +194,14 @@ void test_precision_bound() {
     // sure the test's own reasoning about that is stated: folding the folded value
     // moves it again.
     const std::vector<uint16_t> twice =
-        apply("model.language_model.norm.weight", folded, dsv4::SafeDType::F16);
+        apply("model.language_model.norm.weight", folded, pocket::SafeDType::F16);
     expect(twice != folded, "the fold is not idempotent, as expected");
 }
 
 }  // namespace
 
 int main() {
-    std::cout << "backend=" << dsv4::device_backend_name() << "\n";
+    std::cout << "backend=" << pocket::device_backend_name() << "\n";
     test_name_coverage();
     test_dtype_and_name_guards();
     test_precision_bound();

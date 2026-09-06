@@ -12,7 +12,7 @@
 #include <sstream>
 #include <stdexcept>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 uint64_t ceil_div(uint64_t value, uint64_t divisor) {
@@ -1047,4 +1047,4 @@ void QwenWeightMap::require_full_coverage() const {
     }
 }
 
-}  // namespace dsv4
+}  // namespace pocket

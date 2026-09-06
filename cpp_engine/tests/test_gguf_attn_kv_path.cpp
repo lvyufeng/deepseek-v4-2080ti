@@ -5,7 +5,7 @@
 // post-rope L2 norm equals the post-rmsnorm L2 norm. Since RMSNorm with gamma
 // gives RMS ~ |gamma|_avg, we check the rope step preserves the kv RMS.
 
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
     const int token = argc >= 3 ? std::atoi(argv[2]) : 1234;
     const int position = argc >= 4 ? std::atoi(argv[3]) : 0;
     try {
-        auto r = dsv4::run_gguf_attn_kv_path_smoke(argv[1], token, position);
+        auto r = pocket::run_gguf_attn_kv_path_smoke(argv[1], token, position);
         std::printf("token=%d position=%d dim=%d kv_dim=%d rope_dim=%d\n",
                     token, position, r.dim, r.kv_dim, r.rope_dim);
         std::printf("kv_a_rms         = %.4f\n", r.kv_a_rms);

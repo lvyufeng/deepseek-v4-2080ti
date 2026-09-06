@@ -33,8 +33,8 @@ namespace {
     } \
 } while (0)
 
-const char* dt_name(dsv4::DType dt) {
-    using dsv4::DType;
+const char* dt_name(pocket::DType dt) {
+    using pocket::DType;
     switch (dt) {
         case DType::F16: return "f16";
         case DType::BF16: return "bf16";
@@ -46,7 +46,7 @@ const char* dt_name(dsv4::DType dt) {
     }
 }
 
-void describe(const dsv4::WeightSource& ws, const std::string& name) {
+void describe(const pocket::WeightSource& ws, const std::string& name) {
     if (!ws.has(name)) {
         std::printf("  %-44s MISSING\n", name.c_str());
         return;
@@ -71,8 +71,8 @@ int main(int argc, char** argv) {
         return 2;
     }
     try {
-        auto ws = dsv4::open_weight_source(argv[1]);
-        if (ws->format() != dsv4::WeightSource::Format::GGUF_Q2) {
+        auto ws = pocket::open_weight_source(argv[1]);
+        if (ws->format() != pocket::WeightSource::Format::GGUF_Q2) {
             throw std::runtime_error("test requires a GGUF Q2 checkpoint");
         }
 
@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
 
         // --- Embed F16 lookup smoke test ---
         auto embed = ws->require("embed.weight");
-        if (embed.dtype != dsv4::DType::F16) {
+        if (embed.dtype != pocket::DType::F16) {
             throw std::runtime_error(std::string("embed dtype expected f16, got ") +
                                      dt_name(embed.dtype));
         }
@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
         CHECK_CUDA(cudaMemcpy(d_row_f16, host_row, dim * sizeof(uint16_t),
                               cudaMemcpyHostToDevice));
 
-        if (!dsv4::f16_row_to_float_cuda(d_row_f16, d_x_f32, /*row=*/0, dim)) {
+        if (!pocket::f16_row_to_float_cuda(d_row_f16, d_x_f32, /*row=*/0, dim)) {
             throw std::runtime_error("f16_row_to_float_cuda failed");
         }
         CHECK_CUDA(cudaDeviceSynchronize());

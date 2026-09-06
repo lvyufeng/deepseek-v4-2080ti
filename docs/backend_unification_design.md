@@ -249,7 +249,7 @@ class BackendExecutor(ABC):
 ```python
 # src/backend/cpp_engine_backend.py
 from typing import List
-import dsv4_cpp_core  # Python bindings to cpp_engine
+import pocket_cpp_core  # Python bindings to cpp_engine
 
 from .executor import BackendExecutor, ExecuteRequest, ExecuteOutput
 
@@ -257,7 +257,7 @@ class CppEngineBackend(BackendExecutor):
     """Wrapper for QwenEngine/DeepSeekEngine from cpp_engine."""
     
     def __init__(self, ckpt_dir: str, options: dict):
-        self.engine = dsv4_cpp_core.QwenEngine(
+        self.engine = pocket_cpp_core.QwenEngine(
             ckpt_dir,
             options,
             layer_count=options.get("num_layers", 0),
@@ -679,7 +679,7 @@ class UnifiedEngine:
 
 ```python
 # Current usage (must continue to work)
-from dsv4_cpp_core import QwenEngine, QwenEngineOptions
+from pocket_cpp_core import QwenEngine, QwenEngineOptions
 
 options = QwenEngineOptions()
 options.max_batch_size = 8
@@ -778,7 +778,7 @@ engine = UnifiedEngine(backend)
    - **Recommendation**: Keep model-specific code in backend implementation, scheduler is model-agnostic
 
 4. **Backward compatibility with existing scripts?**
-   - **Recommendation**: Keep `dsv4_cpp_core` API unchanged, new `UnifiedEngine` as opt-in
+   - **Recommendation**: Keep `pocket_cpp_core` API unchanged, new `UnifiedEngine` as opt-in
 
 ---
 

@@ -1,6 +1,6 @@
 import json
 
-from src.encoding.dsv4 import REASONING_EFFORT_PROMPTS, encode_messages
+from src.encoding.deepseek_v4 import REASONING_EFFORT_PROMPTS, encode_messages
 from src.server.openai import (
     _completion_response,
     _make_payload,
@@ -258,7 +258,7 @@ class _CharTokenizer:
 
 
 def test_streaming_decoder_hides_dsml_tool_call_prefix():
-    from src.encoding.dsv4 import dsml_token
+    from src.encoding.deepseek_v4 import dsml_token
 
     tokenizer = _CharTokenizer()
     chunks = ["hi", "\n", "\n", "<", dsml_token, "tool", "_calls", ">"]

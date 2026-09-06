@@ -26,7 +26,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 // fp32 -> bf16 round-to-nearest-even, returned as fp32 (round-trip through bf16).
@@ -573,4 +573,4 @@ std::vector<float> flashmemory_yarn_inv_freqs(
     return mixed;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

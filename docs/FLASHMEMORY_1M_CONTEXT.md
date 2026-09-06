@@ -29,39 +29,39 @@ FlashMemory + KV_SWAP 组合机制实现了**长上下文（支持 1M tokens）+
 
 ```bash
 # FlashMemory plugin（runtime scoring）
-DSV4_GGUF_FLASHMEMORY_PLUGIN=1
-DSV4_GGUF_FLASHMEMORY_LOAD_DEVICE=1
-DSV4_GGUF_FLASHMEMORY_RUNTIME_SCORING=1
-DSV4_GGUF_FLASHMEMORY_ENSEMBLE=max  # 或 mean
-DSV4_GGUF_FLASHMEMORY_CKPT=/path/to/flashmemory_ds_v4.safetensors
+POCKETLLM_GGUF_FLASHMEMORY_PLUGIN=1
+POCKETLLM_GGUF_FLASHMEMORY_LOAD_DEVICE=1
+POCKETLLM_GGUF_FLASHMEMORY_RUNTIME_SCORING=1
+POCKETLLM_GGUF_FLASHMEMORY_ENSEMBLE=max  # 或 mean
+POCKETLLM_GGUF_FLASHMEMORY_CKPT=/path/to/flashmemory_ds_v4.safetensors
 
 # Sparse compressor + indexer（必需）
-DSV4_GGUF_SPARSE_COMPRESSOR=1
-DSV4_GGUF_SPARSE_INDEXER=1
+POCKETLLM_GGUF_SPARSE_COMPRESSOR=1
+POCKETLLM_GGUF_SPARSE_INDEXER=1
 
 # KV_SWAP（核心显存优化）
-DSV4_GGUF_KV_SWAP=1
-DSV4_GGUF_KV_SWAP_GPU_CHUNKS=512       # GPU staging 槽位数，见下文调参
-DSV4_GGUF_KV_SWAP_PINNED_MIB=16384     # Pinned host memory cap（MiB），见下文调参
+POCKETLLM_GGUF_KV_SWAP=1
+POCKETLLM_GGUF_KV_SWAP_GPU_CHUNKS=512       # GPU staging 槽位数，见下文调参
+POCKETLLM_GGUF_KV_SWAP_PINNED_MIB=16384     # Pinned host memory cap（MiB），见下文调参
 ```
 
 ### 可选环境变量
 
 ```bash
 # FlashMemory 高级配置
-DSV4_GGUF_FLASHMEMORY_SRC_LAYER=-1     # 共享 compressed_k 来源层（-1=自动）
+POCKETLLM_GGUF_FLASHMEMORY_SRC_LAYER=-1     # 共享 compressed_k 来源层（-1=自动）
 
 # KV_SWAP 高级配置
-DSV4_GGUF_KV_SWAP_SYNC=1               # 1=sync H2D（推荐），0=async
-DSV4_GGUF_KV_SWAP_VALIDATE=0           # 1=开启 swap 正确性验证（调试用，慢）
+POCKETLLM_GGUF_KV_SWAP_SYNC=1               # 1=sync H2D（推荐），0=async
+POCKETLLM_GGUF_KV_SWAP_VALIDATE=0           # 1=开启 swap 正确性验证（调试用，慢）
 
 # 调试与 profiling
-DSV4_GGUF_MEM_PROFILE=1                # 显示各阶段显存占用
+POCKETLLM_GGUF_MEM_PROFILE=1                # 显示各阶段显存占用
 ```
 
 ### 关键参数调优
 
-#### 1. `DSV4_GGUF_KV_SWAP_GPU_CHUNKS`（GPU staging 槽位数）
+#### 1. `POCKETLLM_GGUF_KV_SWAP_GPU_CHUNKS`（GPU staging 槽位数）
 
 **作用**：控制 GPU 上常驻的 compressed chunks 数量。
 
@@ -80,7 +80,7 @@ GPU_CHUNKS ≈ index_topk × 1.5 ~ 2.0
 ```
 - `index_topk=512` → 推荐 `GPU_CHUNKS=512~1024`
 
-#### 2. `DSV4_GGUF_KV_SWAP_PINNED_MIB`（Pinned host memory 上限）
+#### 2. `POCKETLLM_GGUF_KV_SWAP_PINNED_MIB`（Pinned host memory 上限）
 
 **作用**：限制 pinned host memory 总分配量（所有 sparse layers）。
 
@@ -116,7 +116,7 @@ sizeof(float) = 4
 
 **错误提示**：
 ```
-DSV4_GGUF_KV_SWAP pinned cache exceeds cap: required_mib=XXX cap_mib=YYY
+POCKETLLM_GGUF_KV_SWAP pinned cache exceeds cap: required_mib=XXX cap_mib=YYY
 ```
 → 增大 `PINNED_MIB` 或减小 context length
 
@@ -126,20 +126,20 @@ DSV4_GGUF_KV_SWAP pinned cache exceeds cap: required_mib=XXX cap_mib=YYY
 
 ```bash
 #!/bin/bash
-export DSV4_GGUF_FLASHMEMORY_PLUGIN=1
-export DSV4_GGUF_FLASHMEMORY_LOAD_DEVICE=1
-export DSV4_GGUF_FLASHMEMORY_RUNTIME_SCORING=1
-export DSV4_GGUF_FLASHMEMORY_ENSEMBLE=max
-export DSV4_GGUF_FLASHMEMORY_CKPT=/tmp/FlashMemory-Deepseek-V4/weights/flashmemory_ds_v4.safetensors
+export POCKETLLM_GGUF_FLASHMEMORY_PLUGIN=1
+export POCKETLLM_GGUF_FLASHMEMORY_LOAD_DEVICE=1
+export POCKETLLM_GGUF_FLASHMEMORY_RUNTIME_SCORING=1
+export POCKETLLM_GGUF_FLASHMEMORY_ENSEMBLE=max
+export POCKETLLM_GGUF_FLASHMEMORY_CKPT=/tmp/FlashMemory-Deepseek-V4/weights/flashmemory_ds_v4.safetensors
 
-export DSV4_GGUF_SPARSE_COMPRESSOR=1
-export DSV4_GGUF_SPARSE_INDEXER=1
+export POCKETLLM_GGUF_SPARSE_COMPRESSOR=1
+export POCKETLLM_GGUF_SPARSE_INDEXER=1
 
-export DSV4_GGUF_KV_SWAP=1
-export DSV4_GGUF_KV_SWAP_GPU_CHUNKS=512
-export DSV4_GGUF_KV_SWAP_PINNED_MIB=1024
+export POCKETLLM_GGUF_KV_SWAP=1
+export POCKETLLM_GGUF_KV_SWAP_GPU_CHUNKS=512
+export POCKETLLM_GGUF_KV_SWAP_PINNED_MIB=1024
 
-export DSV4_GGUF_MEM_PROFILE=1
+export POCKETLLM_GGUF_MEM_PROFILE=1
 
 # 运行 TP4 生成（需提前准备 8K prompt tokens 或使用 seed file）
 ./scripts/run_gguf_q2_tp_generate.sh
@@ -161,8 +161,8 @@ gguf_kv_swap_stats layers=21 gpu_chunks_total=10752 compressed_cap_total=43008 h
 ### 示例 2：256K context + 省显存模式
 
 ```bash
-export DSV4_GGUF_KV_SWAP_GPU_CHUNKS=1024       # 更大 staging，降低 miss
-export DSV4_GGUF_KV_SWAP_PINNED_MIB=4096       # 4 GB pinned memory
+export POCKETLLM_GGUF_KV_SWAP_GPU_CHUNKS=1024       # 更大 staging，降低 miss
+export POCKETLLM_GGUF_KV_SWAP_PINNED_MIB=4096       # 4 GB pinned memory
 
 # 其他配置同示例 1
 # 需实际生成或 prefill 256K tokens 来填充 compressor cache
@@ -176,7 +176,7 @@ export DSV4_GGUF_KV_SWAP_PINNED_MIB=4096       # 4 GB pinned memory
 ### 示例 3：禁用 KV_SWAP（回退到默认行为）
 
 ```bash
-export DSV4_GGUF_KV_SWAP=0  # 或不设置
+export POCKETLLM_GGUF_KV_SWAP=0  # 或不设置
 
 # 其他 FlashMemory 配置保持，KV cache 全驻留 GPU
 ```
@@ -216,37 +216,37 @@ export DSV4_GGUF_KV_SWAP=0  # 或不设置
 
 ## 故障排查
 
-### 错误 1：启动失败 "DSV4_GGUF_KV_SWAP requires DSV4_GGUF_SPARSE_COMPRESSOR=1"
+### 错误 1：启动失败 "POCKETLLM_GGUF_KV_SWAP requires POCKETLLM_GGUF_SPARSE_COMPRESSOR=1"
 
 **原因**：KV_SWAP 依赖 sparse compressor/indexer 机制。
 
 **解决**：
 ```bash
-export DSV4_GGUF_SPARSE_COMPRESSOR=1
-export DSV4_GGUF_SPARSE_INDEXER=1
+export POCKETLLM_GGUF_SPARSE_COMPRESSOR=1
+export POCKETLLM_GGUF_SPARSE_INDEXER=1
 ```
 
-### 错误 2："DSV4_GGUF_KV_SWAP_GPU_CHUNKS must be >= index_topk"
+### 错误 2："POCKETLLM_GGUF_KV_SWAP_GPU_CHUNKS must be >= index_topk"
 
 **原因**：GPU_CHUNKS < index_topk（通常 512）会降低 retrieval coverage。
 
 **解决**：
 - 增大 `GPU_CHUNKS` 到 >= 512
-- 或短上下文测试时设置 `DSV4_GGUF_KV_SWAP_TEST_ALLOW_TOPK_REDUCTION=1`（仅测试用）
+- 或短上下文测试时设置 `POCKETLLM_GGUF_KV_SWAP_TEST_ALLOW_TOPK_REDUCTION=1`（仅测试用）
 
-### 错误 3："DSV4_GGUF_KV_SWAP pinned cache exceeds cap"
+### 错误 3："POCKETLLM_GGUF_KV_SWAP pinned cache exceeds cap"
 
 **原因**：长上下文的 pinned memory 需求超过 `PINNED_MIB` 上限。
 
 **解决**：
 ```bash
 # 查看错误提示的 required_mib，增大 PINNED_MIB
-export DSV4_GGUF_KV_SWAP_PINNED_MIB=32768  # 32 GB
+export POCKETLLM_GGUF_KV_SWAP_PINNED_MIB=32768  # 32 GB
 ```
 
 ### 错误 4："GGUF KV swap selected chunk before it was stored"
 
-**原因**：在 `DSV4_GGUF_DECODE_ONLY_CONTEXT` 模式下，直接跳到 position=N-1 执行 decode，但 compressor 没有逐步生成 chunks。
+**原因**：在 `POCKETLLM_GGUF_DECODE_ONLY_CONTEXT` 模式下，直接跳到 position=N-1 执行 decode，但 compressor 没有逐步生成 chunks。
 
 **解决**：
 - DECODE_ONLY_CONTEXT 模式不适用于 KV_SWAP 验证（只用于性能 profiling）
@@ -268,7 +268,7 @@ export DSV4_GGUF_KV_SWAP_PINNED_MIB=32768  # 32 GB
    - 若 `misses/(hits+misses) > 50%`：LRU 命中率低 → 增大 `GPU_CHUNKS`
 2. 检查 H2D bytes：`h2d_mib=XXX`
    - 若每 step H2D > 10 MB：频繁换入 → 增大 `GPU_CHUNKS` 或检查 FlashMemory selection 是否正常
-3. 确认 `DSV4_GGUF_KV_SWAP_SYNC=1`（async 模式可能有未知问题）
+3. 确认 `POCKETLLM_GGUF_KV_SWAP_SYNC=1`（async 模式可能有未知问题）
 
 ## 技术细节
 
@@ -364,7 +364,7 @@ struct GgufKvSwapLayerState {
 
 - **FlashMemory 论文**：DeepSeek-V4 Technical Report（Memory Indexer 章节）
 - **实现细节**：`cpp_engine/backends/cuda/kernels/flashmemory_ops.cu`（scorer kernels）
-- **KV_SWAP 实现**：`cpp_engine/engine/dsv4_engine.cpp` line 4010-4170
+- **KV_SWAP 实现**：`cpp_engine/engine/deepseek_v4_engine.cpp` line 4010-4170
 - **Phase-1 验证**：FlashMemory runtime scoring 接入（`cheeky-hugging-eich.md` Phase-1）
 - **Phase-2 验证**：KV_SWAP 组合验证（本文档）
 

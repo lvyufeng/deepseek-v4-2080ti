@@ -16,7 +16,7 @@
 #include <sstream>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 namespace {
 
@@ -261,7 +261,7 @@ ParsedMessage PythonSidecar::parse(const std::string& text, const std::string& t
             first = false;
             // We just embed the raw payload as-is. Since JsonValue has no
             // serializer we re-extract known fields. tool_call shape from
-            // dsv4.parse_message_from_completion_text is
+            // deepseek_v4.parse_message_from_completion_text is
             // {"id": "...", "type": "function", "function": {"name": "...", "arguments": "..."}}.
             tos << "{";
             if (tc.is_object()) {
@@ -305,4 +305,4 @@ ParsedMessage PythonSidecar::parse(const std::string& text, const std::string& t
     return parsed;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

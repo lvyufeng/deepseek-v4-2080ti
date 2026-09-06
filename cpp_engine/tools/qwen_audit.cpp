@@ -58,10 +58,10 @@ double gib(uint64_t bytes) {
 // Opening every shard header validates the index end to end: each mapped shard
 // exists, parses, and reports byte extents that fall inside the file. Headers are
 // small, and no tensor payload is read.
-uint64_t audit_shards(const dsv4::SafeTensorsIndex& index, bool verbose) {
+uint64_t audit_shards(const pocket::SafeTensorsIndex& index, bool verbose) {
     uint64_t header_tensors = 0;
     for (const std::string& shard_name : index.shards()) {
-        const dsv4::SafeTensorsShard shard(index.shard_path(shard_name));
+        const pocket::SafeTensorsShard shard(index.shard_path(shard_name));
         header_tensors += shard.tensors().size();
         if (verbose) {
             std::cout << "shard " << shard_name << " file_bytes=" << shard.file_size()
@@ -72,12 +72,12 @@ uint64_t audit_shards(const dsv4::SafeTensorsIndex& index, bool verbose) {
     return header_tensors;
 }
 
-void print_rank(const dsv4::SafeTensorsIndex& index, const dsv4::QwenConfig& config,
+void print_rank(const pocket::SafeTensorsIndex& index, const pocket::QwenConfig& config,
                 int tp_world, int tp_rank, bool strict) {
-    const dsv4::QwenWeightMap map(index, config, tp_world, tp_rank);
+    const pocket::QwenWeightMap map(index, config, tp_world, tp_rank);
     if (strict) map.require_full_coverage();
-    const dsv4::QwenCoverage cover = map.coverage();
-    const dsv4::QwenLinearKindCounts kinds = map.checkpoint_linear_kind_counts();
+    const pocket::QwenCoverage cover = map.coverage();
+    const pocket::QwenLinearKindCounts kinds = map.checkpoint_linear_kind_counts();
     const uint64_t resident =
         map.local_weight_bytes() + map.local_scale_bytes();
 
@@ -101,8 +101,8 @@ void print_rank(const dsv4::SafeTensorsIndex& index, const dsv4::QwenConfig& con
                   << " head_rows=" << head.logical_local_shape.at(0)
                   << " mlp_intermediate_rows=" << mlp.gate_proj.logical_local_shape.at(0)
                   << " down_proj_k=" << mlp.down_proj.logical_local_shape.at(1)
-                  << " storage_dtype=" << dsv4::safe_dtype_name(embed.dtype)
-                  << " device_dtype=" << dsv4::safe_dtype_name(embed.device_dtype)
+                  << " storage_dtype=" << pocket::safe_dtype_name(embed.dtype)
+                  << " device_dtype=" << pocket::safe_dtype_name(embed.device_dtype)
                   << " mtp=" << (map.mtp().found ? 1 : 0) << '\n';
         std::cout << "  checkpoint_text_GiB=" << gib(cover.checkpoint_text_bytes)
                   << " index_tensors=" << cover.index_tensors << '\n';
@@ -120,8 +120,8 @@ void print_rank(const dsv4::SafeTensorsIndex& index, const dsv4::QwenConfig& con
 int main(int argc, char** argv) {
     try {
         const Args args = parse_args(argc, argv);
-        const dsv4::QwenConfig config = dsv4::QwenConfig::from_hf_config(args.ckpt);
-        const dsv4::SafeTensorsIndex index(args.ckpt);
+        const pocket::QwenConfig config = pocket::QwenConfig::from_hf_config(args.ckpt);
+        const pocket::SafeTensorsIndex index(args.ckpt);
 
         std::cout << std::fixed << std::setprecision(3);
         std::cout << "ckpt=" << args.ckpt << '\n'

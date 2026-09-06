@@ -7,7 +7,7 @@
 #include <variant>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 struct JsonValue;
 using JsonArray = std::vector<JsonValue>;
@@ -37,4 +37,4 @@ std::string json_required_string(const JsonObject& obj, const std::string& key);
 uint64_t json_required_u64(const JsonObject& obj, const std::string& key);
 std::vector<uint64_t> json_required_u64_array(const JsonObject& obj, const std::string& key);
 
-}  // namespace dsv4
+}  // namespace pocket

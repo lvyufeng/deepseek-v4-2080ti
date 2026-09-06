@@ -38,7 +38,7 @@ cmake --build "${BUILD_DIR}" -j"$(nproc)" --target \
     test_qwen_ascend_group_b \
     test_qwen_gqa_mmad_qk_probe \
     test_qwen_gqa_decode_mmad_integrated \
-    dsv4_cpp_engine \
+    pocketllm_engine \
     test_tp_comm_smoke
 
 # The MMAD probe is an isolated hardware experiment, not a production attention

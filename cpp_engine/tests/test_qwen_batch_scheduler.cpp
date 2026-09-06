@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include <string>
 
-using namespace dsv4;
+using namespace pocket;
 
 void test_single_request() {
     std::cout << "=== Test 1: Single Request ===" << std::endl;

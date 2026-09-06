@@ -16,7 +16,7 @@
 #include <mutex>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 namespace ascend {
 
 // Scratch for one aclnn call, drawn from a per-stream pool.
@@ -292,4 +292,4 @@ inline aclrtStream resolve(void* stream) {
 inline bool ok(aclnnStatus status) { return status == ACL_SUCCESS; }
 
 }  // namespace ascend
-}  // namespace dsv4
+}  // namespace pocket

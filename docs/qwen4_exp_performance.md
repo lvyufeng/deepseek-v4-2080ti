@@ -180,7 +180,7 @@ small average activation error is not sufficient to preserve real generation.
 ### Exact-BF16 hyper-connection limits
 
 Two scale-then-activation pairs now use dedicated CUDA kernels when
-`DSV4_QWEN4_HC_CUDA=1`: HC mix-down divide plus SiLU, and block-injection divide
+`POCKETLLM_QWEN4_HC_CUDA=1`: HC mix-down divide plus SiLU, and block-injection divide
 plus `2 * sigmoid`. Direct tests at 1, 7, and 8192 rows are bit-identical to the
 PyTorch BF16 expressions. At 8192 rows the isolated pairs improved from about
 0.069 to 0.054 ms and from 0.083 to 0.049 ms respectively. Their aggregate
@@ -248,7 +248,7 @@ BF16 and conversion is transient.
    shard per rank and never duplicates routed-expert work.
 3. **Keep active-only H2D.** The full-local-layer grouped BF16 path increases
    H2D bytes by about 31.6% and regressed real 8K TP4 prefill to 577.13 tok/s.
-   `DSV4_QWEN4_MOE_GROUPED` stays disabled by default.
+   `POCKETLLM_QWEN4_MOE_GROUPED` stays disabled by default.
 4. **Keep MoE copy-stream prefetch enabled.** It is worth about 950 versus
    727 tok/s in the current accuracy-first path.
 5. **Keep prefill and decode precision paths separate.** Large prefill rows may
@@ -262,8 +262,8 @@ Accuracy-first 8K A/B:
 
 ```bash
 PYTHONPATH=. \
-DSV4_QWEN4_DENSE_FP16=1 \
-DSV4_QWEN4_HC_CUDA=1 \
+POCKETLLM_QWEN4_DENSE_FP16=1 \
+POCKETLLM_QWEN4_HC_CUDA=1 \
 /home/lvyufeng/miniconda3/envs/deepseek/bin/torchrun \
   --standalone --nproc_per_node=4 \
   .scratch/bench_qwen4_exp_tp_fp16_matrix.py \

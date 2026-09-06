@@ -211,22 +211,22 @@ class HostExpertMoE:
         self.cache_hits = 0
         # Set to a dict to collect per-phase timings (profiling only).
         self.phase_stats: dict | None = None
-        self.prefetch_enabled = os.environ.get("DSV4_QWEN4_MOE_PREFETCH", "1").lower() in {
+        self.prefetch_enabled = os.environ.get("POCKETLLM_QWEN4_MOE_PREFETCH", "1").lower() in {
             "1", "true", "yes"
         }
         self._copy_stream: torch.cuda.Stream | None = None
         self._cuda_ext = None
-        self.grouped_enabled = os.environ.get("DSV4_QWEN4_MOE_GROUPED", "0").lower() in {
+        self.grouped_enabled = os.environ.get("POCKETLLM_QWEN4_MOE_GROUPED", "0").lower() in {
             "1", "true", "yes"
         }
-        self.grouped_min_tokens = int(os.environ.get("DSV4_QWEN4_MOE_GROUPED_MIN_TOKENS", "128"))
-        self.grouped_max_padding = float(os.environ.get("DSV4_QWEN4_MOE_GROUPED_MAX_PADDING", "2.5"))
+        self.grouped_min_tokens = int(os.environ.get("POCKETLLM_QWEN4_MOE_GROUPED_MIN_TOKENS", "128"))
+        self.grouped_max_padding = float(os.environ.get("POCKETLLM_QWEN4_MOE_GROUPED_MAX_PADDING", "2.5"))
         self.grouped_min_free_gib = float(
-            os.environ.get("DSV4_QWEN4_MOE_GROUPED_MIN_FREE_GIB", "2.0")
+            os.environ.get("POCKETLLM_QWEN4_MOE_GROUPED_MIN_FREE_GIB", "2.0")
         )
         self.fp16_compute_min_tokens = max(
             1,
-            int(os.environ.get("DSV4_QWEN4_MOE_FP16_MIN_TOKENS", "128")),
+            int(os.environ.get("POCKETLLM_QWEN4_MOE_FP16_MIN_TOKENS", "128")),
         )
 
     def _cache_put(self, key: tuple[int, int], pair: tuple[torch.Tensor, torch.Tensor]) -> None:
@@ -450,7 +450,7 @@ class HostExpertMoE:
             and hidden_states.device.type == "cuda"
         )
         fp16_compute_enabled = os.environ.get(
-            "DSV4_QWEN4_MOE_FP16_COMPUTE", "0"
+            "POCKETLLM_QWEN4_MOE_FP16_COMPUTE", "0"
         ).lower() in {"1", "true", "yes"}
         compute_dtype = (
             torch.float16

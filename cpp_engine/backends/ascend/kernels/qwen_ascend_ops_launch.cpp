@@ -65,7 +65,7 @@
 #include "aclrtlaunch_qwen_normalize_gated_delta_qk_kernel.h"
 #include "aclrtlaunch_qwen_partial_rope_rows_kernel.h"
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 using ascend::resolve;
@@ -660,4 +660,4 @@ bool qwen_hbm_read_probe_ascend(const uint16_t* d_source, uint16_t* d_sink,
                static_cast<uint32_t>(tile_count)) == kLaunchOk;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

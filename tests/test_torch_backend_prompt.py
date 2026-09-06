@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pocketllm.api import EngineArgs, GenerationRequest, SamplingParams
 from pocketllm.backends.torch_backend import TorchBackend
-from src.encoding.dsv4 import encode_messages
+from src.encoding.deepseek_v4 import encode_messages
 
 
 class RecordingServingEngine:

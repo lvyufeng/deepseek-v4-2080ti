@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 enum class DType {
     F32,
@@ -32,4 +32,4 @@ struct TensorView {
 std::string dtype_name(DType dtype);
 uint64_t tensor_element_count(const std::vector<uint64_t>& shape);
 
-}  // namespace dsv4
+}  // namespace pocket

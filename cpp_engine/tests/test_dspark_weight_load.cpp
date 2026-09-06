@@ -26,9 +26,9 @@ void expect(bool cond, const std::string& what) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    const char* ckpt = argc > 1 ? argv[1] : std::getenv("DSV4_CKPT_DIR");
+    const char* ckpt = argc > 1 ? argv[1] : std::getenv("POCKETLLM_CKPT_DIR");
     if (ckpt == nullptr) {
-        std::printf("usage: %s <checkpoint_dir>   (or set DSV4_CKPT_DIR)\n", argv[0]);
+        std::printf("usage: %s <checkpoint_dir>   (or set POCKETLLM_CKPT_DIR)\n", argv[0]);
         return 2;
     }
     const int tp_rank = argc > 2 ? std::atoi(argv[2]) : 0;

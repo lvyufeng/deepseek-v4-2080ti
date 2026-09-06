@@ -8,7 +8,7 @@
 #include <sstream>
 #include <stdexcept>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 std::string read_file(const std::string& path) {
@@ -310,4 +310,4 @@ bool is_qwen3_5_checkpoint(const std::string& ckpt_dir) {
     return type == "qwen3_5" || type == "qwen3_5_text";
 }
 
-}  // namespace dsv4
+}  // namespace pocket

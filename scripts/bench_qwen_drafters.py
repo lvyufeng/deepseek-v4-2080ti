@@ -72,7 +72,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ckpt", required=True)
     parser.add_argument("--dspark", help="external DSpark checkpoint directory")
     parser.add_argument("--dflash2", help="external DFlash2 checkpoint directory")
-    parser.add_argument("--binary", default="cpp_engine/build/dsv4_cpp_engine")
+    parser.add_argument("--binary", default="cpp_engine/build/pocketllm_engine")
     parser.add_argument(
         "--drafters", default="mtp,dspark,dflash2",
         help="comma-separated subset of mtp,dspark,dflash2")

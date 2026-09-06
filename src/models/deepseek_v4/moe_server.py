@@ -169,7 +169,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt-path", required=True)
     parser.add_argument("--config", required=True)
-    parser.add_argument("--shm-name", default="dsv4_cpu_moe_server")
+    parser.add_argument("--shm-name", default="pocketllm_cpu_moe_server")
     parser.add_argument("--omp-threads", type=int, default=64)
     parser.add_argument("--server-shards", type=int, default=int(os.getenv("DEEPSEEK_CPU_MOE_SERVER_SHARDS", "1")))
     parser.add_argument("--shared-weight-dir", default=os.getenv("DEEPSEEK_CPU_MOE_SHARED_WEIGHT_DIR"))

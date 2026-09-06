@@ -137,10 +137,10 @@ uint64_t digest_tokens(const std::vector<std::vector<int>>& per_request) {
 // We need it to size the paged pool to the same budget; building a probe
 // engine reads the model once, which is exactly what the real run does anyway.
 uint64_t derive_arena_bytes(const Options& opts) {
-    dsv4::QwenEngineOptions probe;
+    pocket::QwenEngineOptions probe;
     probe.device = opts.device >= 0 ? opts.device : opts.tp_rank;
     probe.max_batch_size = opts.batch_size;
-    probe.kv_cache_dtype = dsv4::QwenKvCacheDType::Fp16;
+    probe.kv_cache_dtype = pocket::QwenKvCacheDType::Fp16;
     probe.prefix_cache = false;
     probe.kv_paged = false;
     if (opts.tp_world > 1) {
@@ -148,7 +148,7 @@ uint64_t derive_arena_bytes(const Options& opts) {
         probe.tp_rank = opts.tp_rank;
         probe.nccl_id_path = opts.nccl_id_path;
     }
-    dsv4::QwenEngine probe_engine(opts.checkpoint, probe, opts.layers,
+    pocket::QwenEngine probe_engine(opts.checkpoint, probe, opts.layers,
                                   opts.max_context);
     return probe_engine.kv_cache_bytes();
 }
@@ -156,7 +156,7 @@ uint64_t derive_arena_bytes(const Options& opts) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::fprintf(stderr, "CUDA runtime not available\n");
         return 1;
     }
@@ -168,10 +168,10 @@ int main(int argc, char** argv) {
             return 2;
         }
 
-        dsv4::QwenEngineOptions engine_opts;
+        pocket::QwenEngineOptions engine_opts;
         engine_opts.device = opts.device >= 0 ? opts.device : opts.tp_rank;
         engine_opts.max_batch_size = opts.batch_size;
-        engine_opts.kv_cache_dtype = dsv4::QwenKvCacheDType::Fp16;
+        engine_opts.kv_cache_dtype = pocket::QwenKvCacheDType::Fp16;
         engine_opts.prefix_cache = false;
         if (opts.tp_world > 1) {
             engine_opts.tp_world = opts.tp_world;
@@ -191,7 +191,7 @@ int main(int argc, char** argv) {
             engine_opts.kv_cache_bytes = budget;
         }
 
-        dsv4::QwenEngine engine(opts.checkpoint, engine_opts, opts.layers,
+        pocket::QwenEngine engine(opts.checkpoint, engine_opts, opts.layers,
                                 opts.max_context);
         engine.allocate_batch_slots(opts.batch_size);
         engine.warmup_tp();
@@ -206,13 +206,13 @@ int main(int argc, char** argv) {
         }
 
         // Deterministic, identical prompts across both arms.
-        std::vector<std::unique_ptr<dsv4::QwenBatchedRequest>> owned;
-        std::vector<dsv4::QwenBatchedRequest*> batch;
+        std::vector<std::unique_ptr<pocket::QwenBatchedRequest>> owned;
+        std::vector<pocket::QwenBatchedRequest*> batch;
         std::vector<std::vector<int>> generated;
         const int prompt_len = std::min(256, opts.max_context - 1);
         const int decode = opts.decode_steps;
         for (int i = 0; i < opts.batch_size; ++i) {
-            auto req = std::make_unique<dsv4::QwenBatchedRequest>();
+            auto req = std::make_unique<pocket::QwenBatchedRequest>();
             req->request_id = static_cast<uint64_t>(1000 + i);
             req->slot_id = engine.allocate_slot(req->request_id);
             if (req->slot_id < 0) {
@@ -238,7 +238,7 @@ int main(int argc, char** argv) {
         // Measure decode: aggregate wall-time, then per-request token streams.
         double decode_seconds = 0.0;
         for (int step = 0; step < decode; ++step) {
-            const dsv4::QwenBatchDecodeResult dec = engine.batch_decode_step(batch);
+            const pocket::QwenBatchDecodeResult dec = engine.batch_decode_step(batch);
             decode_seconds += dec.seconds;
             for (size_t i = 0; i < batch.size(); ++i) {
                 generated[i].push_back(dec.next_tokens[i]);

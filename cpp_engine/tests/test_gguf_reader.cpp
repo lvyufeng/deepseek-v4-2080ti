@@ -9,7 +9,7 @@ int main(int argc, char** argv) {
         return 2;
     }
     try {
-        dsv4::GGUFFile file(argv[1]);
+        pocket::GGUFFile file(argv[1]);
         if (file.version() == 0 || file.tensor_count() == 0 || file.metadata_count() == 0) {
             throw std::runtime_error("invalid parsed GGUF summary");
         }

@@ -128,8 +128,8 @@ docs/
 
 ### ✅ 已验证
 
-- [x] **编译通过**：`make -j8 dsv4_cpp_engine` 成功，exit code 0
-- [x] **二进制生成**：`./dsv4_cpp_engine` 可执行
+- [x] **编译通过**：`make -j8 pocketllm_engine` 成功，exit code 0
+- [x] **二进制生成**：`./pocketllm_engine` 可执行
 - [x] **类型完整性**：所有结构体定义正确
 - [x] **API 签名**：所有函数声明匹配实现
 
@@ -285,10 +285,10 @@ Phase 3.1 成功完成了 cpp_engine batching 的**基础架构搭建**：
 
 **最终编译输出**：
 ```
-[100%] Built target dsv4_cpp_engine
+[100%] Built target pocketllm_engine
 [exited with code 0]
 ```
 
-**二进制位置**：`./dsv4_cpp_engine`
+**二进制位置**：`./pocketllm_engine`
 
 **代码状态**：已提交，可继续迭代 ✅

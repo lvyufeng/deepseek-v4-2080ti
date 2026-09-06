@@ -1791,7 +1791,7 @@ def start_in_process_cpu_moe_server(
         from src.components.moe.ipc import CPUMoESharedMemory
 
         if shm_name is None:
-            shm_name = os.getenv("DEEPSEEK_CPU_MOE_SERVER_SHM", f"dsv4_cpu_moe_inproc_{os.getpid()}")
+            shm_name = os.getenv("DEEPSEEK_CPU_MOE_SERVER_SHM", f"pocketllm_cpu_moe_inproc_{os.getpid()}")
 
         shm = CPUMoESharedMemory(shm_name, dim, topk, create=True)
         w1_layers = _layer_pointer_tensor_from_backends(backends, "_native_int8_w1_ptrs")

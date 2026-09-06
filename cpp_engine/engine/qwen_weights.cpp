@@ -12,7 +12,7 @@
 #include <cstring>
 #include <stdexcept>
 
-namespace dsv4 {
+namespace pocket {
 
 namespace {
 
@@ -252,4 +252,4 @@ QwenDeviceTensor qwen_upload_nvfp4_linear_cuda(
     return device;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

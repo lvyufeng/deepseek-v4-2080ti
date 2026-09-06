@@ -4,7 +4,7 @@
 set -e
 
 CKPT="${CKPT:-/mnt/data1/dsv4_inference/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2.gguf}"
-NCCL_ID="${NCCL_ID:-/tmp/dsv4_gguf_tp4_nccl.id}"
+NCCL_ID="${NCCL_ID:-/tmp/pocketllm_gguf_tp4_nccl.id}"
 BIN="${BIN:-/mnt/data1/dsv4_inference/build/cpp_engine/tests/test_gguf_generate}"
 LOG_DIR="${LOG_DIR:-/tmp}"
 MAX_NEW="${MAX_NEW:-8}"
@@ -27,11 +27,11 @@ fi
 for rank in 0 1 2 3; do
   eval "$EXTRA_ENV CUDA_VISIBLE_DEVICES=$rank $BIN $CKPT $MAX_NEW $SEED_ARGS \
         --tp-world 4 --tp-rank $rank --device 0 --nccl-id-path $NCCL_ID $EXTRA_ARGS \
-        > $LOG_DIR/dsv4_gguf_tp4_rank${rank}.log 2>&1 &"
+        > $LOG_DIR/pocketllm_gguf_tp4_rank${rank}.log 2>&1 &"
 done
 
 echo "started 4 ranks; PIDs:" >&2
 jobs -p
 wait
 echo "==== rank 0 log ====" >&2
-cat $LOG_DIR/dsv4_gguf_tp4_rank0.log
+cat $LOG_DIR/pocketllm_gguf_tp4_rank0.log

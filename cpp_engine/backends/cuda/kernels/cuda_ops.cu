@@ -7,10 +7,10 @@
 #include <climits>
 #include <cmath>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
-__device__ __forceinline__ int dsv4_dp4a_i8(int a, int b, int acc) {
+__device__ __forceinline__ int pocket_dp4a_i8(int a, int b, int acc) {
 #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 610)
     return __dp4a(a, b, acc);
 #else
@@ -1519,7 +1519,7 @@ __global__ void wo_a_int8_decode_gemm_kernel(
     const int8_t* w_row = weight_q + static_cast<size_t>(row) * group_dim;
     const int* w_i32 = reinterpret_cast<const int*>(w_row);
     int acc = 0;
-    for (int i = 0; i < packs; ++i) acc = dsv4_dp4a_i8(x_shared[i], w_i32[i], acc);
+    for (int i = 0; i < packs; ++i) acc = pocket_dp4a_i8(x_shared[i], w_i32[i], acc);
     y[row] = static_cast<float>(acc) * x_scale[group] * weight_scale[row];
 }
 
@@ -2678,4 +2678,4 @@ bool bf16_to_fp32_cuda(const uint16_t* d_x, float* d_y, int count, void* stream)
     return cudaGetLastError() == cudaSuccess;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

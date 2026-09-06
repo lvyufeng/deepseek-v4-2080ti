@@ -1,9 +1,9 @@
 // TP end-to-end benchmark for plain and DSpark speculative decode.
 //
-// DSV4_BENCH_MODE selects one isolated path per process:
+// POCKETLLM_BENCH_MODE selects one isolated path per process:
 //   plain_nodspark: plain decode without loading DSpark or hidden capture
 //   plain_dspark:   plain decode after loading DSpark (capture overhead)
-//   spec:           speculative decode; DSV4_CPP_BATCHED_VERIFY selects verify
+//   spec:           speculative decode; POCKETLLM_CPP_BATCHED_VERIFY selects verify
 // Fixture format: one case per line, <name>\t<comma-separated token ids>.
 // Rank 0 prints one RESULT_JSON object per case; other output is diagnostic.
 
@@ -22,7 +22,7 @@
 #include <string>
 #include <vector>
 
-using namespace dsv4;
+using namespace pocket;
 
 namespace {
 
@@ -198,19 +198,19 @@ int main(int argc, char** argv) {
         const int token_count = argc > 3 ? std::atoi(argv[3]) : 32;
         const int repeats = argc > 4 ? std::atoi(argv[4]) : 3;
         const int layer_count = argc > 5 ? std::atoi(argv[5]) : 43;
-        const std::string mode = std::getenv("DSV4_BENCH_MODE") != nullptr
-                                     ? std::getenv("DSV4_BENCH_MODE")
+        const std::string mode = std::getenv("POCKETLLM_BENCH_MODE") != nullptr
+                                     ? std::getenv("POCKETLLM_BENCH_MODE")
                                      : "spec";
         if (mode != "plain_nodspark" && mode != "plain_dspark" && mode != "spec" &&
             mode != "dspark_suite") {
             throw std::runtime_error(
-                "DSV4_BENCH_MODE must be plain_nodspark, plain_dspark, spec, or dspark_suite");
+                "POCKETLLM_BENCH_MODE must be plain_nodspark, plain_dspark, spec, or dspark_suite");
         }
         const bool use_dspark = mode != "plain_nodspark";
         const bool use_speculative = mode == "spec";
         const bool batched_verify =
-            std::getenv("DSV4_CPP_BATCHED_VERIFY") != nullptr &&
-            std::atoi(std::getenv("DSV4_CPP_BATCHED_VERIFY")) != 0;
+            std::getenv("POCKETLLM_CPP_BATCHED_VERIFY") != nullptr &&
+            std::atoi(std::getenv("POCKETLLM_CPP_BATCHED_VERIFY")) != 0;
         const std::string path = use_speculative
                                      ? (batched_verify ? "spec_batched" : "spec_sequential")
                                      : mode;
@@ -280,16 +280,16 @@ int main(int argc, char** argv) {
             }
         };
 
-        if (std::getenv("DSV4_CPP_TOPK_DIAG") != nullptr &&
-            std::atoi(std::getenv("DSV4_CPP_TOPK_DIAG")) > 0) {
+        if (std::getenv("POCKETLLM_CPP_TOPK_DIAG") != nullptr &&
+            std::atoi(std::getenv("POCKETLLM_CPP_TOPK_DIAG")) > 0) {
             for (const Fixture& fixture : fixtures) emit_prefill_topk(engine, fixture, sp);
         }
 
         if (mode == "dspark_suite") {
             run_path("plain_dspark", false);
-            setenv("DSV4_CPP_BATCHED_VERIFY", "0", 1);
+            setenv("POCKETLLM_CPP_BATCHED_VERIFY", "0", 1);
             run_path("spec_sequential", true);
-            setenv("DSV4_CPP_BATCHED_VERIFY", "1", 1);
+            setenv("POCKETLLM_CPP_BATCHED_VERIFY", "1", 1);
             run_path("spec_batched", true);
         } else {
             run_path(path, use_speculative);

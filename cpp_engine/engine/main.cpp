@@ -1,7 +1,7 @@
 #include "cmd_channel.hpp"
 #include "cuda_ops.hpp"
 #include "device_runtime.hpp"
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 #include "model_config.hpp"
 #include "openai_server.hpp"
 #include "persistent_engine.hpp"
@@ -307,7 +307,7 @@ enum class QwenPersistentCommand : int32_t {
     Generate = 4,
 };
 
-void qwen_send_command(dsv4::CmdChannel& channel, QwenPersistentCommand command,
+void qwen_send_command(pocket::CmdChannel& channel, QwenPersistentCommand command,
                        int32_t arg0 = 0, int32_t arg1 = 0,
                        const std::vector<int>* payload = nullptr) {
     const int32_t count = payload == nullptr
@@ -321,8 +321,8 @@ void qwen_send_command(dsv4::CmdChannel& channel, QwenPersistentCommand command,
     }
 }
 
-void run_qwen_persistent_worker(dsv4::QwenEngine& qwen,
-                                dsv4::CmdChannel& channel) {
+void run_qwen_persistent_worker(pocket::QwenEngine& qwen,
+                                pocket::CmdChannel& channel) {
     while (true) {
         int32_t header[kQwenPersistentHeaderInts] = {0, 0, 0, 0};
         channel.recv_from_root(header, kQwenPersistentHeaderInts);
@@ -343,7 +343,7 @@ void run_qwen_persistent_worker(dsv4::QwenEngine& qwen,
         } else if (command == QwenPersistentCommand::Decode) {
             (void)qwen.decode_step(header[1]);
         } else if (command == QwenPersistentCommand::Generate) {
-            const std::vector<dsv4::QwenForwardResult> outputs =
+            const std::vector<pocket::QwenForwardResult> outputs =
                 qwen.generate(payload, header[1]);
             std::cout << "qwen_persistent_worker_result=1 tp_rank="
                       << qwen.options().tp_rank << " tokens=";
@@ -359,8 +359,8 @@ void run_qwen_persistent_worker(dsv4::QwenEngine& qwen,
     }
 }
 
-void print_safe_tensor(const dsv4::SafeTensorInfo& info, const std::string& shard) {
-    std::cout << info.name << " dtype=" << dsv4::safe_dtype_name(info.dtype) << " shape=[";
+void print_safe_tensor(const pocket::SafeTensorInfo& info, const std::string& shard) {
+    std::cout << info.name << " dtype=" << pocket::safe_dtype_name(info.dtype) << " shape=[";
     for (size_t i = 0; i < info.shape.size(); ++i) {
         if (i) std::cout << ',';
         std::cout << info.shape[i];
@@ -377,9 +377,9 @@ int main(int argc, char** argv) {
         const bool host_only = is_host_only_mode(args);
         if (!host_only) {
             if (args.device >= 0) {
-                if (!dsv4::device_set(args.device)) throw std::runtime_error("failed to set device");
+                if (!pocket::device_set(args.device)) throw std::runtime_error("failed to set device");
             } else if (args.tp_world > 1) {
-                if (!dsv4::device_set(args.tp_rank)) throw std::runtime_error("failed to set device for tp rank");
+                if (!pocket::device_set(args.tp_rank)) throw std::runtime_error("failed to set device for tp rank");
             }
         }
         if (args.tp_world > 1) {
@@ -388,18 +388,18 @@ int main(int argc, char** argv) {
         }
         if (args.serve) {
             if (args.ckpt.empty()) throw std::runtime_error("--serve requires --ckpt");
-            if (dsv4::is_qwen3_5_checkpoint(args.ckpt)) {
-                throw std::runtime_error("Qwen checkpoint is not supported by the DSV4 OpenAI server yet; use --smoke-forward or --generate-token");
+            if (pocket::is_qwen3_5_checkpoint(args.ckpt)) {
+                throw std::runtime_error("Qwen checkpoint is not supported by the DeepSeek-V4 OpenAI server yet; use --smoke-forward or --generate-token");
             }
             const int layer_count = args.smoke_layers > 0 ? args.smoke_layers : 43;
             const int max_context = args.max_context > 0 ? args.max_context : 8192;
-            dsv4::ForwardSmokeOptions opts;
+            pocket::ForwardSmokeOptions opts;
             opts.tp_world = args.tp_world;
             opts.tp_rank = args.tp_rank;
             opts.device = args.device >= 0 ? args.device : args.tp_rank;
             opts.nccl_id_path = args.nccl_id_path;
-            const dsv4::ModelConfig model_cfg = dsv4::ModelConfig::from_hf_config(args.ckpt);
-            dsv4::PersistentEngine engine(args.ckpt, opts, layer_count, max_context);
+            const pocket::ModelConfig model_cfg = pocket::ModelConfig::from_hf_config(args.ckpt);
+            pocket::PersistentEngine engine(args.ckpt, opts, layer_count, max_context);
             std::cout << "server_max_context=" << max_context << "\n";
             std::cout << "model_context_length=" << model_cfg.context_length << "\n";
             engine.warmup_tp();
@@ -412,37 +412,37 @@ int main(int argc, char** argv) {
             const std::string sidecar_script = args.sidecar_script.empty()
                 ? std::string("src/server/cpp_sidecar.py")
                 : args.sidecar_script;
-            dsv4::PythonSidecar sidecar(args.python_bin, sidecar_script, args.ckpt);
-            dsv4::OpenAIServerConfig cfg;
+            pocket::PythonSidecar sidecar(args.python_bin, sidecar_script, args.ckpt);
+            pocket::OpenAIServerConfig cfg;
             cfg.port = args.port;
             cfg.host = args.host;
-            dsv4::OpenAIServer server(engine, sidecar, cfg);
+            pocket::OpenAIServer server(engine, sidecar, cfg);
             server.run();
             engine.worker_command_shutdown();
             return 0;
         }
         if (!args.ckpt.empty()) {
-            const bool qwen_checkpoint = dsv4::is_qwen3_5_checkpoint(args.ckpt);
-            dsv4::SafeTensorsIndex index(args.ckpt);
-            std::cout << "dsv4_cpp_engine opened " << args.ckpt << "\n";
+            const bool qwen_checkpoint = pocket::is_qwen3_5_checkpoint(args.ckpt);
+            pocket::SafeTensorsIndex index(args.ckpt);
+            std::cout << "pocketllm_engine opened " << args.ckpt << "\n";
             std::cout << "format=safetensors tensors=" << index.tensor_count()
                       << " shards=" << index.shard_count()
                       << " total_size=" << index.total_size()
-                      << " backend=" << dsv4::device_backend_name() << " device_runtime=" << (dsv4::device_runtime_available() ? "yes" : "no") << "\n";
+                      << " backend=" << pocket::device_backend_name() << " device_runtime=" << (pocket::device_runtime_available() ? "yes" : "no") << "\n";
             if (args.dump_config) {
                 if (qwen_checkpoint) {
-                    const dsv4::QwenConfig qwen_config = dsv4::QwenConfig::from_hf_config(args.ckpt);
+                    const pocket::QwenConfig qwen_config = pocket::QwenConfig::from_hf_config(args.ckpt);
                     std::cout << qwen_config.to_string();
                 } else {
-                    std::cout << dsv4::ModelConfig::from_hf_config(args.ckpt).to_string();
+                    std::cout << pocket::ModelConfig::from_hf_config(args.ckpt).to_string();
                 }
             }
             if (args.qwen_audit) {
                 if (!qwen_checkpoint) throw std::runtime_error("--qwen-audit requires a Qwen checkpoint");
-                const dsv4::QwenConfig qwen_config = dsv4::QwenConfig::from_hf_config(args.ckpt);
-                const dsv4::QwenWeightMap map(index, qwen_config, args.tp_world, args.tp_rank);
-                const dsv4::QwenLinearKindCounts kinds = map.checkpoint_linear_kind_counts();
-                const dsv4::QwenCoverage cover = map.coverage();
+                const pocket::QwenConfig qwen_config = pocket::QwenConfig::from_hf_config(args.ckpt);
+                const pocket::QwenWeightMap map(index, qwen_config, args.tp_world, args.tp_rank);
+                const pocket::QwenLinearKindCounts kinds = map.checkpoint_linear_kind_counts();
+                const pocket::QwenCoverage cover = map.coverage();
                 const double gib = 1024.0 * 1024.0 * 1024.0;
                 std::cout << "qwen_audit tp_world=" << args.tp_world
                           << " tp_rank=" << args.tp_rank
@@ -478,12 +478,12 @@ int main(int argc, char** argv) {
                 for (const std::string& name : cover.unexpected_examples) {
                     std::cout << "qwen_coverage_unexpected " << name << "\n";
                 }
-                const dsv4::QwenTensorRef& embed = map.embed_tokens();
-                const dsv4::QwenLinearRef& head = map.lm_head();
-                const dsv4::QwenMlpWeights& mlp = map.layers().front().mlp;
+                const pocket::QwenTensorRef& embed = map.embed_tokens();
+                const pocket::QwenLinearRef& head = map.lm_head();
+                const pocket::QwenMlpWeights& mlp = map.layers().front().mlp;
                 std::cout << "qwen_tp_local storage_dtype="
-                          << dsv4::safe_dtype_name(embed.dtype)
-                          << " device_dtype=" << dsv4::safe_dtype_name(embed.device_dtype)
+                          << pocket::safe_dtype_name(embed.dtype)
+                          << " device_dtype=" << pocket::safe_dtype_name(embed.device_dtype)
                           << " embed_rows=" << embed.local_shape.at(0)
                           << " head_rows=" << head.logical_local_shape.at(0)
                           << " mlp_intermediate_rows="
@@ -506,16 +506,16 @@ int main(int argc, char** argv) {
             if (!args.inspect_tensor.empty()) {
                 const std::string* shard_name = index.shard_for_tensor(args.inspect_tensor);
                 if (shard_name == nullptr) throw std::runtime_error("tensor not found: " + args.inspect_tensor);
-                dsv4::SafeTensorsShard shard(index.shard_path(*shard_name));
+                pocket::SafeTensorsShard shard(index.shard_path(*shard_name));
                 const auto* info = shard.find_tensor(args.inspect_tensor);
                 if (info == nullptr) throw std::runtime_error("tensor missing in shard header: " + args.inspect_tensor);
                 print_safe_tensor(*info, *shard_name);
             }
             if (args.smoke_forward) {
                 if (qwen_checkpoint) {
-                    std::unique_ptr<dsv4::Tokenizer> tokenizer;
+                    std::unique_ptr<pocket::Tokenizer> tokenizer;
                     if (!args.prompt.empty()) {
-                        tokenizer = std::make_unique<dsv4::Tokenizer>(args.ckpt);
+                        tokenizer = std::make_unique<pocket::Tokenizer>(args.ckpt);
                     }
                     std::vector<int> prompt_ids = load_token_ids(args);
                     if (!args.prompt.empty()) prompt_ids = tokenizer->encode_basic(args.prompt, false);
@@ -526,14 +526,14 @@ int main(int argc, char** argv) {
                     if (args.qwen_persistent_stdin && args.max_context <= 0) {
                         throw std::runtime_error("--qwen-persistent-stdin requires --max-context");
                     }
-                    dsv4::QwenEngineOptions qwen_opts;
+                    pocket::QwenEngineOptions qwen_opts;
                     qwen_opts.tp_world = args.tp_world;
                     qwen_opts.tp_rank = args.tp_rank;
                     qwen_opts.device = args.device >= 0 ? args.device : args.tp_rank;
                     if (args.prefill_chunk_tokens > 0) {
                         qwen_opts.prefill_chunk_tokens = args.prefill_chunk_tokens;
                     }
-                    qwen_opts.kv_cache_dtype = dsv4::parse_qwen_kv_cache_dtype(args.kv_cache_dtype);
+                    qwen_opts.kv_cache_dtype = pocket::parse_qwen_kv_cache_dtype(args.kv_cache_dtype);
                     qwen_opts.attention_window = args.qwen_attention_window;
                     qwen_opts.attention_sink_tokens = args.qwen_attention_sink_tokens;
                     // Prefix snapshots are useful only while this engine stays
@@ -565,15 +565,15 @@ int main(int argc, char** argv) {
                     }
                     const auto model_load_started =
                         std::chrono::steady_clock::now();
-                    dsv4::QwenEngine qwen(args.ckpt, qwen_opts, args.smoke_layers, qwen_context);
+                    pocket::QwenEngine qwen(args.ckpt, qwen_opts, args.smoke_layers, qwen_context);
                     const double model_load_seconds = std::chrono::duration<double>(
                         std::chrono::steady_clock::now() - model_load_started).count();
-                    dsv4::QwenRuntimeTelemetry qwen_telemetry =
+                    pocket::QwenRuntimeTelemetry qwen_telemetry =
                         qwen.runtime_telemetry();
                     std::cout << "qwen_startup=1 layers=" << (args.smoke_layers > 0 ? args.smoke_layers : 64)
                               << " persistent_stdin=" << (args.qwen_persistent_stdin ? 1 : 0)
                               << " prefill_chunk_tokens=" << qwen_opts.prefill_chunk_tokens
-                              << " kv_cache_dtype=" << dsv4::qwen_kv_cache_dtype_name(qwen_opts.kv_cache_dtype)
+                              << " kv_cache_dtype=" << pocket::qwen_kv_cache_dtype_name(qwen_opts.kv_cache_dtype)
                               << " attention_window=" << qwen_opts.attention_window
                               << " attention_sink_tokens=" << qwen_opts.attention_sink_tokens
                               << " prefix_cache=" << (qwen_opts.prefix_cache ? 1 : 0)
@@ -633,8 +633,8 @@ int main(int argc, char** argv) {
                         const std::string channel_path = args.nccl_id_path.empty()
                             ? std::string("/tmp/pocketllm_qwen_persistent")
                             : args.nccl_id_path + ".qwen";
-                        std::unique_ptr<dsv4::CmdChannel> channel =
-                            dsv4::CmdChannel::create(args.tp_world, args.tp_rank,
+                        std::unique_ptr<pocket::CmdChannel> channel =
+                            pocket::CmdChannel::create(args.tp_world, args.tp_rank,
                                                      channel_path);
                         qwen.warmup_tp();
                         if (args.tp_rank > 0) {
@@ -680,9 +680,9 @@ int main(int argc, char** argv) {
                                     !qwen.options().dflash2_checkpoint.empty()) {
                                     qwen_send_command(*channel, QwenPersistentCommand::Generate,
                                                       max_new_tokens, 0, &ids);
-                                    const std::vector<dsv4::QwenForwardResult> outputs =
+                                    const std::vector<pocket::QwenForwardResult> outputs =
                                         qwen.generate(ids, max_new_tokens);
-                                    for (const dsv4::QwenForwardResult& output : outputs) {
+                                    for (const pocket::QwenForwardResult& output : outputs) {
                                         generated.push_back(output.top_token);
                                     }
                                 } else {
@@ -690,7 +690,7 @@ int main(int argc, char** argv) {
                                                       0, 0, &ids);
                                     const auto prefill_started =
                                         std::chrono::steady_clock::now();
-                                    dsv4::QwenForwardResult next = qwen.prefill(ids);
+                                    pocket::QwenForwardResult next = qwen.prefill(ids);
                                     plain_prefill_seconds = std::chrono::duration<double>(
                                         std::chrono::steady_clock::now() - prefill_started).count();
                                     generated.push_back(next.top_token);
@@ -774,9 +774,9 @@ int main(int argc, char** argv) {
                         using Clock = std::chrono::steady_clock;
                         const auto t_total0 = Clock::now();
                         const auto t_prefill0 = Clock::now();
-                        std::vector<dsv4::QwenForwardResult> generated;
+                        std::vector<pocket::QwenForwardResult> generated;
                         generated.reserve(static_cast<size_t>(args.max_new_tokens));
-                        dsv4::QwenPrefixCacheStats prefix_stats;
+                        pocket::QwenPrefixCacheStats prefix_stats;
                         Clock::time_point t_prefill1;
                         Clock::time_point t_decode0;
                         if (qwen.options().mtp ||
@@ -788,7 +788,7 @@ int main(int argc, char** argv) {
                                 std::chrono::duration<double>(qwen.mtp_stats().prefill_seconds));
                             t_decode0 = t_prefill1;
                         } else {
-                            dsv4::QwenForwardResult next = qwen.prefill(prompt_ids);
+                            pocket::QwenForwardResult next = qwen.prefill(prompt_ids);
                             prefix_stats = qwen.prefix_cache_stats();
                             t_prefill1 = Clock::now();
                             t_decode0 = t_prefill1;
@@ -812,7 +812,7 @@ int main(int argc, char** argv) {
                         qwen_telemetry = qwen.runtime_telemetry();
                         size_t free_bytes = 0;
                         size_t total_bytes = 0;
-                        if (!dsv4::device_mem_info(&free_bytes, &total_bytes)) {
+                        if (!pocket::device_mem_info(&free_bytes, &total_bytes)) {
                             free_bytes = 0;
                             total_bytes = 0;
                         }
@@ -859,7 +859,7 @@ int main(int argc, char** argv) {
                                   << " target_head_path="
                                   << qwen_telemetry.target_head_path
                                   << " prefill_chunk_tokens=" << qwen.options().prefill_chunk_tokens
-                                  << " kv_cache_dtype=" << dsv4::qwen_kv_cache_dtype_name(qwen.options().kv_cache_dtype)
+                                  << " kv_cache_dtype=" << pocket::qwen_kv_cache_dtype_name(qwen.options().kv_cache_dtype)
                                   << " attention_window=" << qwen.options().attention_window
                                   << " attention_sink_tokens=" << qwen.options().attention_sink_tokens
                                   << " prefix_cache=" << (qwen.options().prefix_cache ? 1 : 0)
@@ -924,7 +924,7 @@ int main(int argc, char** argv) {
                                          process_started).count()
                                   << "\n";
                     } else {
-                        dsv4::QwenForwardResult result = qwen.prefill(prompt_ids);
+                        pocket::QwenForwardResult result = qwen.prefill(prompt_ids);
                         qwen_telemetry = qwen.runtime_telemetry();
                         std::cout << "smoke_forward=1 qwen_runtime=1 token=" << prompt_ids.back()
                                   << " layers=" << result.layers
@@ -976,7 +976,7 @@ int main(int argc, char** argv) {
                                   << " target_head_path="
                                   << qwen_telemetry.target_head_path
                                   << " prefill_chunk_tokens=" << qwen.options().prefill_chunk_tokens
-                                  << " kv_cache_dtype=" << dsv4::qwen_kv_cache_dtype_name(qwen.options().kv_cache_dtype)
+                                  << " kv_cache_dtype=" << pocket::qwen_kv_cache_dtype_name(qwen.options().kv_cache_dtype)
                                   << " attention_window=" << qwen.options().attention_window
                                   << " attention_sink_tokens=" << qwen.options().attention_sink_tokens
                                   << " prefix_cache=" << (qwen.options().prefix_cache ? 1 : 0)
@@ -991,7 +991,7 @@ int main(int argc, char** argv) {
                     }
                     return 0;
                 }
-                dsv4::Tokenizer tokenizer(args.ckpt);
+                pocket::Tokenizer tokenizer(args.ckpt);
                 std::vector<int> prompt_ids = load_token_ids(args);
                 if (!prompt_ids.empty()) {
                     args.forward_token = prompt_ids.back();
@@ -1011,17 +1011,17 @@ int main(int argc, char** argv) {
                               << " position=" << args.position
                               << " last_text=" << tokenizer.decode_piece(args.forward_token) << "\n";
                     if (!args.generate_token) {
-                        dsv4::ForwardSmokeOptions opts;
+                        pocket::ForwardSmokeOptions opts;
                         opts.tp_world = args.tp_world;
                         opts.tp_rank = args.tp_rank;
                         opts.device = args.device >= 0 ? args.device : args.tp_rank;
                         opts.nccl_id_path = args.nccl_id_path;
-                        dsv4::ForwardSmokeResult result = dsv4::run_safetensors_prompt_forward_with_options(args.ckpt, prompt_ids, args.smoke_layers, opts);
+                        pocket::ForwardSmokeResult result = pocket::run_safetensors_prompt_forward_with_options(args.ckpt, prompt_ids, args.smoke_layers, opts);
                         int top_token = result.top_token;
                         float top_logit = result.top_logit;
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
                         if (args.tp_world > 1 && !args.nccl_id_path.empty()) {
-                            dsv4::TpTopResult global = dsv4::tp_global_top1(
+                            pocket::TpTopResult global = pocket::tp_global_top1(
                                 args.tp_world,
                                 args.tp_rank,
                                 args.device >= 0 ? args.device : args.tp_rank,
@@ -1052,7 +1052,7 @@ int main(int argc, char** argv) {
                         if (args.forward_token < 0) throw std::runtime_error("--generate-token or --prompt is required for generation");
                         prompt_ids.push_back(args.forward_token);
                     }
-                    dsv4::ForwardSmokeOptions opts;
+                    pocket::ForwardSmokeOptions opts;
                     opts.tp_world = args.tp_world;
                     opts.tp_rank = args.tp_rank;
                     opts.device = args.device >= 0 ? args.device : args.tp_rank;
@@ -1061,13 +1061,13 @@ int main(int argc, char** argv) {
                         const int max_context = args.max_context > 0
                             ? args.max_context
                             : static_cast<int>(prompt_ids.size()) + args.max_new_tokens;
-                        dsv4::PersistentEngine engine(args.ckpt, opts, args.smoke_layers, max_context);
+                        pocket::PersistentEngine engine(args.ckpt, opts, args.smoke_layers, max_context);
                         engine.warmup_tp();
                         if (args.tp_rank > 0) {
                             engine.run_worker_loop();
                             return 0;
                         }
-                        dsv4::SamplingParams sp;
+                        pocket::SamplingParams sp;
                         sp.greedy = true;
                         std::vector<int> generated_ids;
                         generated_ids.reserve(static_cast<size_t>(args.max_new_tokens));
@@ -1122,12 +1122,12 @@ int main(int argc, char** argv) {
                         }
                         return 0;
                     }
-                    auto timed = dsv4::run_safetensors_generate_tokens_timed_with_options(args.ckpt, prompt_ids, args.smoke_layers, args.max_new_tokens, opts);
+                    auto timed = pocket::run_safetensors_generate_tokens_timed_with_options(args.ckpt, prompt_ids, args.smoke_layers, args.max_new_tokens, opts);
                     auto& results = timed.tokens;
                     std::vector<int> generated_ids;
                     generated_ids.reserve(results.size());
                     for (size_t step = 0; step < results.size(); ++step) {
-                        const dsv4::ForwardSmokeResult& result = results[step];
+                        const pocket::ForwardSmokeResult& result = results[step];
                         generated_ids.push_back(result.token);
                         std::cout << "generate_step=" << step
                                   << " token=" << result.token
@@ -1159,9 +1159,9 @@ int main(int argc, char** argv) {
                                   << " tp_rank=" << args.tp_rank << "\n";
                     }
                 } else {
-                    dsv4::ForwardSmokeResult result = args.forward_token >= 0
-                        ? dsv4::run_safetensors_token_forward(args.ckpt, args.forward_token, args.smoke_layers)
-                        : dsv4::run_safetensors_layer_loop_smoke(args.ckpt, args.smoke_layers);
+                    pocket::ForwardSmokeResult result = args.forward_token >= 0
+                        ? pocket::run_safetensors_token_forward(args.ckpt, args.forward_token, args.smoke_layers)
+                        : pocket::run_safetensors_layer_loop_smoke(args.ckpt, args.smoke_layers);
                     std::cout << "smoke_forward=1 token=" << result.token
                               << " layers=" << result.layers
                               << " dim=" << result.dim
@@ -1178,13 +1178,13 @@ int main(int argc, char** argv) {
             }
             return 0;
         }
-        dsv4::Dsv4Engine engine(args.model);
-        std::cout << "dsv4_cpp_engine opened " << args.model << "\n";
+        pocket::DeepSeekV4Engine engine(args.model);
+        std::cout << "pocketllm_engine opened " << args.model << "\n";
         std::cout << "format=gguf gguf_version=" << engine.gguf().version()
                   << " tensors=" << engine.gguf().tensor_count()
                   << " metadata=" << engine.gguf().metadata_count()
                   << " alignment=" << engine.gguf().alignment()
-                  << " backend=" << dsv4::device_backend_name() << " device_runtime=" << (dsv4::device_runtime_available() ? "yes" : "no") << "\n";
+                  << " backend=" << pocket::device_backend_name() << " device_runtime=" << (pocket::device_runtime_available() ? "yes" : "no") << "\n";
         if (args.dump_config) {
             std::cout << engine.config().to_string();
         }

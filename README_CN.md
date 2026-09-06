@@ -79,11 +79,14 @@ cmake -S cpp_engine -B build/cpp_engine -DCMAKE_BUILD_TYPE=Release
 cmake --build build/cpp_engine -j
 ```
 
-当前 executable 保留兼容名称 `dsv4_cpp_engine`：
+可执行文件为 `pocketllm_engine`：
 
 ```text
-build/cpp_engine/dsv4_cpp_engine
+build/cpp_engine/pocketllm_engine
 ```
+
+它原名 `dsv4_cpp_engine`。该改名与 `pocket::` 命名空间、`POCKETLLM_*` 环境变量一起构成破坏性变更，
+详见[迁移说明](docs/migration/dsv4-to-pocket-rename.md)。
 
 ### 运行 DeepSeek-V4 C++ TP4 serving
 
@@ -140,7 +143,7 @@ Qwen 路径支持 text prompt 或 token IDs，并通过 NCCL ID 文件启动 TP4
 rm -f /tmp/pocketllm_qwen_nccl.id
 for rank in 0 1 2 3; do
   CUDA_VISIBLE_DEVICES=$rank \
-  build/cpp_engine/dsv4_cpp_engine \
+  build/cpp_engine/pocketllm_engine \
     --ckpt /path/to/Qwen3.8-27B-FP8 \
     --tp-world 4 --tp-rank $rank --device 0 \
     --nccl-id-path /tmp/pocketllm_qwen_nccl.id \

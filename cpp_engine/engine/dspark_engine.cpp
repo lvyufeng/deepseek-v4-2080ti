@@ -15,9 +15,9 @@
 
 namespace dspark {
 
-// The device runtime lives in namespace dsv4; pull its names in so the migrated
-// allocation and transfer call sites read the same as they do in the dsv4 engine.
-using namespace dsv4;  // NOLINT(build/namespaces)
+// The device runtime lives in namespace pocket; pull its names in so the migrated
+// allocation and transfer call sites read the same as they do in the DeepSeek-V4 engine.
+using namespace pocket;  // NOLINT(build/namespaces)
 
 namespace {
 
@@ -31,21 +31,21 @@ void check_device(bool ok, const char* what) {
 
 // Optional scalar lookups: config.json for this checkpoint carries every field
 // we need, but falling back to the struct default keeps older configs loadable.
-int json_int_or(const dsv4::JsonObject& obj, const std::string& key, int fallback) {
-    const dsv4::JsonValue* v = dsv4::object_get(obj, key);
+int json_int_or(const pocket::JsonObject& obj, const std::string& key, int fallback) {
+    const pocket::JsonValue* v = pocket::object_get(obj, key);
     if (v == nullptr || !v->is_number()) return fallback;
     return static_cast<int>(v->number());
 }
 
-float json_float_or(const dsv4::JsonObject& obj, const std::string& key, float fallback) {
-    const dsv4::JsonValue* v = dsv4::object_get(obj, key);
+float json_float_or(const pocket::JsonObject& obj, const std::string& key, float fallback) {
+    const pocket::JsonValue* v = pocket::object_get(obj, key);
     if (v == nullptr || !v->is_number()) return fallback;
     return static_cast<float>(v->number());
 }
 
-std::vector<int> json_int_array_or(const dsv4::JsonObject& obj, const std::string& key,
+std::vector<int> json_int_array_or(const pocket::JsonObject& obj, const std::string& key,
                                    const std::vector<int>& fallback) {
-    const dsv4::JsonValue* v = dsv4::object_get(obj, key);
+    const pocket::JsonValue* v = pocket::object_get(obj, key);
     if (v == nullptr || !v->is_array()) return fallback;
     std::vector<int> out;
     for (const auto& item : v->array()) {
@@ -91,11 +91,11 @@ Config Config::from_json(const char* config_path) {
     }
     std::ostringstream ss;
     ss << f.rdbuf();
-    const dsv4::JsonValue root = dsv4::parse_json(ss.str());
+    const pocket::JsonValue root = pocket::parse_json(ss.str());
     if (!root.is_object()) {
         throw std::runtime_error(std::string("DSpark: config is not a JSON object: ") + config_path);
     }
-    const dsv4::JsonObject& o = root.object();
+    const pocket::JsonObject& o = root.object();
 
     cfg.block_size = json_int_or(o, "dspark_block_size", cfg.block_size);
     cfg.noise_token_id = json_int_or(o, "dspark_noise_token_id", cfg.noise_token_id);
@@ -156,7 +156,7 @@ struct DSparkEngine::Impl {
             throw std::runtime_error(
                 "DSpark TP>1 needs an NCCL id path; construct with the 5-argument form");
         }
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (count > reduce_capacity) {
             if (d_reduce_bf16 != nullptr) device_free(d_reduce_bf16);
             d_reduce_bf16 = nullptr;
@@ -164,11 +164,11 @@ struct DSparkEngine::Impl {
                          "device_malloc dspark reduce scratch");
             reduce_capacity = count;
         }
-        if (!dsv4::fp32_to_bf16_cuda(d_values, d_reduce_bf16, count))
+        if (!pocket::fp32_to_bf16_cuda(d_values, d_reduce_bf16, count))
             throw std::runtime_error("dspark reduce pack failed");
-        dsv4::tp_all_reduce_sum_bf16_inplace(tp_world_size, tp_rank, tp_device,
+        pocket::tp_all_reduce_sum_bf16_inplace(tp_world_size, tp_rank, tp_device,
                                                nccl_id_path.c_str(), d_reduce_bf16, count);
-        if (!dsv4::bf16_to_fp32_cuda(d_reduce_bf16, d_values, count))
+        if (!pocket::bf16_to_fp32_cuda(d_reduce_bf16, d_values, count))
             throw std::runtime_error("dspark reduce unpack failed");
 #else
         throw std::runtime_error("DSpark TP>1 requires a NCCL-enabled build");
@@ -390,7 +390,7 @@ struct DSparkEngine::Impl {
         float* d_shared_out = nullptr;       // [block_size, dim]
         // Grouped-MoE workspace, kept across calls: a device malloc/free pair
         // per call synchronizes the device and costs far more than the kernel.
-        dsv4::MoePrefillFp4GroupedWorkspace moe_ws;
+        pocket::MoePrefillFp4GroupedWorkspace moe_ws;
 
         void allocate(const Config& cfg, const AttnDims& ad, int experts_per_rank) {
             const int dim = cfg.dim;
@@ -617,7 +617,7 @@ struct DSparkEngine::Impl {
     }
 
     void load_weights() {
-        using namespace dsv4;
+        using namespace pocket;
 
         SafeTensorsIndex index(checkpoint_dir);
 
@@ -984,7 +984,7 @@ struct DSparkEngine::Impl {
         if (stage0.main_proj_weight == nullptr || stage0.main_proj_scale == nullptr) {
             throw std::runtime_error("Stage 0 main_proj weights not loaded");
         }
-        bool success = dsv4::fp8_e4m3_e8m0_matmul_cuda(
+        bool success = pocket::fp8_e4m3_e8m0_matmul_cuda(
             buffers.d_main_concat,        // input: [1, 12288]
             stage0.main_proj_weight,      // weight: [4096, 12288] F8_E4M3
             stage0.main_proj_scale,       // scale: [32, 96] F8_E8M0
@@ -1003,7 +1003,7 @@ struct DSparkEngine::Impl {
         if (stage0.main_norm_weight == nullptr) {
             throw std::runtime_error("Stage 0 main_norm weights not loaded");
         }
-        success = dsv4::rmsnorm_bf16_gamma_cuda(
+        success = pocket::rmsnorm_bf16_gamma_cuda(
             buffers.d_main_proj_out,     // input: [1, 4096]
             stage0.main_norm_weight,     // gamma: [4096] BF16
             buffers.d_main_normed,       // output: [1, 4096]
@@ -1023,7 +1023,7 @@ struct DSparkEngine::Impl {
         if (stage0.embed_weight == nullptr) {
             throw std::runtime_error("Stage 0 embed_weight not loaded");
         }
-        success = dsv4::bf16_rows_to_float_cuda(
+        success = pocket::bf16_rows_to_float_cuda(
             stage0.embed_weight,         // matrix: [vocab, dim] BF16
             buffers.d_draft_input_ids,   // row indices: [block_size]
             buffers.d_draft_input,       // output: [block_size, dim]
@@ -1038,7 +1038,7 @@ struct DSparkEngine::Impl {
         // 5. hc_mult expansion: [block_size, dim] -> [block_size, hc_mult, dim]
         // Repeat each embedding hc_mult=4 times along dim=1
         const int hc = config.hc_mult;
-        success = dsv4::hc_repeat_rows_cuda(
+        success = pocket::hc_repeat_rows_cuda(
             buffers.d_draft_input,       // input: [block_size, dim]
             buffers.d_draft_x,           // output: [block_size, hc_mult, dim]
             bsz,                         // rows
@@ -1088,7 +1088,7 @@ struct DSparkEngine::Impl {
     //   d_out     [block_size, dim]  attention output
     void forward_attention(StageBlock* block, const float* d_x, const float* d_main_x,
                            int start_pos, float* d_out) {
-        using namespace dsv4;
+        using namespace pocket;
         const int bsz = config.block_size;
         const int dim = config.dim;
         const int win = adims.window_size;
@@ -1202,7 +1202,7 @@ struct DSparkEngine::Impl {
     // routed weights are already resident (see StageBlock::FFN), so unlike the
     // main model there is no staging step on the critical path.
     void forward_moe(StageBlock* block, const float* d_x, float* d_out, int rows) {
-        using namespace dsv4;
+        using namespace pocket;
         const int dim = config.dim;
         const int inter = config.moe_inter;
         const int topk = config.topk;
@@ -1295,7 +1295,7 @@ struct DSparkEngine::Impl {
     // [block_size, vocab] logits -- is computed once for the whole block before
     // the loop starts, which is the only part that touches the 1 GB head.
     void forward_head(int input_token, const float* d_x) {
-        using namespace dsv4;
+        using namespace pocket;
         const int bsz = config.block_size;
         const int dim = config.dim;
         const int vocab = config.vocab_size;
@@ -1374,7 +1374,7 @@ struct DSparkEngine::Impl {
         // 1.1 hc_pre for attention
         // Input: x [rows, hc, dim]
         // Output: x_attn [rows, dim], post_attn [rows, hc], comb_attn [rows, hc, hc]
-        bool success = dsv4::hc_pre_float_rows_cuda(
+        bool success = pocket::hc_pre_float_rows_cuda(
             x,                          // d_h4_rows: [rows, hc, dim]
             block->hc_attn_fn,          // d_fn: [hc, hc*dim]
             block->hc_attn_scale,       // d_scale: [hc]
@@ -1391,7 +1391,7 @@ struct DSparkEngine::Impl {
         }
 
         // 1.2 attn_norm: RMSNorm on [rows, dim]
-        success = dsv4::rmsnorm_bf16_gamma_rows_cuda(
+        success = pocket::rmsnorm_bf16_gamma_rows_cuda(
             buffers.d_attn_x,           // input: [rows, dim]
             block->attn_norm_weight,    // gamma: [dim] BF16
             buffers.d_attn_normed,      // output: [rows, dim]
@@ -1411,7 +1411,7 @@ struct DSparkEngine::Impl {
 
         // 1.4 hc_post: merge attention output back
         // Output: x [rows, hc, dim]
-        success = dsv4::hc_post_float_rows_cuda(
+        success = pocket::hc_post_float_rows_cuda(
             buffers.d_attn_out,         // d_x_rows: [rows, dim]
             x,                          // d_residual_h4_rows: [rows, hc, dim]
             buffers.d_attn_post,        // d_post_rows: [rows, hc]
@@ -1428,7 +1428,7 @@ struct DSparkEngine::Impl {
         // 2. FFN path: hc_pre + ffn_norm + ffn + hc_post
 
         // 2.1 hc_pre for FFN
-        success = dsv4::hc_pre_float_rows_cuda(
+        success = pocket::hc_pre_float_rows_cuda(
             x,                          // d_h4_rows: [rows, hc, dim]
             block->hc_ffn_fn,           // d_fn: [hc, hc*dim]
             block->hc_ffn_scale,        // d_scale: [hc]
@@ -1445,7 +1445,7 @@ struct DSparkEngine::Impl {
         }
 
         // 2.2 ffn_norm: RMSNorm on [rows, dim]
-        success = dsv4::rmsnorm_bf16_gamma_rows_cuda(
+        success = pocket::rmsnorm_bf16_gamma_rows_cuda(
             buffers.d_ffn_x,            // input: [rows, dim]
             block->ffn_norm_weight,     // gamma: [dim] BF16
             buffers.d_ffn_normed,       // output: [rows, dim]
@@ -1465,7 +1465,7 @@ struct DSparkEngine::Impl {
         forward_moe(block, buffers.d_ffn_normed, buffers.d_ffn_out, rows);
 
         // 2.4 hc_post: merge FFN output back
-        success = dsv4::hc_post_float_rows_cuda(
+        success = pocket::hc_post_float_rows_cuda(
             buffers.d_ffn_out,          // d_x_rows: [rows, dim]
             x,                          // d_residual_h4_rows: [rows, hc, dim]
             buffers.d_ffn_post,         // d_post_rows: [rows, hc]
@@ -1486,7 +1486,7 @@ struct DSparkEngine::Impl {
     // being drafted from, and a missing one shows up only as a draft that
     // matches nothing rather than as an error.
     void write_main_kv(const float* h_main_hidden, int rows, int start_pos) {
-        using namespace dsv4;
+        using namespace pocket;
         if (h_main_hidden == nullptr || rows <= 0) return;
         if (start_pos < 0) throw std::runtime_error("write_main_kv: negative start_pos");
 

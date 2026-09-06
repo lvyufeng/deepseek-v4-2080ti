@@ -84,9 +84,9 @@ bool check_fp16_cache(int context_len) {
     cudaMemcpy(d_q, q.data(), q.size() * sizeof(uint16_t), cudaMemcpyHostToDevice);
     cudaMemcpy(d_k_rows, k.data(), k.size() * sizeof(uint16_t), cudaMemcpyHostToDevice);
     cudaMemcpy(d_v_rows, v.data(), v.size() * sizeof(uint16_t), cudaMemcpyHostToDevice);
-    if (!dsv4::qwen_append_kv_cache_f16(d_k_rows, d_v_rows, d_k_cache, d_v_cache,
+    if (!pocket::qwen_append_kv_cache_f16(d_k_rows, d_v_rows, d_k_cache, d_v_cache,
                                               context_len, kv_heads, head_dim, 0, max_context) ||
-        !dsv4::qwen_gqa_decode_attention_f16(d_q, d_k_cache, d_v_cache, d_out, d_scores,
+        !pocket::qwen_gqa_decode_attention_f16(d_q, d_k_cache, d_v_cache, d_out, d_scores,
                                                    q_heads, kv_heads, head_dim, context_len,
                                                    max_context) || cudaDeviceSynchronize() != cudaSuccess) {
         fail("FP16 cache launch");
@@ -182,11 +182,11 @@ bool check_residual_add_rmsnorm_fused() {
                        cudaMemcpyHostToDevice) != cudaSuccess ||
             cudaMemcpy(d_ref_residual, d_hidden, elements * sizeof(uint16_t),
                        cudaMemcpyDeviceToDevice) != cudaSuccess ||
-            !dsv4::qwen_add_inplace_f16(
+            !pocket::qwen_add_inplace_f16(
                 d_ref_residual, d_delta, static_cast<int>(elements)) ||
-            !dsv4::qwen_rmsnorm_fp16_gamma_rows_f16(
+            !pocket::qwen_rmsnorm_fp16_gamma_rows_f16(
                 d_ref_residual, d_gamma, d_ref_normalized, rows, cols, eps) ||
-            !dsv4::qwen_residual_add_rmsnorm_fp16_gamma_rows_f16(
+            !pocket::qwen_residual_add_rmsnorm_fp16_gamma_rows_f16(
                 d_hidden, d_delta, d_gamma, d_fused_residual,
                 d_fused_normalized, rows, cols, eps) ||
             cudaDeviceSynchronize() != cudaSuccess) {
@@ -259,13 +259,13 @@ bool check_prefill_tiled(int seq_len, int head_dim, int position_offset,
     if (cudaMemcpy(d_q, q.data(), q.size() * sizeof(uint16_t), cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemcpy(d_k, k.data(), k.size() * sizeof(uint16_t), cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemcpy(d_v, v.data(), v.size() * sizeof(uint16_t), cudaMemcpyHostToDevice) != cudaSuccess ||
-        !dsv4::qwen_gqa_prefill_attention_f16(
+        !pocket::qwen_gqa_prefill_attention_f16(
             d_q, d_k, d_v, d_old, seq_len, q_heads, kv_heads, head_dim,
             position_offset, max_context) ||
-        !dsv4::qwen_gqa_prefill_attention_f16_tiled_cuda(
+        !pocket::qwen_gqa_prefill_attention_f16_tiled_cuda(
             d_q, d_k, d_v, d_new, seq_len, q_heads, kv_heads, head_dim,
             position_offset, max_context) ||
-        !dsv4::qwen_gqa_prefill_attention_f16_tiled_cuda(
+        !pocket::qwen_gqa_prefill_attention_f16_tiled_cuda(
             d_q, d_k, d_v, d_sparse, seq_len, q_heads, kv_heads, head_dim,
             position_offset, max_context, seq_len + position_offset + 8, 0) ||
         cudaDeviceSynchronize() != cudaSuccess) {
@@ -324,13 +324,13 @@ bool check_verify_split(int seq_len, int head_dim, int position_offset) {
     if (cudaMemcpy(d_q, q.data(), q.size() * sizeof(uint16_t), cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemcpy(d_k, k.data(), k.size() * sizeof(uint16_t), cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemcpy(d_v, v.data(), v.size() * sizeof(uint16_t), cudaMemcpyHostToDevice) != cudaSuccess ||
-        !dsv4::qwen_gqa_prefill_attention_f16(
+        !pocket::qwen_gqa_prefill_attention_f16(
             d_q, d_k, d_v, d_ref, seq_len, q_heads, kv_heads, head_dim,
             position_offset, max_context) ||
-        !dsv4::qwen_gqa_verify_attention_f16_exact_cuda(
+        !pocket::qwen_gqa_verify_attention_f16_exact_cuda(
             d_q, d_k, d_v, d_exact, d_scores, seq_len, q_heads, kv_heads,
             head_dim, position_offset, max_context) ||
-        !dsv4::qwen_gqa_verify_attention_f16(
+        !pocket::qwen_gqa_verify_attention_f16(
             d_q, d_k, d_v, d_verify, d_partial, seq_len, q_heads, kv_heads,
             head_dim, position_offset, max_context, splits) ||
         cudaDeviceSynchronize() != cudaSuccess) {
@@ -389,13 +389,13 @@ bool check_decode_fused(int context_len, int head_dim) {
     if (cudaMemcpy(d_q, q.data(), q.size() * sizeof(uint16_t), cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemcpy(d_k, k.data(), k.size() * sizeof(uint16_t), cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemcpy(d_v, v.data(), v.size() * sizeof(uint16_t), cudaMemcpyHostToDevice) != cudaSuccess ||
-        !dsv4::qwen_gqa_decode_attention_f16(
+        !pocket::qwen_gqa_decode_attention_f16(
             d_q, d_k, d_v, d_old, d_scores, q_heads, kv_heads, head_dim,
             context_len, context_len) ||
-        !dsv4::qwen_gqa_decode_attention_f16_fused_cuda(
+        !pocket::qwen_gqa_decode_attention_f16_fused_cuda(
             d_q, d_k, d_v, d_new, d_partial, q_heads, kv_heads, head_dim,
             context_len, context_len) ||
-        !dsv4::qwen_gqa_decode_attention_f16_fused_cuda(
+        !pocket::qwen_gqa_decode_attention_f16_fused_cuda(
             d_q, d_k, d_v, d_sparse, d_partial, q_heads, kv_heads, head_dim,
             context_len, context_len, context_len + 8, 0) ||
         cudaDeviceSynchronize() != cudaSuccess) {
@@ -455,7 +455,7 @@ bool check_decode_window_reference() {
     if (cudaMemcpy(d_q, q.data(), q.size() * sizeof(uint16_t), cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemcpy(d_k, k.data(), k.size() * sizeof(uint16_t), cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemcpy(d_v, v.data(), v.size() * sizeof(uint16_t), cudaMemcpyHostToDevice) != cudaSuccess ||
-        !dsv4::qwen_gqa_decode_attention_f16_fused_cuda(
+        !pocket::qwen_gqa_decode_attention_f16_fused_cuda(
             d_q, d_k, d_v, d_out, d_partial, q_heads, kv_heads, head_dim,
             context_len, context_len, window, sink) ||
         cudaDeviceSynchronize() != cudaSuccess) {
@@ -527,10 +527,10 @@ bool check_decode_grid_256k() {
     if (cudaMemset(d_q, 0, q_heads * head_dim * sizeof(uint16_t)) != cudaSuccess ||
         cudaMemset(d_k_cache, 0, context_len * kv_heads * head_dim * sizeof(uint16_t)) != cudaSuccess ||
         cudaMemset(d_v_cache, 0, context_len * kv_heads * head_dim * sizeof(uint16_t)) != cudaSuccess ||
-        !dsv4::qwen_gqa_decode_attention_f16(
+        !pocket::qwen_gqa_decode_attention_f16(
             d_q, d_k_cache, d_v_cache, d_out, d_scores, q_heads, kv_heads,
             head_dim, context_len, context_len) ||
-        !dsv4::qwen_gqa_decode_attention_f16_fused_cuda(
+        !pocket::qwen_gqa_decode_attention_f16_fused_cuda(
             d_q, d_k_cache, d_v_cache, d_fused, d_partial, q_heads, kv_heads,
             head_dim, context_len, context_len) ||
         cudaDeviceSynchronize() != cudaSuccess) {
@@ -616,7 +616,7 @@ bool check_fp8_f16_projection() {
     }
     setenv("QWEN_FP8_F16_MULTIROW", "1", 1);
     setenv("QWEN_FP8_F16_MULTIROW_ROWS", "4", 1);
-    if (!dsv4::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
+    if (!pocket::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
             dx, dw, ds, dy_multi, decode_rows, decode_cols,
             decode_weight_stride, decode_scale_stride) ||
         cudaDeviceSynchronize() != cudaSuccess) {
@@ -626,7 +626,7 @@ bool check_fp8_f16_projection() {
     setenv("QWEN_FP8_F16_MULTIROW", "0", 1);
     unsetenv("QWEN_FP8_F16_MULTIROW_ROWS");
     setenv("QWEN_FP8_F16_VECTORIZE", "1", 1);
-    if (!dsv4::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
+    if (!pocket::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
             dx, dw, ds, dy_vector, decode_rows, decode_cols,
             decode_weight_stride, decode_scale_stride) ||
         cudaDeviceSynchronize() != cudaSuccess) {
@@ -635,7 +635,7 @@ bool check_fp8_f16_projection() {
     }
     setenv("QWEN_FP8_F16_MULTIROW", "0", 1);
     setenv("QWEN_FP8_F16_VECTORIZE", "0", 1);
-    if (!dsv4::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
+    if (!pocket::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
             dx, dw, ds, dy_fallback, decode_rows, decode_cols,
             decode_weight_stride, decode_scale_stride) ||
         cudaDeviceSynchronize() != cudaSuccess) {
@@ -758,13 +758,13 @@ bool check_fp8_f16_projection() {
         bool dual_ok = true;
         for (int pass = 0; pass < 3 && dual_ok; ++pass) {
             dual_ok =
-                dsv4::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
+                pocket::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
                     dual_px, first_pw, first_ps, first_reference, first_rows,
                     dual_cols, dual_cols, first_scale_stride) &&
-                dsv4::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
+                pocket::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
                     dual_px, second_pw, second_ps, second_reference,
                     second_rows, dual_cols, dual_cols, second_scale_stride) &&
-                dsv4::qwen_fp8_e4m3_fp16scale_matvec_dual_f16_cuda(
+                pocket::qwen_fp8_e4m3_fp16scale_matvec_dual_f16_cuda(
                     dual_px, first_pw, first_ps, first_dual, first_rows,
                     dual_cols, first_scale_stride, second_pw, second_ps,
                     second_dual, second_rows, dual_cols, second_scale_stride,
@@ -798,10 +798,10 @@ bool check_fp8_f16_projection() {
         bool triple_ok = true;
         for (int pass = 0; pass < 3 && triple_ok; ++pass) {
             triple_ok =
-                dsv4::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
+                pocket::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
                     dual_px, third_pw, third_ps, third_reference, third_rows,
                     dual_cols, dual_cols, second_scale_stride) &&
-                dsv4::qwen_fp8_e4m3_fp16scale_matvec_triple_f16_cuda(
+                pocket::qwen_fp8_e4m3_fp16scale_matvec_triple_f16_cuda(
                     dual_px, first_pw, first_ps, first_dual, first_rows,
                     dual_cols, first_scale_stride, second_pw, second_ps,
                     second_dual, second_rows, dual_cols, second_scale_stride,
@@ -869,7 +869,7 @@ bool check_fp8_f16_projection() {
         return false;
     }
     setenv("QWEN_FP8_F16_SMALL_BATCH", "1", 1);
-    if (!dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
+    if (!pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
             sx, sw, ss, sy_reuse, small_batch, small_rows, small_cols,
             small_x_stride, small_y_stride, small_weight_stride,
             small_scale_stride) || cudaDeviceSynchronize() != cudaSuccess) {
@@ -877,7 +877,7 @@ bool check_fp8_f16_projection() {
         return false;
     }
     setenv("QWEN_FP8_F16_SMALL_BATCH", "0", 1);
-    if (!dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
+    if (!pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
             sx, sw, ss, sy_tiled, small_batch, small_rows, small_cols,
             small_x_stride, small_y_stride, small_weight_stride,
             small_scale_stride) || cudaDeviceSynchronize() != cudaSuccess) {
@@ -969,13 +969,13 @@ bool check_fp8_f16_projection() {
             setenv("QWEN_FP8_F16_SMALL_BATCH", "1", 1);
             setenv("QWEN_FP8_F16_SMALL_BATCH_SHARED", "1", 1);
             const bool shared_launched =
-                dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
+                pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
                     px, pw, ps, py_shared, item.batch, item.rows, item.cols,
                     x_stride, y_stride, weight_stride, scale_stride) &&
                 cudaDeviceSynchronize() == cudaSuccess;
             setenv("QWEN_FP8_F16_SMALL_BATCH_SHARED", "0", 1);
             const bool plain_launched =
-                dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
+                pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
                     px, pw, ps, py_plain, item.batch, item.rows, item.cols,
                     x_stride, y_stride, weight_stride, scale_stride) &&
                 cudaDeviceSynchronize() == cudaSuccess;
@@ -1062,14 +1062,14 @@ bool check_fp8_f16_projection() {
         return false;
     }
     setenv("QWEN_FP8_F16_PREFILL_WIDE_N64", "1", 1);
-    if (!dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
+    if (!pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
             px, pw, ps, py_wide, batch, rows, cols, x_stride, y_stride,
             weight_stride, scale_stride) || cudaDeviceSynchronize() != cudaSuccess) {
         fail("FP16 FP8 wide prefill launch");
         return false;
     }
     setenv("QWEN_FP8_F16_PREFILL_WIDE_N64", "0", 1);
-    if (!dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
+    if (!pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
             px, pw, ps, py_fallback, batch, rows, cols, x_stride, y_stride,
             weight_stride, scale_stride) || cudaDeviceSynchronize() != cudaSuccess) {
         fail("FP16 FP8 fallback prefill launch");
@@ -1101,7 +1101,7 @@ bool check_fp8_f16_projection() {
         return false;
     }
     setenv("QWEN_FP8_F16_PREFILL_CUBLAS", "1", 1);
-    if (!dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
+    if (!pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
             px, pw, ps, py_cublas, batch, rows, cols, x_stride, y_stride,
             weight_stride, scale_stride) || cudaDeviceSynchronize() != cudaSuccess) {
         fail("FP16 FP8 cuBLAS prefill launch");
@@ -1202,13 +1202,13 @@ bool check_resident_fp16_projection() {
     setenv("QWEN_FP8_F16_SMALL_BATCH", "1", 1);
     setenv("QWEN_FP8_F16_SMALL_BATCH_SHARED", "1", 1);
     const bool launched =
-        dsv4::qwen_fp8_e4m3_fp16scale_dequantize_f16_cuda(
+        pocket::qwen_fp8_e4m3_fp16scale_dequantize_f16_cuda(
             d_weight, d_scale, d_dense, rows, cols, weight_stride,
             scale_stride) &&
-        dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
+        pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
             d_x, d_weight, d_scale, d_online_y, batch, rows, cols, x_stride,
             y_stride, weight_stride, scale_stride) &&
-        dsv4::qwen_fp16_matmul_rows_f16_cublas_cuda(
+        pocket::qwen_fp16_matmul_rows_f16_cublas_cuda(
             d_x, d_dense, d_resident_y, batch, rows, cols, x_stride, y_stride,
             cols) &&
         cudaDeviceSynchronize() == cudaSuccess;
@@ -1337,7 +1337,7 @@ bool check_fp8_prefill_tail(int cols) {
     setenv("QWEN_FP8_F16_SMALL_BATCH", "0", 1);
     unsetenv("QWEN_FP8_F16_PREFILL_CUBLAS");
     setenv("QWEN_FP8_F16_PREFILL_WIDE_N64", "1", 1);
-    const bool launched = dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
+    const bool launched = pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
         px, pw, ps, py, batch, rows, cols, x_stride, y_stride,
         weight_stride, scale_stride) && cudaDeviceSynchronize() == cudaSuccess;
     unsetenv("QWEN_FP8_F16_SMALL_BATCH");
@@ -1414,10 +1414,10 @@ bool check_fp8_channel_projection() {
                    cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemcpy(ps, scale.data(), scale.size() * sizeof(uint16_t),
                    cudaMemcpyHostToDevice) != cudaSuccess ||
-        !dsv4::qwen_fp8_e4m3_channel_matmul_rows_f16_cuda(
+        !pocket::qwen_fp8_e4m3_channel_matmul_rows_f16_cuda(
             px, pw, ps, py_half, batch, rows, cols, x_stride, y_stride,
             weight_stride) ||
-        !dsv4::qwen_fp8_e4m3_channel_matmul_rows_f16_f32_cuda(
+        !pocket::qwen_fp8_e4m3_channel_matmul_rows_f16_f32_cuda(
             px, pw, ps, py_float, batch, rows, cols, x_stride, y_stride,
             weight_stride) || cudaDeviceSynchronize() != cudaSuccess) {
         fail("FP8 channel projection launch");
@@ -1505,7 +1505,7 @@ bool check_batched_argmax() {
     if (!device_logits || !device_tokens || !device_values ||
         cudaMemcpy(device_logits, logits.data(), logits.size() * sizeof(float),
                    cudaMemcpyHostToDevice) != cudaSuccess ||
-        !dsv4::argmax_fp32_rows_cuda(device_logits, device_tokens, device_values,
+        !pocket::argmax_fp32_rows_cuda(device_logits, device_tokens, device_values,
                                      rows, count, token_offset) ||
         cudaDeviceSynchronize() != cudaSuccess) {
         fail("batched argmax launch");
@@ -1544,7 +1544,7 @@ bool check_region_copy() {
     std::vector<DeviceBuffer> buffers(sizes.size());
     std::vector<uint8_t*> device_regions(sizes.size());
     std::vector<std::vector<uint8_t>> expected(sizes.size());
-    std::vector<dsv4::QwenCopyRegion> descriptors;
+    std::vector<pocket::QwenCopyRegion> descriptors;
     descriptors.reserve(sizes.size());
     uint64_t packed_bytes = 0;
     uint64_t total_blocks = 0;
@@ -1566,7 +1566,7 @@ bool check_region_copy() {
             return true;
         }
         device_regions[region] += 16;
-        dsv4::QwenCopyRegion descriptor;
+        pocket::QwenCopyRegion descriptor;
         descriptor.device_address = reinterpret_cast<uint64_t>(
             device_regions[region]);
         descriptor.packed_offset = packed_bytes;
@@ -1574,11 +1574,11 @@ bool check_region_copy() {
         descriptor.first_block = total_blocks;
         descriptors.push_back(descriptor);
         packed_bytes += bytes;
-        total_blocks += dsv4::qwen_copy_region_blocks(bytes);
+        total_blocks += pocket::qwen_copy_region_blocks(bytes);
     }
 
     DeviceBuffer ddescriptors, dpacked;
-    auto* d_regions = ddescriptors.allocate<dsv4::QwenCopyRegion>(
+    auto* d_regions = ddescriptors.allocate<pocket::QwenCopyRegion>(
         descriptors.size());
     uint8_t* d_packed = dpacked.allocate<uint8_t>(packed_bytes + 32);
     if (!d_regions || !d_packed ||
@@ -1586,7 +1586,7 @@ bool check_region_copy() {
                    descriptors.size() * sizeof(descriptors[0]),
                    cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemset(d_packed, kGuard, packed_bytes + 32) != cudaSuccess ||
-        !dsv4::qwen_gather_copy_regions(
+        !pocket::qwen_gather_copy_regions(
             d_regions, static_cast<int>(descriptors.size()), d_packed + 16,
             total_blocks) ||
         cudaDeviceSynchronize() != cudaSuccess) {
@@ -1621,7 +1621,7 @@ bool check_region_copy() {
             return true;
         }
     }
-    if (!dsv4::qwen_scatter_copy_regions(
+    if (!pocket::qwen_scatter_copy_regions(
             d_regions, static_cast<int>(descriptors.size()), d_packed + 16,
             total_blocks) ||
         cudaDeviceSynchronize() != cudaSuccess) {
@@ -1674,7 +1674,7 @@ bool check_strided_row_copy(int rows) {
         cudaMemcpy(d_destination, destination.data(),
                    destination.size() * sizeof(uint16_t),
                    cudaMemcpyHostToDevice) != cudaSuccess ||
-        !dsv4::qwen_copy_rows_strided_f16(
+        !pocket::qwen_copy_rows_strided_f16(
             d_source, source_stride, d_destination + destination_offset,
             destination_stride, rows, columns) ||
         cudaDeviceSynchronize() != cudaSuccess ||
@@ -1771,12 +1771,12 @@ bool check_fp8_swiglu_decode_vectorized() {
         // comparison is vectorized against scalar and nothing else.
         setenv("QWEN_FP8_F16_MULTIROW", "0", 1);
         setenv("QWEN_FP8_F16_SWIGLU_VECTORIZE", "1", 1);
-        const bool vec_ok = dsv4::qwen_fp8_e4m3_fp16scale_swiglu_matvec_f16_cuda(
+        const bool vec_ok = pocket::qwen_fp8_e4m3_fp16scale_swiglu_matvec_f16_cuda(
                                 px, pg, pgs, pu, pus, py_vec, item.rows,
                                 item.cols, weight_stride, scale_stride) &&
                             cudaDeviceSynchronize() == cudaSuccess;
         setenv("QWEN_FP8_F16_SWIGLU_VECTORIZE", "0", 1);
-        const bool scalar_ok = dsv4::qwen_fp8_e4m3_fp16scale_swiglu_matvec_f16_cuda(
+        const bool scalar_ok = pocket::qwen_fp8_e4m3_fp16scale_swiglu_matvec_f16_cuda(
                                    px, pg, pgs, pu, pus, py_scalar, item.rows,
                                    item.cols, weight_stride, scale_stride) &&
                                cudaDeviceSynchronize() == cudaSuccess;
@@ -1905,13 +1905,13 @@ bool check_fp8_fused_swiglu_shared() {
         }
         setenv("QWEN_FP8_F16_SMALL_BATCH_SHARED", "1", 1);
         const bool shared_ok =
-            dsv4::qwen_fp8_e4m3_fp16scale_swiglu_small_batch_f16_cuda(
+            pocket::qwen_fp8_e4m3_fp16scale_swiglu_small_batch_f16_cuda(
                 px, pg, pgs, pu, pus, py_shared, item.batch, item.rows,
                 item.cols, x_stride, y_stride, weight_stride, scale_stride) &&
             cudaDeviceSynchronize() == cudaSuccess;
         setenv("QWEN_FP8_F16_SMALL_BATCH_SHARED", "0", 1);
         const bool plain_ok =
-            dsv4::qwen_fp8_e4m3_fp16scale_swiglu_small_batch_f16_cuda(
+            pocket::qwen_fp8_e4m3_fp16scale_swiglu_small_batch_f16_cuda(
                 px, pg, pgs, pu, pus, py_plain, item.batch, item.rows,
                 item.cols, x_stride, y_stride, weight_stride, scale_stride) &&
             cudaDeviceSynchronize() == cudaSuccess;
@@ -1971,7 +1971,7 @@ bool check_fused_swiglu() {
                    cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemcpy(d_up, up.data(), up.size() * sizeof(uint16_t),
                    cudaMemcpyHostToDevice) != cudaSuccess ||
-        !dsv4::qwen_fp16_swiglu_matmul_rows_f16(
+        !pocket::qwen_fp16_swiglu_matmul_rows_f16(
             d_input, d_gate, d_up, d_output, batch, rows, cols, cols, rows,
             cols) || cudaDeviceSynchronize() != cudaSuccess) {
         fail("FP16 fused SwiGLU launch");
@@ -2070,15 +2070,15 @@ bool check_gated_delta_prenormalized(int rows = 8, int heads = 12,
     // speculative verify does. A kernel that mishandles the state load/store
     // shows up on the second pass even if the first one looks right.
     for (int pass = 0; pass < passes; ++pass) {
-        if (!dsv4::qwen_gated_delta_sequence_f16(
+        if (!pocket::qwen_gated_delta_sequence_f16(
                 d_state_reference, d_q, d_k, d_v, d_g, d_beta, d_reference,
                 rows, heads, key_heads, dim, dim, q_scale) ||
-            !dsv4::qwen_normalize_gated_delta_qk_f16(
+            !pocket::qwen_normalize_gated_delta_qk_f16(
                 d_q, d_k, d_q_normalized, d_k_normalized, rows, key_heads, dim) ||
-            !dsv4::qwen_gated_delta_sequence_normalized_f16(
+            !pocket::qwen_gated_delta_sequence_normalized_f16(
                 d_state_normalized, d_q_normalized, d_k_normalized, d_v, d_g,
                 d_beta, d_normalized, rows, heads, key_heads, dim, dim, q_scale) ||
-            !dsv4::qwen_gated_delta_sequence_normalized_shared_f16(
+            !pocket::qwen_gated_delta_sequence_normalized_shared_f16(
                 d_state_shared, d_q_normalized, d_k_normalized, d_v, d_g,
                 d_beta, d_shared, rows, heads, key_heads, dim, dim, q_scale) ||
             cudaDeviceSynchronize() != cudaSuccess) {
@@ -2218,7 +2218,7 @@ bool check_gated_delta_step_matches_sequence(int rows = 1, int heads = 12,
     for (int pass = 0; pass < passes; ++pass) {
         bool launched = true;
         for (int row = 0; row < rows && launched; ++row) {
-            launched = dsv4::qwen_gated_delta_step_f16_cuda(
+            launched = pocket::qwen_gated_delta_step_f16_cuda(
                 d_state_step,
                 d_q + static_cast<size_t>(row) * key_heads * dim,
                 d_k + static_cast<size_t>(row) * key_heads * dim,
@@ -2229,7 +2229,7 @@ bool check_gated_delta_step_matches_sequence(int rows = 1, int heads = 12,
                 heads, key_heads, dim, dim, q_scale);
         }
         if (!launched ||
-            !dsv4::qwen_gated_delta_sequence_f16_cuda(
+            !pocket::qwen_gated_delta_sequence_f16_cuda(
                 d_state_sequence, d_q, d_k, d_v, d_g, d_beta, d_sequence,
                 rows, heads, key_heads, dim, dim, q_scale) ||
             cudaDeviceSynchronize() != cudaSuccess) {
@@ -2312,11 +2312,11 @@ bool check_fp8_cache() {
     cudaMemcpy(d_q, q.data(), q.size() * sizeof(uint16_t), cudaMemcpyHostToDevice);
     cudaMemcpy(d_k_rows, k.data(), k.size() * sizeof(uint16_t), cudaMemcpyHostToDevice);
     cudaMemcpy(d_v_rows, v.data(), v.size() * sizeof(uint16_t), cudaMemcpyHostToDevice);
-    if (!dsv4::qwen_append_kv_cache_fp8_cuda(d_k_rows, d_v_rows, d_k_cache, d_v_cache,
+    if (!pocket::qwen_append_kv_cache_fp8_cuda(d_k_rows, d_v_rows, d_k_cache, d_v_cache,
                                                d_k_scale, d_v_scale, context_len,
                                                kv_heads, head_dim, scale_block, 0,
                                                max_context) ||
-        !dsv4::qwen_gqa_decode_attention_fp8_cuda(d_q, d_k_cache, d_v_cache,
+        !pocket::qwen_gqa_decode_attention_fp8_cuda(d_q, d_k_cache, d_v_cache,
                                                    d_k_scale, d_v_scale, d_out,
                                                    d_scores, q_heads, kv_heads,
                                                    head_dim, scale_block,
@@ -2408,9 +2408,9 @@ bool check_fp16_matvec_logits(int rows, int cols) {
         fail("FP16 matvec logits allocation/copy");
         return true;
     }
-    if (!dsv4::qwen_fp16_matmul_rows_f16_f32_cuda(
+    if (!pocket::qwen_fp16_matmul_rows_f16_f32_cuda(
             px, pw, p_reference, 1, rows, cols, cols, rows, cols) ||
-        !dsv4::qwen_fp16_matvec_rows_f16_f32_cuda(
+        !pocket::qwen_fp16_matvec_rows_f16_f32_cuda(
             px, pw, p_matvec, 1, rows, cols, cols, rows, cols) ||
         cudaDeviceSynchronize() != cudaSuccess) {
         fail("FP16 matvec logits launch");
@@ -2445,7 +2445,7 @@ bool check_fp16_matvec_logits(int rows, int cols) {
         if (candidate[row] > candidate[best_candidate]) best_candidate = row;
     }
     // Batched shapes must be refused, not silently run on the reference path.
-    const bool rejects_batch = !dsv4::qwen_fp16_matvec_rows_f16_f32_cuda(
+    const bool rejects_batch = !pocket::qwen_fp16_matvec_rows_f16_f32_cuda(
         px, pw, p_matvec, 2, rows, cols, cols, rows, cols);
     if (!finite || worst_reference > 2.0e-3 || worst_candidate > 2.0e-3 ||
         best_reference != best_candidate || !rejects_batch) {
@@ -2465,7 +2465,7 @@ bool check_fp16_matvec_logits(int rows, int cols) {
 }  // namespace
 
 int main() {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::printf("[SKIP] test_qwen_half_ops requires a CUDA device\n");
         return 0;
     }

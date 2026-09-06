@@ -25,7 +25,7 @@
 #include <cstdlib>
 #include <mutex>
 
-namespace dsv4 {
+namespace pocket {
 
 namespace {
 
@@ -1161,7 +1161,7 @@ bool moe_prefill_q2_grouped_cuda_with_workspace(
     const int blocks_per_row = dim / 256;
     const int x_groups = ceil_div(dim, 32);
     dim3 block(256);
-    if (env_enabled_q2("DSV4_Q2_PREFILL_W13_EXPERT_TILE", true)) {
+    if (env_enabled_q2("POCKETLLM_Q2_PREFILL_W13_EXPERT_TILE", true)) {
         dim3 grid_w13_tile(ceil_div(inter_dim, kQ2TileN), n_experts, ceil_div(max_count, 8));
         gguf_moe_grouped_w13_iq2_xxs_dp4a_expert_tile_kernel<<<grid_w13_tile, block, 0, cs>>>(
             workspace.d_x_q, workspace.d_x_scale, d_seg_starts, d_w1_blocks, d_w3_blocks, sg,
@@ -1180,12 +1180,12 @@ bool moe_prefill_q2_grouped_cuda_with_workspace(
     }
     const int w2_blocks_per_row = inter_dim / 256;
     const int hidden_groups = ceil_div(inter_dim, 16);
-    if (env_enabled_q2("DSV4_Q2_PREFILL_W2_EXPERT_TILE", false)) {
+    if (env_enabled_q2("POCKETLLM_Q2_PREFILL_W2_EXPERT_TILE", false)) {
         dim3 grid_w2_tile(ceil_div(dim, kQ2TileN * 8), n_experts, ceil_div(max_count, 8));
         gguf_moe_grouped_w2_q2k_dp4a_expert_tile_kernel<<<grid_w2_tile, block, 0, cs>>>(
             workspace.d_hidden_q, workspace.d_hidden_scale, d_route_tokens, d_seg_starts, d_w2_blocks,
             d_y_rows, n_experts, dim, inter_dim, w2_blocks_per_row, hidden_groups);
-    } else if (env_enabled_q2("DSV4_Q2_PREFILL_W2_ROUTE_TILE", true)) {
+    } else if (env_enabled_q2("POCKETLLM_Q2_PREFILL_W2_ROUTE_TILE", true)) {
         dim3 grid_w2_route_tile(ceil_div(dim, kQ2TileN), n_experts, ceil_div(max_count, 8));
         gguf_moe_grouped_w2_q2k_dp4a_route_tile_kernel<<<grid_w2_route_tile, block, 0, cs>>>(
             workspace.d_hidden_q, workspace.d_hidden_scale, d_route_tokens, d_seg_starts, d_w2_blocks,
@@ -1270,4 +1270,4 @@ bool f16_contiguous_rows_to_float_cuda(
     return cudaGetLastError() == cudaSuccess;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

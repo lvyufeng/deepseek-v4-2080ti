@@ -10,7 +10,7 @@
 #include <cuda_runtime.h>
 #include <nvtx3/nvToolsExt.h>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 cudaStream_t as_stream(void* stream) {
@@ -226,4 +226,4 @@ void device_range_push(const char* label) {
 
 void device_range_pop() { nvtxRangePop(); }
 
-}  // namespace dsv4
+}  // namespace pocket

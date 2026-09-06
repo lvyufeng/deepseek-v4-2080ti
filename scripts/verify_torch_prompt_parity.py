@@ -25,7 +25,7 @@ sys.path.insert(0, str(REPO))
 
 from pocketllm.api import GenerationRequest, SamplingParams  # noqa: E402
 from pocketllm.protocol import ChatRequest  # noqa: E402
-from src.encoding.dsv4 import encode_messages  # noqa: E402
+from src.encoding.deepseek_v4 import encode_messages  # noqa: E402
 
 WEATHER_TOOL = {
     "type": "function",

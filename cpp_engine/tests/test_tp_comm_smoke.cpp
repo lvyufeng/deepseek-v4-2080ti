@@ -75,23 +75,23 @@ template <typename T>
 class DeviceBuffer {
 public:
     explicit DeviceBuffer(size_t count) : count_(count) {
-        if (!dsv4::device_malloc_into(ptr_, count * sizeof(T))) {
+        if (!pocket::device_malloc_into(ptr_, count * sizeof(T))) {
             throw std::runtime_error("device_malloc failed in tp_comm smoke test");
         }
     }
-    ~DeviceBuffer() { dsv4::device_free(ptr_); }
+    ~DeviceBuffer() { pocket::device_free(ptr_); }
     DeviceBuffer(const DeviceBuffer&) = delete;
     DeviceBuffer& operator=(const DeviceBuffer&) = delete;
 
     T* get() const { return ptr_; }
 
     void upload(const T* host) {
-        if (!dsv4::memcpy_h2d(ptr_, host, count_ * sizeof(T))) {
+        if (!pocket::memcpy_h2d(ptr_, host, count_ * sizeof(T))) {
             throw std::runtime_error("memcpy_h2d failed in tp_comm smoke test");
         }
     }
     void download(T* host) {
-        if (!dsv4::memcpy_d2h(host, ptr_, count_ * sizeof(T))) {
+        if (!pocket::memcpy_d2h(host, ptr_, count_ * sizeof(T))) {
             throw std::runtime_error("memcpy_d2h failed in tp_comm smoke test");
         }
     }
@@ -116,14 +116,14 @@ int main(int argc, char** argv) {
         else if (arg == "--id-path" && i + 1 < argc) id_path = argv[++i];
         else throw std::runtime_error("unknown or incomplete argument: " + arg);
     }
-    if (!dsv4::tp_comm_available()) {
+    if (!pocket::tp_comm_available()) {
         std::cout << "[SKIP] no collective library in this build\n";
         return 0;
     }
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
     std::cout << "rank " << rank << "/" << world << " device " << device << "\n";
 
-    dsv4::run_tp_float_sum_smoke(world, rank, device, id_path.c_str(),
+    pocket::run_tp_float_sum_smoke(world, rank, device, id_path.c_str(),
                                  static_cast<float>(rank + 1));
 
     // FP16 all-reduce over one hidden row, the shape the engine's TP reduce
@@ -137,7 +137,7 @@ int main(int argc, char** argv) {
                           static_cast<float>(i % 8));
     }
 
-    if (!dsv4::device_set(device)) {
+    if (!pocket::device_set(device)) {
         throw std::runtime_error("device_set failed in tp_comm smoke test");
     }
     DeviceBuffer<uint16_t> d_values(static_cast<size_t>(count));
@@ -148,9 +148,9 @@ int main(int argc, char** argv) {
     for (int iter = 0; iter < 3; ++iter) {
         std::vector<uint16_t> values = host;
         d_values.upload(values.data());
-        dsv4::tp_all_reduce_sum_f16_inplace(world, rank, device, id_path.c_str(),
+        pocket::tp_all_reduce_sum_f16_inplace(world, rank, device, id_path.c_str(),
                                             d_values.get(), count);
-        if (!dsv4::device_synchronize()) {
+        if (!pocket::device_synchronize()) {
             throw std::runtime_error("device_synchronize failed after all-reduce");
         }
         d_values.download(values.data());
@@ -189,7 +189,7 @@ int main(int argc, char** argv) {
     d_local_logits.upload(local_logits.data());
     // Inputs are device-resident, outputs are host: that is the signature the
     // engine's sampler uses on the non-device-resident path.
-    dsv4::tp_global_top1_rows(world, rank, device, id_path.c_str(),
+    pocket::tp_global_top1_rows(world, rank, device, id_path.c_str(),
                               d_local_tokens.get(), d_local_logits.get(), rows,
                               global_tokens.data(), global_logits.data());
     for (int row = 0; row < rows; ++row) {

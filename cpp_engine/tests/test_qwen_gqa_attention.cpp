@@ -115,7 +115,7 @@ bool run_decode(int q_heads, int kv_heads, int head_dim, int context_len, int ma
     cudaMemcpy(dev.k, k.data(), k.size() * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(dev.v, v.data(), v.size() * sizeof(float), cudaMemcpyHostToDevice);
 
-    if (!dsv4::qwen_gqa_decode_attention_cuda(dev.q, dev.k, dev.v, dev.out, dev.scores,
+    if (!pocket::qwen_gqa_decode_attention_cuda(dev.q, dev.k, dev.v, dev.out, dev.scores,
                                               q_heads, kv_heads, head_dim, context_len,
                                               max_context)) {
         fail("gqa decode launch failed");
@@ -213,16 +213,16 @@ bool run_prefill_tiled(int rows, int q_heads, int kv_heads, int head_dim,
     cudaMemcpy(d_k, k.data(), k.size() * sizeof(uint16_t), cudaMemcpyHostToDevice);
     cudaMemcpy(d_v, v.data(), v.size() * sizeof(uint16_t), cudaMemcpyHostToDevice);
 
-    setenv("DSV4_QWEN_GQA_POS_TILE", "1", 1);
+    setenv("POCKETLLM_QWEN_GQA_POS_TILE", "1", 1);
     // An unset LONG_TILE selects hpg6 and an unset MMA_TILE selects the
     // tensor-core kernel in production. Make this reference launch explicitly
     // generic on both so the candidate checks below cannot compare a kernel with
     // itself through inherited or default environment state.
-    setenv("DSV4_QWEN_GQA_LONG_TILE", "0", 1);
-    setenv("DSV4_QWEN_GQA_MMA_TILE", "0", 1);
-    unsetenv("DSV4_QWEN_GQA_FLASH_TILE");
-    unsetenv("DSV4_QWEN_GQA_QUERY_ROWS");
-    const bool tiled_ok = dsv4::qwen_gqa_prefill_attention_f16_tiled_cuda(
+    setenv("POCKETLLM_QWEN_GQA_LONG_TILE", "0", 1);
+    setenv("POCKETLLM_QWEN_GQA_MMA_TILE", "0", 1);
+    unsetenv("POCKETLLM_QWEN_GQA_FLASH_TILE");
+    unsetenv("POCKETLLM_QWEN_GQA_QUERY_ROWS");
+    const bool tiled_ok = pocket::qwen_gqa_prefill_attention_f16_tiled_cuda(
         d_q, d_k, d_v, d_tiled, rows, q_heads, kv_heads, head_dim,
         position_offset, max_context, 0, 0);
     bool long_qr2_ok = true;
@@ -230,38 +230,38 @@ bool run_prefill_tiled(int rows, int q_heads, int kv_heads, int head_dim,
     bool flash_ok = true;
     bool mma_ok = true;
     if (long_shape) {
-        setenv("DSV4_QWEN_GQA_LONG_TILE", "1", 1);
-        setenv("DSV4_QWEN_GQA_QUERY_ROWS", "2", 1);
-        long_qr2_ok = dsv4::qwen_gqa_prefill_attention_f16_tiled_cuda(
+        setenv("POCKETLLM_QWEN_GQA_LONG_TILE", "1", 1);
+        setenv("POCKETLLM_QWEN_GQA_QUERY_ROWS", "2", 1);
+        long_qr2_ok = pocket::qwen_gqa_prefill_attention_f16_tiled_cuda(
             d_q, d_k, d_v, d_long_qr2, rows, q_heads, kv_heads, head_dim,
             position_offset, max_context, 0, 0);
-        setenv("DSV4_QWEN_GQA_QUERY_ROWS", "4", 1);
-        long_ok = dsv4::qwen_gqa_prefill_attention_f16_tiled_cuda(
+        setenv("POCKETLLM_QWEN_GQA_QUERY_ROWS", "4", 1);
+        long_ok = pocket::qwen_gqa_prefill_attention_f16_tiled_cuda(
             d_q, d_k, d_v, d_long, rows, q_heads, kv_heads, head_dim,
             position_offset, max_context, 0, 0);
-        setenv("DSV4_QWEN_GQA_FLASH_TILE", "1", 1);
-        flash_ok = dsv4::qwen_gqa_prefill_attention_f16_tiled_cuda(
+        setenv("POCKETLLM_QWEN_GQA_FLASH_TILE", "1", 1);
+        flash_ok = pocket::qwen_gqa_prefill_attention_f16_tiled_cuda(
             d_q, d_k, d_v, d_flash, rows, q_heads, kv_heads, head_dim,
             position_offset, max_context, 0, 0);
-        unsetenv("DSV4_QWEN_GQA_FLASH_TILE");
-        unsetenv("DSV4_QWEN_GQA_QUERY_ROWS");
+        unsetenv("POCKETLLM_QWEN_GQA_FLASH_TILE");
+        unsetenv("POCKETLLM_QWEN_GQA_QUERY_ROWS");
         // Tensor-core path. It reassociates both dot products and rounds the
         // softmax numerator to half for the MMA operand, so it is checked against
         // the CPU reference on its own tolerance, never for equality with hpg6.
-        setenv("DSV4_QWEN_GQA_MMA_TILE", "1", 1);
-        mma_ok = dsv4::qwen_gqa_prefill_attention_f16_tiled_cuda(
+        setenv("POCKETLLM_QWEN_GQA_MMA_TILE", "1", 1);
+        mma_ok = pocket::qwen_gqa_prefill_attention_f16_tiled_cuda(
             d_q, d_k, d_v, d_mma, rows, q_heads, kv_heads, head_dim,
             position_offset, max_context, 0, 0);
-        setenv("DSV4_QWEN_GQA_MMA_TILE", "0", 1);
-        setenv("DSV4_QWEN_GQA_LONG_TILE", "0", 1);
+        setenv("POCKETLLM_QWEN_GQA_MMA_TILE", "0", 1);
+        setenv("POCKETLLM_QWEN_GQA_LONG_TILE", "0", 1);
     }
     // The position-batched kernel only amortises barriers; it must reproduce the
     // per-position kernel bit for bit, so this is an equality check rather than a
     // tolerance check.
     uint16_t* d_seq = nullptr;
     bool seq_ok = cudaMalloc(&d_seq, q.size() * sizeof(uint16_t)) == cudaSuccess;
-    setenv("DSV4_QWEN_GQA_POS_TILE", "0", 1);
-    seq_ok = seq_ok && dsv4::qwen_gqa_prefill_attention_f16_tiled_cuda(
+    setenv("POCKETLLM_QWEN_GQA_POS_TILE", "0", 1);
+    seq_ok = seq_ok && pocket::qwen_gqa_prefill_attention_f16_tiled_cuda(
         d_q, d_k, d_v, d_seq, rows, q_heads, kv_heads, head_dim,
         position_offset, max_context, 0, 0);
     // The warp-per-combo kernel reassociates the dot-product reduction, so it is
@@ -269,14 +269,14 @@ bool run_prefill_tiled(int rows, int q_heads, int kv_heads, int head_dim,
     // equality with the per-position kernel.
     uint16_t* d_warp = nullptr;
     bool warp_ok = cudaMalloc(&d_warp, q.size() * sizeof(uint16_t)) == cudaSuccess;
-    setenv("DSV4_QWEN_GQA_POS_TILE", "1", 1);
-    setenv("DSV4_QWEN_GQA_WARP_COMBO", "1", 1);
-    warp_ok = warp_ok && dsv4::qwen_gqa_prefill_attention_f16_tiled_cuda(
+    setenv("POCKETLLM_QWEN_GQA_POS_TILE", "1", 1);
+    setenv("POCKETLLM_QWEN_GQA_WARP_COMBO", "1", 1);
+    warp_ok = warp_ok && pocket::qwen_gqa_prefill_attention_f16_tiled_cuda(
         d_q, d_k, d_v, d_warp, rows, q_heads, kv_heads, head_dim,
         position_offset, max_context, 0, 0);
-    unsetenv("DSV4_QWEN_GQA_WARP_COMBO");
-    unsetenv("DSV4_QWEN_GQA_POS_TILE");
-    const bool plain_ok = dsv4::qwen_gqa_prefill_attention_f16(
+    unsetenv("POCKETLLM_QWEN_GQA_WARP_COMBO");
+    unsetenv("POCKETLLM_QWEN_GQA_POS_TILE");
+    const bool plain_ok = pocket::qwen_gqa_prefill_attention_f16(
         d_q, d_k, d_v, d_plain, rows, q_heads, kv_heads, head_dim,
         position_offset, max_context);
     if (!tiled_ok || !plain_ok || !long_qr2_ok || !long_ok || !flash_ok ||
@@ -434,11 +434,11 @@ bool run_prefill_tiled(int rows, int q_heads, int kv_heads, int head_dim,
                     long_qr2_vs_qr4_mismatches, worst_flash, flash_mismatches,
                     worst_mma, mma_mismatches);
     }
-    unsetenv("DSV4_QWEN_GQA_LONG_TILE");
-    unsetenv("DSV4_QWEN_GQA_QUERY_ROWS");
-    unsetenv("DSV4_QWEN_GQA_FLASH_TILE");
-    unsetenv("DSV4_QWEN_GQA_MMA_TILE");
-    unsetenv("DSV4_QWEN_GQA_POS_TILE");
+    unsetenv("POCKETLLM_QWEN_GQA_LONG_TILE");
+    unsetenv("POCKETLLM_QWEN_GQA_QUERY_ROWS");
+    unsetenv("POCKETLLM_QWEN_GQA_FLASH_TILE");
+    unsetenv("POCKETLLM_QWEN_GQA_MMA_TILE");
+    unsetenv("POCKETLLM_QWEN_GQA_POS_TILE");
     (void)long_qr2_mismatches;
     (void)long_mismatches;
     (void)flash_mismatches;
@@ -499,15 +499,15 @@ bool run_decode_mma(int context_len, int target_splits,
     }
 
     const int mma_splits = split_override > 0
-        ? dsv4::qwen_gqa_decode_split_count_variant(
-              context_len, dsv4::QwenGqaDecodeVariant::TensorCore,
+        ? pocket::qwen_gqa_decode_split_count_variant(
+              context_len, pocket::QwenGqaDecodeVariant::TensorCore,
               split_override)
-        : dsv4::qwen_gqa_decode_split_count_variant(
-              context_len, dsv4::QwenGqaDecodeVariant::TensorCore);
-    const int scalar_splits = dsv4::qwen_gqa_decode_split_count_variant(
-        context_len, dsv4::QwenGqaDecodeVariant::Scalar, split_override);
+        : pocket::qwen_gqa_decode_split_count_variant(
+              context_len, pocket::QwenGqaDecodeVariant::TensorCore);
+    const int scalar_splits = pocket::qwen_gqa_decode_split_count_variant(
+        context_len, pocket::QwenGqaDecodeVariant::Scalar, split_override);
     if (check_variant_geometry && split_override == 0 &&
-        std::getenv("DSV4_QWEN_DECODE_MMA_TARGET_SPLITS") == nullptr &&
+        std::getenv("POCKETLLM_QWEN_DECODE_MMA_TARGET_SPLITS") == nullptr &&
         mma_splits != target_splits) {
         fail("gqa decode candidate split count ctx=" +
              std::to_string(context_len) + " got=" +
@@ -572,19 +572,19 @@ bool run_decode_mma(int context_len, int target_splits,
         release();
         return false;
     }
-    if (!dsv4::qwen_gqa_decode_attention_f16_fused_variant_cuda(
+    if (!pocket::qwen_gqa_decode_attention_f16_fused_variant_cuda(
             d_q, d_k, d_v, d_scalar, d_partials, q_heads, kv_heads, head_dim,
             context_len, max_context, 0, 0,
-            dsv4::QwenGqaDecodeVariant::Scalar, split_override) ||
+            pocket::QwenGqaDecodeVariant::Scalar, split_override) ||
         cudaDeviceSynchronize() != cudaSuccess) {
         fail("gqa decode scalar launch ctx=" + std::to_string(context_len));
         release();
         return true;
     }
-    if (!dsv4::qwen_gqa_decode_attention_f16_fused_variant_cuda(
+    if (!pocket::qwen_gqa_decode_attention_f16_fused_variant_cuda(
             d_q, d_k, d_v, d_mma, d_partials, q_heads, kv_heads, head_dim,
             context_len, max_context, 0, 0,
-            dsv4::QwenGqaDecodeVariant::TensorCore, split_override) ||
+            pocket::QwenGqaDecodeVariant::TensorCore, split_override) ||
         cudaDeviceSynchronize() != cudaSuccess) {
         fail("gqa decode candidate launch ctx=" + std::to_string(context_len));
         release();
@@ -602,10 +602,10 @@ bool run_decode_mma(int context_len, int target_splits,
     // memory with one owning lane per element, so a repeat mismatch would mean a
     // race rather than a reassociation difference.
     std::vector<uint16_t> repeat(q_elements);
-    if (!dsv4::qwen_gqa_decode_attention_f16_fused_variant_cuda(
+    if (!pocket::qwen_gqa_decode_attention_f16_fused_variant_cuda(
             d_q, d_k, d_v, d_mma, d_partials, q_heads, kv_heads, head_dim,
             context_len, max_context, 0, 0,
-            dsv4::QwenGqaDecodeVariant::TensorCore, split_override) ||
+            pocket::QwenGqaDecodeVariant::TensorCore, split_override) ||
         cudaDeviceSynchronize() != cudaSuccess ||
         cudaMemcpy(repeat.data(), d_mma, repeat.size() * sizeof(uint16_t),
                    cudaMemcpyDeviceToHost) != cudaSuccess) {
@@ -723,13 +723,13 @@ bool run_verify_crossover(int context_len) {
                    cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemcpy(d_v, v.data(), v.size() * sizeof(uint16_t),
                    cudaMemcpyHostToDevice) != cudaSuccess ||
-        !dsv4::qwen_gqa_verify_attention_f16_exact_cuda(
+        !pocket::qwen_gqa_verify_attention_f16_exact_cuda(
             d_q, d_k, d_v, d_exact, d_scores, rows, q_heads, kv_heads,
             head_dim, position_offset, context_len) ||
-        !dsv4::qwen_gqa_verify_attention_f16(
+        !pocket::qwen_gqa_verify_attention_f16(
             d_q, d_k, d_v, d_split, d_partials, rows, q_heads, kv_heads,
             head_dim, position_offset, context_len, splits) ||
-        !dsv4::qwen_gqa_verify_attention_f16_cublas_qk_cuda(
+        !pocket::qwen_gqa_verify_attention_f16_cublas_qk_cuda(
             d_q, d_k, d_v, d_cublas, d_scores, rows, q_heads, kv_heads,
             head_dim, position_offset, context_len) ||
         cudaDeviceSynchronize() != cudaSuccess) {
@@ -774,7 +774,7 @@ bool run_verify_crossover(int context_len) {
 }  // namespace
 
 int main() {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::printf("[SKIP] test_qwen_gqa_attention requires a CUDA device\n");
         return 0;
     }
@@ -826,7 +826,7 @@ int main() {
     // accepts; 8199 and 65537 leave the last KV tile partial. Both kernels run in
     // this process against the same inputs, so every case checks scalar against
     // the CPU reference, the candidate against the CPU reference, and the two
-    // against each other, regardless of what DSV4_QWEN_DECODE_MMA selects.
+    // against each other, regardless of what POCKETLLM_QWEN_DECODE_MMA selects.
     // The candidate targets two CTA waves (136 on this host) at every context.
     // 4096 and 8199 land below that because the count is re-derived from the
     // rounded slice length: 31 positions cover 4096 in 133 splits and 61 cover
@@ -855,9 +855,9 @@ int main() {
         std::printf("[SKIP] device allocation failed\n");
         return 0;
     }
-    const int tp2_long_splits = dsv4::qwen_gqa_decode_split_count(65537, 2, true);
+    const int tp2_long_splits = pocket::qwen_gqa_decode_split_count(65537, 2, true);
     const char* mma_split_env =
-        std::getenv("DSV4_QWEN_DECODE_MMA_TARGET_SPLITS");
+        std::getenv("POCKETLLM_QWEN_DECODE_MMA_TARGET_SPLITS");
     const int mma_split_override =
         mma_split_env != nullptr ? std::atoi(mma_split_env) : 0;
     const int expected_tp2_long_splits =

@@ -16,13 +16,13 @@ Decisions already made:
 
 Three measured facts make the refactor tractable:
 
-1. **Zero kernel launches in the engine layer.** `<<<` count is 0 in `dsv4_engine.cpp`,
+1. **Zero kernel launches in the engine layer.** `<<<` count is 0 in `deepseek_v4_engine.cpp`,
    `qwen_engine.cpp`, and `dspark_engine.cpp`. All kernels already sit behind a function-call
    boundary.
 2. **The kernel headers are already vendor-neutral.** `cuda_ops.hpp` and `qwen_cuda_ops.hpp` include
    only `<cstddef>` / `<cstdint>`, and 91 of 93 declarations take `void* stream`. Only
    `qwen_sampler.hpp` leaks CUDA types.
-3. **Device memory is already funnelled.** In `dsv4_engine.cpp`, 892 of ~934 CUDA call sites go
+3. **Device memory is already funnelled.** In `deepseek_v4_engine.cpp`, 892 of ~934 CUDA call sites go
    through the `check_cuda(...)` wrapper; only 42 raw `cudaMalloc` sites bypass it.
 
 So the engine-layer coupling is overwhelmingly **memory management, not compute**:
@@ -37,7 +37,7 @@ cpp_engine/
     weight_source.cpp  model_config.cpp  qwen_config.cpp  tokenizer.cpp
     tensor.cpp  sampler.cpp  cmd_channel.cpp  python_sidecar.cpp  openai_server.cpp
   engine/                  # one copy, written against backends/api only
-    dsv4_engine.cpp  qwen_engine.cpp  dspark_engine.cpp
+    deepseek_v4_engine.cpp  qwen_engine.cpp  dspark_engine.cpp
     qwen_dflash2.cpp  qwen_dspark.cpp  qwen_weights.cpp  qwen_target_head.cpp
   backends/
     api/                   # vendor-neutral contracts (no vendor headers)
@@ -86,7 +86,7 @@ for.
 
 The collective surface is small: 13 functions in `tp_comm.hpp`, using only
 AllReduce / AllGather / Broadcast plus comm init/destroy and group start/end. Every one of these has
-an HCCL equivalent. Engine call sites: 54 in `dsv4_engine.cpp`, 52 in `qwen_engine.cpp`.
+an HCCL equivalent. Engine call sites: 54 in `deepseek_v4_engine.cpp`, 52 in `qwen_engine.cpp`.
 
 ## Kernel sharing policy
 
@@ -114,7 +114,7 @@ Each phase ends in a buildable, testable state.
 
 ### Phase 1 — Extract device_runtime, CUDA-only
 
-Scope is now measured: the 7 engine sources still needing a vendor SDK are `dsv4_engine.cpp`,
+Scope is now measured: the 7 engine sources still needing a vendor SDK are `deepseek_v4_engine.cpp`,
 `qwen_engine.cpp`, `dspark_engine.cpp`, `qwen_dflash2.cpp`, `qwen_dspark.cpp`, `qwen_weights.cpp`
 and `main.cpp`. Completing this phase means `check_layering` can be extended to cover `engine/`.
 
@@ -123,8 +123,8 @@ and `main.cpp`. Completing this phase means `check_layering` can be extended to 
   identical in codegen.
 - Migrate `check_cuda` call sites to the abstraction. Start with the low-count files
   (`qwen_target_head` 4, `main` 7, `qwen_weights` 18, `qwen_dspark` 50) to validate the interface
-  before touching `dsv4_engine.cpp`.
-- **The 42 raw `cudaMalloc` sites in `dsv4_engine.cpp` need individual review** — they bypass
+  before touching `deepseek_v4_engine.cpp`.
+- **The 42 raw `cudaMalloc` sites in `deepseek_v4_engine.cpp` need individual review** — they bypass
   `check_cuda` and will not be caught by changing one helper.
 - Safety net: CUDA build must stay green throughout; the compiler catches missed sites once vendor
   headers are removed from `engine/`.
@@ -136,7 +136,7 @@ and `main.cpp`. Completing this phase means `check_layering` can be extended to 
 - Added the `check_layering` target asserting that `include/` and `core/` pull in no vendor SDK
   header. `engine/` is deliberately not yet covered, since it still calls vendor APIs directly.
 - Reworked CMake into `POCKET_BACKEND=cuda|ascend` with `cuda` as the default, keeping the
-  `dsv4_cpp_core` archive, the `dsv4_cpp_engine` binary name and all 87 test targets unchanged.
+  `pocket_cpp_core` archive, the `pocketllm_engine` binary name and all 87 test targets unchanged.
 
 Verified locally without a CUDA toolchain: all 13 `core/` sources plus `third_party/httplib.cpp`
 compile to objects, while the 7 `engine/` sources fail on `cuda_runtime.h` exactly as expected.

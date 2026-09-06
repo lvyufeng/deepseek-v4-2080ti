@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 enum class QwenShardRule {
     Replicated,
@@ -307,4 +307,4 @@ QwenDeviceTensor qwen_upload_nvfp4_linear_cuda(
     float* weight_global_factor, float* input_global_scale,
     void* stream = nullptr);
 
-}  // namespace dsv4
+}  // namespace pocket

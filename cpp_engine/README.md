@@ -4,7 +4,7 @@
 
 `cpp_engine/` is PocketLLM's native C++/CUDA runtime and model-inspection layer. It currently contains performance-oriented DeepSeek-V4 paths, a validated Qwen3.8-27B-FP8 TP4 text runtime, GGUF/Safetensors readers, NCCL helpers, and model-specific CUDA tests.
 
-The executable is still named `dsv4_cpp_engine` for compatibility with existing scripts. The name does not mean every code path is DeepSeek-specific.
+The executable is still named `pocketllm_engine` for compatibility with existing scripts. The name does not mean every code path is DeepSeek-specific.
 
 ## Current scope
 
@@ -29,13 +29,13 @@ The default CUDA architecture is SM75 for the RTX 2080 Ti/Turing baseline.
 ## Executable
 
 ```text
-build/cpp_engine/dsv4_cpp_engine
+build/cpp_engine/pocketllm_engine
 ```
 
 Inspect or dump a DeepSeek GGUF config:
 
 ```bash
-build/cpp_engine/dsv4_cpp_engine \
+build/cpp_engine/pocketllm_engine \
   --model /path/to/model.gguf \
   --dump-config
 ```
@@ -43,7 +43,7 @@ build/cpp_engine/dsv4_cpp_engine \
 Inspect a Safetensors checkpoint:
 
 ```bash
-build/cpp_engine/dsv4_cpp_engine \
+build/cpp_engine/pocketllm_engine \
   --ckpt /path/to/checkpoint \
   --dump-config
 ```
@@ -51,7 +51,7 @@ build/cpp_engine/dsv4_cpp_engine \
 Audit a Qwen TP shard without running generation:
 
 ```bash
-build/cpp_engine/dsv4_cpp_engine \
+build/cpp_engine/pocketllm_engine \
   --ckpt /path/to/Qwen3.8-27B-FP8 \
   --tp-world 4 --tp-rank 0 \
   --qwen-audit
@@ -79,6 +79,12 @@ CMake builds focused CUDA/numerical tests under `build/cpp_engine/tests/`, inclu
 
 A kernel microbenchmark is not a model TPS result. End-to-end numbers must follow the repository's [benchmark reporting rules](../docs/benchmarking.md).
 
-## Compatibility names
+## Naming
 
-Existing code and scripts use the `dsv4` C++ namespace, `DSV4_*` environment variables, and the `dsv4_cpp_engine` filename. They remain in place to avoid breaking validated deployment commands. User-facing branding and new documentation use **PocketLLM**.
+The runtime uses the `pocket` C++ namespace, `POCKETLLM_*` environment variables, and the
+`pocketllm_engine` executable. `DeepSeek-V4` still appears wherever an actual upstream model,
+checkpoint, or architecture is meant — that is a model name, not a project name.
+
+This is a rename from the project's former `dsv4` identity and it is a **breaking change**: see
+[the migration note](../docs/migration/dsv4-to-pocket-rename.md) for the full mapping and for how to
+translate an existing deployment command.

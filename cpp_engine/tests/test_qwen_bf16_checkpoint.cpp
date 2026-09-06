@@ -250,16 +250,16 @@ bool write_fixture(const std::string& dir, const std::vector<TensorSpec>& text,
 
 void check_dense_bf16_tp4(const std::string& dir, size_t text_count,
                           size_t visual_count) {
-    const dsv4::QwenConfig config = dsv4::QwenConfig::from_hf_config(dir);
-    const dsv4::SafeTensorsIndex index(dir);
+    const pocket::QwenConfig config = pocket::QwenConfig::from_hf_config(dir);
+    const pocket::SafeTensorsIndex index(dir);
     require(index.shard_count() == 2, "fixture must span two shards");
     require(index.tensor_count() == text_count + visual_count,
             "index must hold both text and vision tensors");
 
     for (int rank = 0; rank < 4; ++rank) {
-        const dsv4::QwenWeightMap map(index, config, 4, rank);
+        const pocket::QwenWeightMap map(index, config, 4, rank);
         map.require_full_coverage();
-        const dsv4::QwenCoverage cover = map.coverage();
+        const pocket::QwenCoverage cover = map.coverage();
         require(cover.mapped_tensors == text_count,
                 "text map must claim exactly the text tensors, got " +
                     std::to_string(cover.mapped_tensors));
@@ -267,7 +267,7 @@ void check_dense_bf16_tp4(const std::string& dir, size_t text_count,
                 "vision tensors must be reported as deliberately ignored");
         require(cover.unexpected_tensors == 0, "no tensor may be unclassified");
 
-        const dsv4::QwenLinearKindCounts kinds =
+        const pocket::QwenLinearKindCounts kinds =
             map.checkpoint_linear_kind_counts();
         require(kinds.fp8_block128 == 0 && kinds.fp8_channel == 0 &&
                     kinds.nvfp4_group16 == 0,
@@ -301,19 +301,19 @@ void check_dense_bf16_tp4(const std::string& dir, size_t text_count,
                 "row-parallel o_proj must shard its input");
 
         // BF16 storage, FP16 device residency: the CUDA/SM75 policy.
-        require(map.embed_tokens().dtype == dsv4::SafeDType::BF16 &&
-                    map.embed_tokens().device_dtype == dsv4::SafeDType::F16,
+        require(map.embed_tokens().dtype == pocket::SafeDType::BF16 &&
+                    map.embed_tokens().device_dtype == pocket::SafeDType::F16,
                 "BF16 storage must materialize as FP16 on Turing");
         require(map.mtp().found, "native MTP must be mapped");
-        require(map.mtp().fc.weight.rule == dsv4::QwenShardRule::Replicated,
+        require(map.mtp().fc.weight.rule == pocket::QwenShardRule::Replicated,
                 "MTP fusion projection stays replicated");
 
         // Packed QKV and the depthwise conv share one fused row axis. Each rank
         // must take its own slice of all three segments, in order, rather than a
         // single contiguous range of the fused tensor.
         const auto& linear_attn = map.layers().front().linear_attention;
-        const dsv4::QwenTensorRef& qkv = linear_attn.in_proj_qkv.weight;
-        require(qkv.rule == dsv4::QwenShardRule::PackedQkvColumnParallel,
+        const pocket::QwenTensorRef& qkv = linear_attn.in_proj_qkv.weight;
+        require(qkv.rule == pocket::QwenShardRule::PackedQkvColumnParallel,
                 "fused in_proj_qkv must use the packed column-parallel rule");
         require(qkv.segments.size() == 3, "packed QKV must expose three segments");
         const uint64_t key_shard = 8u * 32u / 4u;    // 64 rows of K per rank
@@ -329,15 +329,15 @@ void check_dense_bf16_tp4(const std::string& dir, size_t text_count,
         require(qkv.segments[0].second == qkv.segments[1].second,
                 "Q and K segments shard identically");
 
-        const dsv4::QwenTensorRef& conv = linear_attn.conv1d;
-        require(conv.rule == dsv4::QwenShardRule::PackedConvChannelParallel,
+        const pocket::QwenTensorRef& conv = linear_attn.conv1d;
+        require(conv.rule == pocket::QwenShardRule::PackedConvChannelParallel,
                 "conv1d must shard by channel alongside packed QKV");
         require(conv.segments.size() == 3, "conv1d must follow the QKV segments");
         require(conv.local_shape.at(0) == qkv.local_shape.at(0),
                 "conv1d channels must match the packed QKV rows on this rank");
         require(conv.local_shape.at(2) == 4, "conv kernel width stays whole");
 
-        require(linear_attn.out_proj.rule == dsv4::QwenShardRule::RowParallel,
+        require(linear_attn.out_proj.rule == pocket::QwenShardRule::RowParallel,
                 "linear attention out_proj is row parallel");
         require(linear_attn.out_proj.logical_local_shape.at(1) == value_shard,
                 "out_proj must shard its input by value heads");
@@ -347,10 +347,10 @@ void check_dense_bf16_tp4(const std::string& dir, size_t text_count,
         require(cover.sharded_local_bytes < cover.checkpoint_text_bytes,
                 "a single rank must hold less than the whole text checkpoint");
 
-        const dsv4::QwenHostTensor host =
-            dsv4::qwen_materialize_host_tensor(index, map.embed_tokens());
-        require(host.storage_dtype == dsv4::SafeDType::BF16 &&
-                    host.device_dtype == dsv4::SafeDType::F16,
+        const pocket::QwenHostTensor host =
+            pocket::qwen_materialize_host_tensor(index, map.embed_tokens());
+        require(host.storage_dtype == pocket::SafeDType::BF16 &&
+                    host.device_dtype == pocket::SafeDType::F16,
                 "materializer must convert BF16 to FP16");
         require(host.bytes.size() == 128u * 128u * sizeof(uint16_t),
                 "materialized embedding shard size");
@@ -368,9 +368,9 @@ void check_unexpected_tensor_is_rejected(const std::string& base_dir) {
     require(write_fixture(dir, text_specs(), visual),
             "could not write unexpected-tensor fixture");
 
-    const dsv4::QwenConfig config = dsv4::QwenConfig::from_hf_config(dir);
-    const dsv4::SafeTensorsIndex index(dir);
-    const dsv4::QwenWeightMap map(index, config, 4, 0);
+    const pocket::QwenConfig config = pocket::QwenConfig::from_hf_config(dir);
+    const pocket::SafeTensorsIndex index(dir);
+    const pocket::QwenWeightMap map(index, config, 4, 0);
     require(map.coverage().unexpected_tensors == 1,
             "an unrecognized tensor must be counted as unexpected");
     bool threw = false;
@@ -389,7 +389,7 @@ bool path_exists(const std::string& path) {
 
 // Authoritative Qwen/Qwen3.8-27B facts, verified against the published index.
 void check_real_checkpoint(const std::string& dir) {
-    const dsv4::QwenConfig config = dsv4::QwenConfig::from_hf_config(dir);
+    const pocket::QwenConfig config = pocket::QwenConfig::from_hf_config(dir);
     require(config.vocab_size == 248320, "official vocab_size");
     require(config.hidden_size == 5120, "official hidden_size");
     require(config.num_hidden_layers == 64, "official layer count");
@@ -400,21 +400,21 @@ void check_real_checkpoint(const std::string& dir) {
     require(config.max_position_embeddings == 262144, "official max positions");
     require(config.mtp_num_hidden_layers == 1, "official MTP layer count");
 
-    const dsv4::SafeTensorsIndex index(dir);
+    const pocket::SafeTensorsIndex index(dir);
     require(index.shard_count() == 18, "official shard count");
     require(index.tensor_count() == 1199, "official index tensor count");
     require(index.total_size() == 55562855904ull, "official total_size");
 
     for (const std::string& shard : index.shards()) {
-        const dsv4::SafeTensorsShard opened(index.shard_path(shard));
+        const pocket::SafeTensorsShard opened(index.shard_path(shard));
         require(!opened.tensors().empty(), "shard header must parse: " + shard);
     }
 
     uint64_t previous_text_bytes = 0;
     for (int rank = 0; rank < 4; ++rank) {
-        const dsv4::QwenWeightMap map(index, config, 4, rank);
+        const pocket::QwenWeightMap map(index, config, 4, rank);
         map.require_full_coverage();
-        const dsv4::QwenCoverage cover = map.coverage();
+        const pocket::QwenCoverage cover = map.coverage();
         require(cover.mapped_tensors == 866, "official text tensor count");
         require(cover.visual_tensors == 333, "official vision tensor count");
         require(cover.checkpoint_text_bytes == 54641395712ull,

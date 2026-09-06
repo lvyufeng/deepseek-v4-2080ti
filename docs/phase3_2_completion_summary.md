@@ -131,8 +131,8 @@ Impl(..., const QwenEngineOptions& options, ...) {
 ### ✅ 编译成功
 
 ```bash
-make -j8 dsv4_cpp_engine
-[100%] Built target dsv4_cpp_engine
+make -j8 pocketllm_engine
+[100%] Built target pocketllm_engine
 ```
 
 **结果**：
@@ -352,7 +352,7 @@ Phase 3.2 成功实现了 **Multi-slot KV Cache 重构**：
 
 **编译输出**:
 ```
-[100%] Built target dsv4_cpp_engine
+[100%] Built target pocketllm_engine
 ```
 
 **代码状态**: 已完成，待测试 ✅

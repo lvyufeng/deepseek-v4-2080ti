@@ -73,7 +73,7 @@ bool wide_n64_tail_matches_wmma() {
     constexpr int blocks_per_row = cols / 64;
     constexpr float global_factor = 0.125f;
 
-    std::vector<dsv4::QwenNvfp4Block64> blocks(rows * blocks_per_row);
+    std::vector<pocket::QwenNvfp4Block64> blocks(rows * blocks_per_row);
     for (size_t index = 0; index < blocks.size(); ++index) {
         auto& record = blocks[index];
         static constexpr uint8_t scales[4] = {0x38, 0x34, 0x3c, 0x30};
@@ -97,7 +97,7 @@ bool wide_n64_tail_matches_wmma() {
     DeviceBuffer dx, dw, dq8, dq8_scale, dy_wide, dy_wmma;
     uint16_t* d_x = dx.allocate<uint16_t>(input.size());
     uint8_t* d_blocks = dw.allocate<uint8_t>(
-        blocks.size() * sizeof(dsv4::QwenNvfp4Block64));
+        blocks.size() * sizeof(pocket::QwenNvfp4Block64));
     int8_t* d_q8 = dq8.allocate<int8_t>(static_cast<size_t>(batch) * cols);
     float* d_q8_scale = dq8_scale.allocate<float>(
         static_cast<size_t>(batch) * cols / 32);
@@ -108,14 +108,14 @@ bool wide_n64_tail_matches_wmma() {
         cudaMemcpy(d_x, input.data(), input.size() * sizeof(uint16_t),
                    cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemcpy(d_blocks, blocks.data(),
-                   blocks.size() * sizeof(dsv4::QwenNvfp4Block64),
+                   blocks.size() * sizeof(pocket::QwenNvfp4Block64),
                    cudaMemcpyHostToDevice) != cudaSuccess ||
-        !dsv4::qwen_nvfp4_quantize_q8_group32_f16_cuda(
+        !pocket::qwen_nvfp4_quantize_q8_group32_f16_cuda(
             d_x, d_q8, d_q8_scale, batch, cols, cols) ||
-        !dsv4::qwen_nvfp4_group16_matmul_q8_wmma_f32_cuda(
+        !pocket::qwen_nvfp4_group16_matmul_q8_wmma_f32_cuda(
             d_q8, d_q8_scale, d_blocks, d_wmma, batch, rows, cols, cols,
             rows, blocks_per_row, global_factor) ||
-        !dsv4::qwen_nvfp4_group16_matmul_q8_wide_n64_f16_cuda(
+        !pocket::qwen_nvfp4_group16_matmul_q8_wide_n64_f16_cuda(
             d_q8, d_q8_scale, d_blocks, d_wide, batch, rows, cols, cols,
             rows, blocks_per_row, global_factor) ||
         cudaDeviceSynchronize() != cudaSuccess) {
@@ -157,7 +157,7 @@ bool wide_n64_tail_matches_wmma() {
 }  // namespace
 
 int main() {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::printf("[SKIP] test_qwen_nvfp4 requires CUDA\n");
         return 0;
     }
@@ -167,7 +167,7 @@ int main() {
     constexpr int cols = 128;
     constexpr int blocks_per_row = cols / 64;
     constexpr float global_factor = 0.25f;
-    std::vector<dsv4::QwenNvfp4Block64> blocks(rows * blocks_per_row);
+    std::vector<pocket::QwenNvfp4Block64> blocks(rows * blocks_per_row);
     for (int row = 0; row < rows; ++row) {
         for (int block = 0; block < blocks_per_row; ++block) {
             auto& record = blocks[row * blocks_per_row + block];
@@ -212,9 +212,9 @@ int main() {
                  dy_wide_half, dy_swiglu;
     uint16_t* d_x = dx.allocate<uint16_t>(input.size());
     uint8_t* d_blocks = dw.allocate<uint8_t>(
-        blocks.size() * sizeof(dsv4::QwenNvfp4Block64));
+        blocks.size() * sizeof(pocket::QwenNvfp4Block64));
     uint8_t* d_up_blocks = dw_up.allocate<uint8_t>(
-        blocks.size() * sizeof(dsv4::QwenNvfp4Block64));
+        blocks.size() * sizeof(pocket::QwenNvfp4Block64));
     uint16_t* d_half = dy_half.allocate<uint16_t>(batch * rows);
     float* d_float = dy_float.allocate<float>(batch * rows);
     int8_t* d_q8 = dq8.allocate<int8_t>(batch * cols);
@@ -231,35 +231,35 @@ int main() {
         cudaMemcpy(d_x, input.data(), input.size() * sizeof(uint16_t),
                    cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemcpy(d_blocks, blocks.data(),
-                   blocks.size() * sizeof(dsv4::QwenNvfp4Block64),
+                   blocks.size() * sizeof(pocket::QwenNvfp4Block64),
                    cudaMemcpyHostToDevice) != cudaSuccess ||
         cudaMemcpy(d_up_blocks, blocks.data(),
-                   blocks.size() * sizeof(dsv4::QwenNvfp4Block64),
+                   blocks.size() * sizeof(pocket::QwenNvfp4Block64),
                    cudaMemcpyHostToDevice) != cudaSuccess ||
-        !dsv4::qwen_nvfp4_group16_matmul_rows_f16_cuda(
+        !pocket::qwen_nvfp4_group16_matmul_rows_f16_cuda(
             d_x, d_blocks, d_half, batch, rows, cols, cols, rows,
             blocks_per_row, global_factor) ||
-        !dsv4::qwen_nvfp4_group16_matmul_rows_f16_f32_cuda(
+        !pocket::qwen_nvfp4_group16_matmul_rows_f16_f32_cuda(
             d_x, d_blocks, d_float, batch, rows, cols, cols, rows,
             blocks_per_row, global_factor) ||
-        !dsv4::qwen_nvfp4_quantize_q8_group32_f16_cuda(
+        !pocket::qwen_nvfp4_quantize_q8_group32_f16_cuda(
             d_x, d_q8, d_q8_scale, batch, cols, cols) ||
-        !dsv4::qwen_nvfp4_group16_matmul_q8_f16_cuda(
+        !pocket::qwen_nvfp4_group16_matmul_q8_f16_cuda(
             d_q8, d_q8_scale, d_blocks, d_dp4a_half, batch, rows, cols,
             cols, rows, blocks_per_row, global_factor) ||
-        !dsv4::qwen_nvfp4_group16_matmul_q8_f32_cuda(
+        !pocket::qwen_nvfp4_group16_matmul_q8_f32_cuda(
             d_q8, d_q8_scale, d_blocks, d_dp4a_float, batch, rows, cols,
             cols, rows, blocks_per_row, global_factor) ||
-        !dsv4::qwen_nvfp4_group16_matmul_q8_wmma_f16_cuda(
+        !pocket::qwen_nvfp4_group16_matmul_q8_wmma_f16_cuda(
             d_q8, d_q8_scale, d_blocks, d_wmma_half, batch, rows, cols,
             cols, rows, blocks_per_row, global_factor) ||
-        !dsv4::qwen_nvfp4_group16_matmul_q8_wmma_f32_cuda(
+        !pocket::qwen_nvfp4_group16_matmul_q8_wmma_f32_cuda(
             d_q8, d_q8_scale, d_blocks, d_wmma_float, batch, rows, cols,
             cols, rows, blocks_per_row, global_factor) ||
-        !dsv4::qwen_nvfp4_group16_matmul_q8_wide_n64_f16_cuda(
+        !pocket::qwen_nvfp4_group16_matmul_q8_wide_n64_f16_cuda(
             d_q8, d_q8_scale, d_blocks, d_wide_half, batch, rows, cols,
             cols, rows, blocks_per_row, global_factor) ||
-        !dsv4::qwen_nvfp4_group16_swiglu_q8_wmma_f16_cuda(
+        !pocket::qwen_nvfp4_group16_swiglu_q8_wmma_f16_cuda(
             d_q8, d_q8_scale, d_blocks, global_factor,
             d_up_blocks, global_factor, d_swiglu, batch, rows, cols,
             cols, rows, blocks_per_row) ||

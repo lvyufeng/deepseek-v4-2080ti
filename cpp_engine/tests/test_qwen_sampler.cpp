@@ -61,16 +61,16 @@ DeviceRun run_sampler(const std::vector<float>& host_logits, int rows,
     int* d_tokens = nullptr;
     float* d_out_logits = nullptr;
     float* d_uniforms = nullptr;
-    dsv4::DeviceRngState* d_states = nullptr;
+    pocket::DeviceRngState* d_states = nullptr;
 
     check(cudaMalloc(&d_logits, host_logits.size() * sizeof(float)), "malloc logits");
     check(cudaMalloc(&d_tokens, static_cast<size_t>(rows) * sizeof(int)), "malloc tokens");
     check(cudaMalloc(&d_out_logits, static_cast<size_t>(rows) * sizeof(float)), "malloc out logits");
-    check(cudaMalloc(&d_states, static_cast<size_t>(rows) * dsv4::qwen_sampler_rng_state_size()), "malloc states");
+    check(cudaMalloc(&d_states, static_cast<size_t>(rows) * pocket::qwen_sampler_rng_state_size()), "malloc states");
     check(cudaMemcpy(d_logits, host_logits.data(),
                      host_logits.size() * sizeof(float), cudaMemcpyHostToDevice),
           "copy logits");
-    check(dsv4::qwen_init_rng_states(d_states, rows, 1234ULL, nullptr), "init states");
+    check(pocket::qwen_init_rng_states(d_states, rows, 1234ULL, nullptr), "init states");
 
     if (!uniforms.empty()) {
         check(cudaMalloc(&d_uniforms, uniforms.size() * sizeof(float)), "malloc uniforms");
@@ -79,7 +79,7 @@ DeviceRun run_sampler(const std::vector<float>& host_logits, int rows,
               "copy uniforms");
     }
 
-    check(dsv4::qwen_sample_top_k_top_p_rows(
+    check(pocket::qwen_sample_top_k_top_p_rows(
               d_logits, d_tokens, d_out_logits, rows, vocab, vocab_start,
               temperature, top_p, top_k, d_states, d_uniforms, nullptr),
           "launch sampler");
@@ -228,7 +228,7 @@ void test_topk40_world_major_merge() {
     check(cudaMemcpy(d_gathered_logits, gathered_logits.data(),
                      gathered_logits.size() * sizeof(float), cudaMemcpyHostToDevice),
           "merge copy gathered logits");
-    check(dsv4::qwen_merge_topk_candidates(
+    check(pocket::qwen_merge_topk_candidates(
               d_gathered_tokens, d_gathered_logits, d_tokens, d_logits, world,
               rows, top_k, nullptr),
           "merge top-k=40 launch");
@@ -450,7 +450,7 @@ int main() {
             check(cudaMemcpy(d_logits, shard_logits.data(),
                              shard_logits.size() * sizeof(float), cudaMemcpyHostToDevice),
                   "tp copy logits");
-            check(dsv4::qwen_local_topk_candidates(
+            check(pocket::qwen_local_topk_candidates(
                       d_logits, d_tokens, d_out, rows, shard, rank * shard,
                       top_k, nullptr),
                   "tp stage1 launch");
@@ -486,13 +486,13 @@ int main() {
         int* d_tokens = nullptr;
         float* d_logits_out = nullptr;
         float* d_uniforms = nullptr;
-        dsv4::DeviceRngState* d_states = nullptr;
+        pocket::DeviceRngState* d_states = nullptr;
         check(cudaMalloc(&d_cand_tok, merged_tokens.size() * sizeof(int)), "tp2 malloc cand tok");
         check(cudaMalloc(&d_cand_lg, merged_logits.size() * sizeof(float)), "tp2 malloc cand lg");
         check(cudaMalloc(&d_tokens, static_cast<size_t>(rows) * sizeof(int)), "tp2 malloc tokens");
         check(cudaMalloc(&d_logits_out, static_cast<size_t>(rows) * sizeof(float)), "tp2 malloc logits");
         check(cudaMalloc(&d_uniforms, uniforms.size() * sizeof(float)), "tp2 malloc uniforms");
-        check(cudaMalloc(&d_states, static_cast<size_t>(rows) * dsv4::qwen_sampler_rng_state_size()), "tp2 malloc states");
+        check(cudaMalloc(&d_states, static_cast<size_t>(rows) * pocket::qwen_sampler_rng_state_size()), "tp2 malloc states");
         check(cudaMemcpy(d_cand_tok, merged_tokens.data(),
                          merged_tokens.size() * sizeof(int), cudaMemcpyHostToDevice),
               "tp2 copy cand tok");
@@ -502,8 +502,8 @@ int main() {
         check(cudaMemcpy(d_uniforms, uniforms.data(),
                          uniforms.size() * sizeof(float), cudaMemcpyHostToDevice),
               "tp2 copy uniforms");
-        check(dsv4::qwen_init_rng_states(d_states, rows, 7ULL, nullptr), "tp2 init states");
-        check(dsv4::qwen_sample_from_candidates(
+        check(pocket::qwen_init_rng_states(d_states, rows, 7ULL, nullptr), "tp2 init states");
+        check(pocket::qwen_sample_from_candidates(
                   d_cand_tok, d_cand_lg, d_tokens, d_logits_out, rows,
                   top_k * tp, 1.0f, 0.95f, top_k, d_states, d_uniforms, nullptr),
               "tp2 launch");

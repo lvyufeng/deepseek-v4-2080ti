@@ -17,7 +17,7 @@ from src.models.deepseek_v4.runtime import (
     ModelArgs,
 )
 from src.models.deepseek_v4.loader import load_model
-from src.encoding.dsv4 import encode_messages, parse_message_from_completion_text
+from src.encoding.deepseek_v4 import encode_messages, parse_message_from_completion_text
 
 
 def _enable_numa_interleave() -> None:

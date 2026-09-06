@@ -3,7 +3,7 @@
 set -eo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="$REPO_ROOT"
-TMP_ROOT="${DSV4_TMP_DIR:-$REPO_ROOT/.tmp}"
+TMP_ROOT="${POCKETLLM_TMP_DIR:-$REPO_ROOT/.tmp}"
 mkdir -p "$TMP_ROOT"
 PYTHON="${PYTHON:-python}"
 TORCHRUN="${TORCHRUN:-torchrun}"
@@ -16,8 +16,8 @@ if [[ ! -e "$CKPT" ]]; then
   echo "Set CKPT_PATH or place the checkpoint under $DEFAULT_CKPT_PATH" >&2
   exit 1
 fi
-LONG="$TMP_ROOT/dsv4_long_input_single.txt"
-OUTDIR="${OUTDIR:-$TMP_ROOT/dsv4_cpu_moe_profile}"
+LONG="$TMP_ROOT/pocketllm_long_input_single.txt"
+OUTDIR="${OUTDIR:-$TMP_ROOT/pocketllm_cpu_moe_profile}"
 rm -rf "$OUTDIR"
 mkdir -p "$OUTDIR"
 

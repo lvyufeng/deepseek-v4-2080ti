@@ -122,7 +122,7 @@ def _get_cpu_moe_server_shm_name() -> str:
     global _cpu_moe_server_ipc_name
     if _cpu_moe_server_ipc_name is not None:
         return _cpu_moe_server_ipc_name
-    default_name = os.getenv("DEEPSEEK_CPU_MOE_SERVER_SHM", "dsv4_cpu_moe_server")
+    default_name = os.getenv("DEEPSEEK_CPU_MOE_SERVER_SHM", "pocketllm_cpu_moe_server")
     if dist.is_initialized() and _env_enabled("DEEPSEEK_CPU_MOE_INPROC_SERVER") and world_size > 1:
         objects = [default_name if rank == 0 else None]
         dist.broadcast_object_list(objects, src=0)

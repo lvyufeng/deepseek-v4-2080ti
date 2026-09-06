@@ -2,7 +2,7 @@
 
 #include <cuda_runtime.h>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 __device__ __forceinline__ float bf16_to_float(uint16_t bits) {
@@ -82,4 +82,4 @@ bool rmsnorm_bf16_gamma_rows_cuda(
     return cudaGetLastError() == cudaSuccess;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

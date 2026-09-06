@@ -169,11 +169,11 @@ int main() {
         check_cuda(cudaMalloc(&d_x, x.size() * sizeof(float)), "malloc x");
         check_cuda(cudaMalloc(&d_y, x.size() * sizeof(float)), "malloc y");
         check_cuda(cudaMalloc(&d_hidden, static_cast<size_t>(routes) * inter_dim * sizeof(float)), "malloc hidden");
-        if (env_int_or_default("DSV4_IQ1_GROUPED_W2_Q8", 1) != 0) {
+        if (env_int_or_default("POCKETLLM_IQ1_GROUPED_W2_Q8", 1) != 0) {
             check_cuda(cudaMalloc(&d_hidden_q, static_cast<size_t>(routes) * inter_dim), "malloc hidden q");
             check_cuda(cudaMalloc(&d_hidden_scale, static_cast<size_t>(routes) * ((inter_dim + 15) / 16) * sizeof(float)), "malloc hidden scale");
         }
-        if (env_int_or_default("DSV4_IQ1_GROUPED_GEMM", 1) != 0) {
+        if (env_int_or_default("POCKETLLM_IQ1_GROUPED_GEMM", 1) != 0) {
             check_cuda(cudaMalloc(&d_x_q, static_cast<size_t>(routes) * dim), "malloc x q");
             check_cuda(cudaMalloc(&d_x_scale, static_cast<size_t>(routes) * ((dim + 15) / 16) * sizeof(float)), "malloc x scale");
             check_cuda(cudaMalloc(&d_tile_experts, static_cast<size_t>(tile_experts.size()) * sizeof(int32_t)), "malloc tile experts");
@@ -197,7 +197,7 @@ int main() {
         check_cuda(cudaMemcpy(d_w2, w2.data(), w2.size(), cudaMemcpyHostToDevice), "copy w2");
         check_cuda(cudaMemcpy(d_w3, w3.data(), w3.size(), cudaMemcpyHostToDevice), "copy w3");
 
-        dsv4::MoePrefillIq1GroupedWorkspace ws;
+        pocket::MoePrefillIq1GroupedWorkspace ws;
         ws.d_hidden = d_hidden;
         ws.d_hidden_q = d_hidden_q;
         ws.d_hidden_scale = d_hidden_scale;
@@ -210,7 +210,7 @@ int main() {
         ws.tile_count = static_cast<int>(tile_experts.size());
         ws.dim = dim;
         ws.inter_dim = inter_dim;
-        if (!dsv4::moe_prefill_iq1_grouped_cuda_with_workspace(
+        if (!pocket::moe_prefill_iq1_grouped_cuda_with_workspace(
                 d_x, d_route_tokens, d_route_weights, d_seg_starts,
                 d_w1, d_w2, d_w3, d_y,
                 tokens, routes, n_local_experts, max_count,
@@ -236,12 +236,12 @@ int main() {
             check_cuda(cudaMemcpy(d_slots, slots.data(), slots.size() * sizeof(int64_t), cudaMemcpyHostToDevice), "copy slots");
             check_cuda(cudaMemcpy(d_weights, token_weights[t].data(), token_weights[t].size() * sizeof(float), cudaMemcpyHostToDevice), "copy weights");
             check_cuda(cudaMemset(d_y_token, 0, dim * sizeof(float)), "zero y token");
-            if (!dsv4::iq1_moe_single_w13_swiglu_cuda(
+            if (!pocket::iq1_moe_single_w13_swiglu_cuda(
                     d_x_token, d_slots, d_weights, d_w1, d_w3, d_hidden_token,
                     topk, n_local_experts, dim, inter_dim, swiglu_limit)) {
                 throw std::runtime_error("single w13 launch failed");
             }
-            if (!dsv4::iq1_moe_single_w2_cuda(
+            if (!pocket::iq1_moe_single_w2_cuda(
                     d_hidden_token, d_slots, d_w2, d_y_token,
                     topk, n_local_experts, dim, inter_dim)) {
                 throw std::runtime_error("single w2 launch failed");
@@ -250,8 +250,8 @@ int main() {
             check_cuda(cudaMemcpy(ref.data() + static_cast<size_t>(t) * dim, d_y_token, dim * sizeof(float), cudaMemcpyDeviceToHost), "copy y token");
         }
 
-        const bool q8_w2 = env_int_or_default("DSV4_IQ1_GROUPED_W2_Q8", 1) != 0;
-        const bool gemm = env_int_or_default("DSV4_IQ1_GROUPED_GEMM", 1) != 0;
+        const bool q8_w2 = env_int_or_default("POCKETLLM_IQ1_GROUPED_W2_Q8", 1) != 0;
+        const bool gemm = env_int_or_default("POCKETLLM_IQ1_GROUPED_GEMM", 1) != 0;
         compare(grouped, ref, gemm ? 8e-2f : (q8_w2 ? 5e-3f : 2e-4f), "iq1_grouped_vs_single");
 
         cudaFree(d_x); cudaFree(d_y); cudaFree(d_hidden); cudaFree(d_hidden_q); cudaFree(d_hidden_scale); cudaFree(d_x_q); cudaFree(d_x_scale); cudaFree(d_tile_experts); cudaFree(d_tile_rows); cudaFree(d_route_tokens); cudaFree(d_route_weights); cudaFree(d_seg_starts);

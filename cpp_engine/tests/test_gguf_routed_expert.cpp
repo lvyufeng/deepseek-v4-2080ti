@@ -2,7 +2,7 @@
 // Embed -> ffn_norm -> q8_1 quantize -> IQ2_XXS w1/w3 -> SwiGLU+q8_1 ->
 // Q2_K w2. Loads only the single expert's bytes from the routed 3D tensor.
 
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
     const int token = argc >= 3 ? std::atoi(argv[2]) : 1234;
     const int expert_id = argc >= 4 ? std::atoi(argv[3]) : 0;
     try {
-        auto r = dsv4::run_gguf_routed_expert_smoke(argv[1], token, expert_id);
+        auto r = pocket::run_gguf_routed_expert_smoke(argv[1], token, expert_id);
         std::printf("token=%d expert_id=%d dim=%d moe_inter_dim=%d\n",
                     token, r.expert_id, r.dim, r.moe_inter_dim);
         std::printf("ffn_normed_rms = %.4f\n", r.ffn_normed_rms);

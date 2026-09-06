@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace dsv4 {
+namespace pocket {
 
 // Qwen DSpark uses standard Qwen3 RMSNorm affine weights (gamma directly),
 // unlike the Qwen3.5 target runtime's (1 + weight) convention.
@@ -1083,4 +1083,4 @@ bool qwen_turboquant_k8v4_dequant_kv_cuda(
     uint16_t* d_v_dense_fp16, int context_len, int kv_heads, int head_dim,
     int max_context, void* stream = nullptr);
 
-}  // namespace dsv4
+}  // namespace pocket

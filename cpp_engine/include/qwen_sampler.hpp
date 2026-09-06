@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-namespace dsv4 {
+namespace pocket {
 
 // Opaque per-row RNG state. The concrete type is backend-private (curandState on
 // CUDA), so callers only ever handle it as a byte buffer sized by
@@ -104,4 +104,4 @@ bool qwen_init_rng_states(
     unsigned long long seed,
     void* stream = nullptr);
 
-}  // namespace dsv4
+}  // namespace pocket

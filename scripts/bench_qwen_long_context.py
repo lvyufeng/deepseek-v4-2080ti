@@ -37,7 +37,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ckpt", required=True, help="Qwen checkpoint directory")
     parser.add_argument(
         "--binary",
-        default="build/cpp_engine/dsv4_cpp_engine",
+        default="build/cpp_engine/pocketllm_engine",
         help="built C++ engine executable",
     )
     parser.add_argument(
@@ -312,18 +312,18 @@ def environment_metadata() -> dict[str, str]:
     names = (
         "CUDA_VISIBLE_DEVICES",
         "QWEN_PHASE_PROFILE",
-        "DSV4_QWEN_GQA_OPTIMIZED",
-        "DSV4_QWEN_GQA_LONG_TILE",
-        "DSV4_QWEN_GQA_FLASH_TILE",
-        "DSV4_QWEN_GQA_MMA_TILE",
-        "DSV4_QWEN_DECODE_MMA",
-        "DSV4_QWEN_DECODE_MMA_TARGET_SPLITS",
-        "DSV4_QWEN_DECODE_TARGET_SPLITS",
-        "DSV4_QWEN_DECODE_SPLIT_POSITIONS",
-        "DSV4_QWEN_DECODE_GROUP_HEADS",
+        "POCKETLLM_QWEN_GQA_OPTIMIZED",
+        "POCKETLLM_QWEN_GQA_LONG_TILE",
+        "POCKETLLM_QWEN_GQA_FLASH_TILE",
+        "POCKETLLM_QWEN_GQA_MMA_TILE",
+        "POCKETLLM_QWEN_DECODE_MMA",
+        "POCKETLLM_QWEN_DECODE_MMA_TARGET_SPLITS",
+        "POCKETLLM_QWEN_DECODE_TARGET_SPLITS",
+        "POCKETLLM_QWEN_DECODE_SPLIT_POSITIONS",
+        "POCKETLLM_QWEN_DECODE_GROUP_HEADS",
         "QWEN_NCCL_COMM_STREAM",
         "QWEN_COMM_OVERLAP_SLICES",
-        "DSV4_QWEN_GQA_QUERY_ROWS",
+        "POCKETLLM_QWEN_GQA_QUERY_ROWS",
         "QWEN_FP8_F16_PREFILL_CUBLAS",
         "QWEN_FP16_LOGITS_MATVEC",
         "QWEN_FUSE_ATTN_RESID_NORM",

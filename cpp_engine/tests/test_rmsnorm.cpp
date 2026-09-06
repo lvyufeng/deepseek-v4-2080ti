@@ -60,19 +60,19 @@ std::vector<float> rmsnorm_cpu_ref(const std::vector<float>& x, const uint16_t* 
 
 int main(int argc, char** argv) {
     try {
-        if (!dsv4::cuda_runtime_available()) {
+        if (!pocket::cuda_runtime_available()) {
             std::cout << "[SKIP] CUDA runtime is not available\n";
             return 0;
         }
         Args args = parse_args(argc, argv);
         if (args.ckpt.empty()) throw std::runtime_error("--ckpt is required");
-        dsv4::SafeTensorsIndex index(args.ckpt);
+        pocket::SafeTensorsIndex index(args.ckpt);
         const std::string* shard_name = index.shard_for_tensor(args.tensor);
         if (shard_name == nullptr) throw std::runtime_error("tensor not found: " + args.tensor);
-        dsv4::SafeTensorsShard shard(index.shard_path(*shard_name));
+        pocket::SafeTensorsShard shard(index.shard_path(*shard_name));
         const auto* info = shard.find_tensor(args.tensor);
         if (info == nullptr) throw std::runtime_error("tensor missing from shard header");
-        if (info->dtype != dsv4::SafeDType::BF16 || info->shape.size() != 1) throw std::runtime_error("expected 1D BF16 gamma");
+        if (info->dtype != pocket::SafeDType::BF16 || info->shape.size() != 1) throw std::runtime_error("expected 1D BF16 gamma");
         const int cols = static_cast<int>(info->shape[0]);
         auto x = make_input(cols);
         auto* gamma = reinterpret_cast<const uint16_t*>(shard.tensor_data(*info));
@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
         check_cuda(cudaMalloc(&d_y, ref.size() * sizeof(float)), "cudaMalloc y");
         check_cuda(cudaMemcpy(d_x, x.data(), x.size() * sizeof(float), cudaMemcpyHostToDevice), "copy x");
         check_cuda(cudaMemcpy(d_gamma, gamma, info->nbytes, cudaMemcpyHostToDevice), "copy gamma");
-        if (!dsv4::rmsnorm_bf16_gamma_cuda(d_x, d_gamma, d_y, cols, eps)) throw std::runtime_error("rmsnorm launch failed");
+        if (!pocket::rmsnorm_bf16_gamma_cuda(d_x, d_gamma, d_y, cols, eps)) throw std::runtime_error("rmsnorm launch failed");
         check_cuda(cudaDeviceSynchronize(), "sync kernel");
         std::vector<float> got(cols);
         check_cuda(cudaMemcpy(got.data(), d_y, got.size() * sizeof(float), cudaMemcpyDeviceToHost), "copy y");

@@ -3,7 +3,7 @@
 // batched IQ2_XXS w1/w3 -> SwiGLU + route_weight + Q8_1 quantize ->
 // batched Q2_K w2 (atomicAdd across routes) -> MoE residual output.
 
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
     }
     const int token = argc >= 3 ? std::atoi(argv[2]) : 1234;
     try {
-        auto r = dsv4::run_gguf_routed_moe_smoke(argv[1], token);
+        auto r = pocket::run_gguf_routed_moe_smoke(argv[1], token);
         std::printf("token=%d dim=%d moe_inter_dim=%d n_active=%d\n",
                     token, r.dim, r.moe_inter_dim, r.n_active);
         std::printf("expert_ids   = [");
@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
         if (!(r.moe_out_rms > 1e-6f && r.moe_out_rms < 1000.0f)) {
             std::cerr << "[FAIL] moe_out_rms out of range\n"; return 1;
         }
-        // Route weights: normalized to sum=1, ×route_scale=1.5 in DSV4-Flash.
+        // Route weights: normalized to sum=1, ×route_scale=1.5 in DeepSeek-V4-Flash.
         // Accept any sum in (0.5, 5.0) — any sensible scaling.
         if (!(r.route_weights_sum > 0.5f && r.route_weights_sum < 5.0f)) {
             std::cerr << "[FAIL] route_weights_sum out of plausible range: "

@@ -183,7 +183,7 @@ int main() {
         check_cuda(cudaMemcpy(d_w2q, packed_w2q.data(), packed_w2q.size(), cudaMemcpyHostToDevice), "copy w2q");
         check_cuda(cudaMemcpy(d_w2s, packed_w2s.data(), packed_w2s.size(), cudaMemcpyHostToDevice), "copy w2s");
 
-        if (!dsv4::moe_prefill_fp4_grouped_cuda(
+        if (!pocket::moe_prefill_fp4_grouped_cuda(
                 d_x,
                 d_route_tokens,
                 d_route_weights,
@@ -224,7 +224,7 @@ int main() {
             check_cuda(cudaMemcpy(d_x_token, x.data() + t * dim, dim * sizeof(float), cudaMemcpyHostToDevice), "copy x_token");
             check_cuda(cudaMemcpy(d_indices, idx.data(), idx.size() * sizeof(int64_t), cudaMemcpyHostToDevice), "copy idx");
             check_cuda(cudaMemcpy(d_weights, wgt.data(), wgt.size() * sizeof(float), cudaMemcpyHostToDevice), "copy wgt");
-            if (!dsv4::moe_single_token_fp4_cuda(
+            if (!pocket::moe_single_token_fp4_cuda(
                     d_x_token,
                     d_indices,
                     d_weights,

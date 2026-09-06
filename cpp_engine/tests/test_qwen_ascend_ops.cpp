@@ -7,7 +7,7 @@
 //
 // The operators are called through the neutral names in qwen_ops.hpp, so this test
 // is written once and would be meaningful on either backend. It links
-// dsv4_cpp_core, so it is built only where those operators exist.
+// pocket_cpp_core, so it is built only where those operators exist.
 //
 //   ./tests/test_qwen_ascend_ops [--device N]
 
@@ -104,14 +104,14 @@ class DeviceBuffer {
 public:
     explicit DeviceBuffer(size_t count) : count_(count) {
         if (count == 0) return;
-        if (!dsv4::device_malloc_into(ptr_, count * sizeof(T))) {
+        if (!pocket::device_malloc_into(ptr_, count * sizeof(T))) {
             throw std::runtime_error("device_malloc failed");
         }
-        if (!dsv4::device_memset(ptr_, 0, count * sizeof(T))) {
+        if (!pocket::device_memset(ptr_, 0, count * sizeof(T))) {
             throw std::runtime_error("device_memset failed");
         }
     }
-    ~DeviceBuffer() { dsv4::device_free(ptr_); }
+    ~DeviceBuffer() { pocket::device_free(ptr_); }
     DeviceBuffer(const DeviceBuffer&) = delete;
     DeviceBuffer& operator=(const DeviceBuffer&) = delete;
 
@@ -123,14 +123,14 @@ public:
 
     void upload(const std::vector<T>& host) {
         if (host.empty()) return;
-        if (!dsv4::memcpy_h2d(ptr_, host.data(), host.size() * sizeof(T))) {
+        if (!pocket::memcpy_h2d(ptr_, host.data(), host.size() * sizeof(T))) {
             throw std::runtime_error("memcpy_h2d failed");
         }
     }
     std::vector<T> download() const {
         std::vector<T> host(count_);
         if (count_ != 0 &&
-            !dsv4::memcpy_d2h(host.data(), ptr_, count_ * sizeof(T))) {
+            !pocket::memcpy_d2h(host.data(), ptr_, count_ * sizeof(T))) {
             throw std::runtime_error("memcpy_d2h failed");
         }
         return host;
@@ -163,7 +163,7 @@ std::vector<uint16_t> random_halves(size_t count, std::mt19937& rng, float scale
 }
 
 void sync_or_throw(const std::string& what) {
-    if (!dsv4::device_synchronize()) {
+    if (!pocket::device_synchronize()) {
         throw std::runtime_error("device_synchronize failed after " + what);
     }
 }
@@ -197,13 +197,13 @@ void test_matmul(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_y(static_cast<size_t>(batch) * rows);
     DeviceBuffer<float> d_y32(static_cast<size_t>(batch) * rows);
 
-    expect(dsv4::qwen_fp16_matmul_rows_f16(d_x.get(), d_w.get(), d_y.get(), batch,
+    expect(pocket::qwen_fp16_matmul_rows_f16(d_x.get(), d_w.get(), d_y.get(), batch,
                                            rows, cols, cols, rows, cols),
            "matmul f16 launch");
-    expect(dsv4::qwen_fp16_matmul_rows_f16_f32(d_x.get(), d_w.get(), d_y32.get(),
+    expect(pocket::qwen_fp16_matmul_rows_f16_f32(d_x.get(), d_w.get(), d_y32.get(),
                                                batch, rows, cols, cols, rows, cols),
            "matmul f32 launch");
-    expect(dsv4::qwen_fp16_matmul_rows_f16(d_x_padded.get(), d_w.get(),
+    expect(pocket::qwen_fp16_matmul_rows_f16(d_x_padded.get(), d_w.get(),
                                            d_y_padded.get(), batch, rows, cols,
                                            x_stride, rows, cols),
            "matmul padded-input launch");
@@ -260,7 +260,7 @@ void test_swiglu_matmul(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_gate(gate);
     DeviceBuffer<uint16_t> d_up(up);
     DeviceBuffer<uint16_t> d_y(static_cast<size_t>(batch) * y_stride);
-    expect(dsv4::qwen_fp16_swiglu_matmul_rows_f16(d_x.get(), d_gate.get(),
+    expect(pocket::qwen_fp16_swiglu_matmul_rows_f16(d_x.get(), d_gate.get(),
                                                   d_up.get(), d_y.get(), batch,
                                                   rows, cols, cols, y_stride, cols),
            "swiglu launch");
@@ -310,24 +310,24 @@ void test_rmsnorm(std::mt19937& rng) {
         random_halves(static_cast<size_t>(cols), rng, 0.1f);
 
     // What the loader would have uploaded: on Ascend, 1 + gamma folded in FP16.
-    dsv4::QwenTensorRef ref;
+    pocket::QwenTensorRef ref;
     ref.name = "model.language_model.layers.0.input_layernorm.weight";
-    dsv4::QwenHostTensor host;
-    host.device_dtype = dsv4::SafeDType::F16;
+    pocket::QwenHostTensor host;
+    host.device_dtype = pocket::SafeDType::F16;
     host.bytes.resize(raw_gamma.size() * sizeof(uint16_t));
     std::memcpy(host.bytes.data(), raw_gamma.data(), host.bytes.size());
-    dsv4::qwen_apply_norm_gamma_policy(ref, host);
+    pocket::qwen_apply_norm_gamma_policy(ref, host);
     std::vector<uint16_t> gamma(raw_gamma.size());
     std::memcpy(gamma.data(), host.bytes.data(), host.bytes.size());
 
-    const bool folded = dsv4::device_backend() == dsv4::DeviceBackend::Ascend;
+    const bool folded = pocket::device_backend() == pocket::DeviceBackend::Ascend;
     expect(folded == (gamma != raw_gamma),
            "gamma fold applied exactly on the Ascend backend");
 
     DeviceBuffer<uint16_t> d_x(x);
     DeviceBuffer<uint16_t> d_gamma(gamma);
     DeviceBuffer<uint16_t> d_y(x.size());
-    expect(dsv4::qwen_rmsnorm_fp16_gamma_rows_f16(d_x.get(), d_gamma.get(),
+    expect(pocket::qwen_rmsnorm_fp16_gamma_rows_f16(d_x.get(), d_gamma.get(),
                                                   d_y.get(), rows, cols, eps),
            "rmsnorm launch");
     sync_or_throw("rmsnorm");
@@ -376,7 +376,7 @@ void test_residual_add_rmsnorm(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_gamma(gamma);
     DeviceBuffer<uint16_t> d_residual(hidden.size());
     DeviceBuffer<uint16_t> d_normalized(hidden.size());
-    expect(dsv4::qwen_residual_add_rmsnorm_fp16_gamma_rows_f16(
+    expect(pocket::qwen_residual_add_rmsnorm_fp16_gamma_rows_f16(
                d_hidden.get(), d_delta.get(), d_gamma.get(), d_residual.get(),
                d_normalized.get(), rows, cols, eps),
            "residual add rmsnorm launch");
@@ -436,7 +436,7 @@ void test_gated_rmsnorm(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_gate(gate);
     DeviceBuffer<uint16_t> d_gamma(gamma);
     DeviceBuffer<uint16_t> d_y(x.size());
-    expect(dsv4::qwen_gated_rmsnorm_fp16_gamma_rows_f16(
+    expect(pocket::qwen_gated_rmsnorm_fp16_gamma_rows_f16(
                d_x.get(), d_gamma.get(), d_gate.get(), d_y.get(), rows, cols, eps),
            "gated rmsnorm launch");
     sync_or_throw("gated rmsnorm");
@@ -472,7 +472,7 @@ void test_elementwise(std::mt19937& rng) {
     {
         DeviceBuffer<uint16_t> d_y(a);
         DeviceBuffer<uint16_t> d_x(b);
-        expect(dsv4::qwen_add_inplace_f16(d_y.get(), d_x.get(),
+        expect(pocket::qwen_add_inplace_f16(d_y.get(), d_x.get(),
                                           static_cast<int>(count)),
                "add inplace launch");
         sync_or_throw("add inplace");
@@ -488,7 +488,7 @@ void test_elementwise(std::mt19937& rng) {
         DeviceBuffer<uint16_t> d_x(a);
         DeviceBuffer<uint16_t> d_gate(b);
         DeviceBuffer<uint16_t> d_y(count);
-        expect(dsv4::qwen_sigmoid_mul_f16(d_x.get(), d_gate.get(), d_y.get(),
+        expect(pocket::qwen_sigmoid_mul_f16(d_x.get(), d_gate.get(), d_y.get(),
                                           static_cast<int>(count)),
                "sigmoid mul launch");
         sync_or_throw("sigmoid mul");
@@ -504,7 +504,7 @@ void test_elementwise(std::mt19937& rng) {
         DeviceBuffer<uint16_t> d_gate(a);
         DeviceBuffer<uint16_t> d_up(b);
         DeviceBuffer<uint16_t> d_y(count);
-        expect(dsv4::qwen_silu_mul_rows_f16(d_gate.get(), d_up.get(), d_y.get(),
+        expect(pocket::qwen_silu_mul_rows_f16(d_gate.get(), d_up.get(), d_y.get(),
                                             rows, cols),
                "silu mul launch");
         sync_or_throw("silu mul");
@@ -531,7 +531,7 @@ void test_concat_rows(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_left(left);
     DeviceBuffer<uint16_t> d_right(right);
     DeviceBuffer<uint16_t> d_out(static_cast<size_t>(rows) * cols * 2);
-    expect(dsv4::qwen_concat_rows_f16(d_left.get(), d_right.get(), d_out.get(),
+    expect(pocket::qwen_concat_rows_f16(d_left.get(), d_right.get(), d_out.get(),
                                       rows, cols),
            "concat launch");
     sync_or_throw("concat");
@@ -560,7 +560,7 @@ void test_copy_rows_strided(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_source(source);
     DeviceBuffer<uint16_t> d_dest(static_cast<size_t>(rows) *
                                   destination_stride);
-    expect(dsv4::qwen_copy_rows_strided_f16(d_source.get(), cols, d_dest.get(),
+    expect(pocket::qwen_copy_rows_strided_f16(d_source.get(), cols, d_dest.get(),
                                             destination_stride, rows, cols),
            "strided copy launch");
     sync_or_throw("strided copy");
@@ -600,7 +600,7 @@ void test_split_packed_qkv(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_q(static_cast<size_t>(rows) * key_dim);
     DeviceBuffer<uint16_t> d_k(static_cast<size_t>(rows) * key_dim);
     DeviceBuffer<uint16_t> d_v(static_cast<size_t>(rows) * value_dim);
-    expect(dsv4::qwen_split_packed_qkv_f16(d_packed.get(), d_q.get(), d_k.get(),
+    expect(pocket::qwen_split_packed_qkv_f16(d_packed.get(), d_q.get(), d_k.get(),
                                            d_v.get(), rows, key_dim, value_dim),
            "split qkv launch");
     sync_or_throw("split qkv");
@@ -640,7 +640,7 @@ void test_split_rows_pair(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_packed(source);
     DeviceBuffer<uint16_t> d_first(static_cast<size_t>(rows) * width);
     DeviceBuffer<uint16_t> d_second(static_cast<size_t>(rows) * width);
-    expect(dsv4::qwen_split_rows_pair_f16(d_packed.get(), d_first.get(),
+    expect(pocket::qwen_split_rows_pair_f16(d_packed.get(), d_first.get(),
                                           d_second.get(), rows, width),
            "split rows pair launch");
     sync_or_throw("split rows pair");
@@ -676,7 +676,7 @@ void test_split_q_gate(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_source(source);
     DeviceBuffer<uint16_t> d_q(total);
     DeviceBuffer<uint16_t> d_gate(total);
-    expect(dsv4::qwen_split_q_gate_f16(d_source.get(), d_q.get(), d_gate.get(),
+    expect(pocket::qwen_split_q_gate_f16(d_source.get(), d_q.get(), d_gate.get(),
                                        rows, q_heads, head_dim),
            "split q gate launch");
     sync_or_throw("split q gate");
@@ -721,7 +721,7 @@ void test_embedding(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_table(table);
     DeviceBuffer<int> d_tokens(tokens);
     DeviceBuffer<uint16_t> d_out(static_cast<size_t>(count) * cols);
-    expect(dsv4::qwen_embedding_fp16_gather_f16(d_table.get(), d_tokens.get(),
+    expect(pocket::qwen_embedding_fp16_gather_f16(d_table.get(), d_tokens.get(),
                                                 d_out.get(), count, cols,
                                                 row_start, row_count),
            "embedding launch");
@@ -760,14 +760,14 @@ void test_copy_regions(std::mt19937& rng) {
     // rather than by value.
     std::vector<std::unique_ptr<DeviceBuffer<uint16_t>>> buffers;
     std::vector<std::vector<uint16_t>> host_values;
-    std::vector<dsv4::QwenCopyRegion> regions;
+    std::vector<pocket::QwenCopyRegion> regions;
     uint64_t packed_offset = 0;
     uint64_t total_blocks = 0;
     for (size_t elements : region_elements) {
         host_values.push_back(random_halves(elements, rng, 1.0f));
         buffers.push_back(
             std::make_unique<DeviceBuffer<uint16_t>>(host_values.back()));
-        dsv4::QwenCopyRegion region;
+        pocket::QwenCopyRegion region;
         region.device_address =
             reinterpret_cast<uint64_t>(buffers.back()->get());
         region.packed_offset = packed_offset;
@@ -775,12 +775,12 @@ void test_copy_regions(std::mt19937& rng) {
         region.first_block = total_blocks;
         regions.push_back(region);
         packed_offset += region.bytes;
-        total_blocks += dsv4::qwen_copy_region_blocks(region.bytes);
+        total_blocks += pocket::qwen_copy_region_blocks(region.bytes);
     }
 
-    DeviceBuffer<dsv4::QwenCopyRegion> d_regions(regions);
+    DeviceBuffer<pocket::QwenCopyRegion> d_regions(regions);
     DeviceBuffer<uint8_t> d_packed(static_cast<size_t>(packed_offset));
-    expect(dsv4::qwen_gather_copy_regions(d_regions.get(),
+    expect(pocket::qwen_gather_copy_regions(d_regions.get(),
                                           static_cast<int>(regions.size()),
                                           d_packed.get(), total_blocks),
            "gather regions launch");
@@ -793,7 +793,7 @@ void test_copy_regions(std::mt19937& rng) {
                                       float_to_half(-7.5f));
         buffers[i]->upload(clobber);
     }
-    expect(dsv4::qwen_scatter_copy_regions(d_regions.get(),
+    expect(pocket::qwen_scatter_copy_regions(d_regions.get(),
                                            static_cast<int>(regions.size()),
                                            d_packed.get(), total_blocks),
            "scatter regions launch");
@@ -811,7 +811,7 @@ void test_copy_regions(std::mt19937& rng) {
 
     // A descriptor table whose block accounting disagrees with total_blocks is a
     // corrupted snapshot, and must be refused rather than partially applied.
-    expect(!dsv4::qwen_gather_copy_regions(d_regions.get(),
+    expect(!pocket::qwen_gather_copy_regions(d_regions.get(),
                                            static_cast<int>(regions.size()),
                                            d_packed.get(), total_blocks + 1),
            "gather rejects an inconsistent block count");
@@ -821,21 +821,21 @@ void test_copy_regions(std::mt19937& rng) {
 // turns false into an exception naming the operator.
 void test_argument_rejection() {
     DeviceBuffer<uint16_t> buffer(64);
-    expect(!dsv4::qwen_rmsnorm_fp16_gamma_rows_f16(nullptr, buffer.get(),
+    expect(!pocket::qwen_rmsnorm_fp16_gamma_rows_f16(nullptr, buffer.get(),
                                                    buffer.get(), 1, 8, 1e-6f),
            "rmsnorm rejects a null input");
-    expect(!dsv4::qwen_rmsnorm_fp16_gamma_rows_f16(buffer.get(), buffer.get(),
+    expect(!pocket::qwen_rmsnorm_fp16_gamma_rows_f16(buffer.get(), buffer.get(),
                                                    buffer.get(), 0, 8, 1e-6f),
            "rmsnorm rejects zero rows");
-    expect(!dsv4::qwen_silu_mul_rows_f16(buffer.get(), buffer.get(), buffer.get(),
+    expect(!pocket::qwen_silu_mul_rows_f16(buffer.get(), buffer.get(), buffer.get(),
                                          4, 0),
            "silu mul rejects zero cols");
-    expect(!dsv4::qwen_copy_rows_strided_f16(buffer.get(), 4, buffer.get(), 8, 2, 8),
+    expect(!pocket::qwen_copy_rows_strided_f16(buffer.get(), 4, buffer.get(), 8, 2, 8),
            "strided copy rejects a source stride below the payload width");
-    expect(!dsv4::qwen_fp16_matmul_rows_f16(buffer.get(), buffer.get(),
+    expect(!pocket::qwen_fp16_matmul_rows_f16(buffer.get(), buffer.get(),
                                             buffer.get(), 1, 4, 8, 4, 4, 8),
            "matmul rejects an x_stride below cols");
-    expect(!dsv4::qwen_fp16_matmul_rows_f16(buffer.get(), buffer.get(),
+    expect(!pocket::qwen_fp16_matmul_rows_f16(buffer.get(), buffer.get(),
                                             buffer.get(), 1, 4, 8, 8, 2, 8),
            "matmul rejects a y_stride below rows");
 }
@@ -857,15 +857,15 @@ int main(int argc, char** argv) {
             throw std::runtime_error("unknown or incomplete argument: " + arg);
         }
     }
-    if (!dsv4::device_runtime_available()) {
+    if (!pocket::device_runtime_available()) {
         std::cout << "[SKIP] no device runtime available\n";
         return 0;
     }
-    if (!dsv4::device_set(device)) {
+    if (!pocket::device_set(device)) {
         std::cout << "[SKIP] device_set failed for device " << device << "\n";
         return 0;
     }
-    std::cout << "backend=" << dsv4::device_backend_name() << " device=" << device
+    std::cout << "backend=" << pocket::device_backend_name() << " device=" << device
               << "\n";
 
     std::mt19937 rng(20260829u);

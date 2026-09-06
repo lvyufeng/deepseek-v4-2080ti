@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 constexpr int kThreads = 128;
@@ -111,7 +111,7 @@ int decode_sm_count() {
 constexpr int kDecodeMmaDefaultMinContext = 0;
 bool decode_mma_enabled(int attended_positions) {
     static const int mode = [] {
-        const char* env = std::getenv("DSV4_QWEN_DECODE_MMA");
+        const char* env = std::getenv("POCKETLLM_QWEN_DECODE_MMA");
         if (env == nullptr) return -1;  // automatic context-based selection
         return std::strcmp(env, "0") == 0 ? 0 : 1;
     }();
@@ -121,7 +121,7 @@ bool decode_mma_enabled(int attended_positions) {
 
 int decode_mma_target_splits() {
     static const int value = [] {
-        const char* env = std::getenv("DSV4_QWEN_DECODE_MMA_TARGET_SPLITS");
+        const char* env = std::getenv("POCKETLLM_QWEN_DECODE_MMA_TARGET_SPLITS");
         const int parsed = env != nullptr ? std::atoi(env) : 0;
         return parsed > 0 ? parsed : 0;
     }();
@@ -144,7 +144,7 @@ bool decode_mma_device_supported() {
 // for one variant's geometry while the process default selects the other.
 int decode_target_splits(int attended_positions, bool mma) {
     static const int override_value = [] {
-        const char* env = std::getenv("DSV4_QWEN_DECODE_TARGET_SPLITS");
+        const char* env = std::getenv("POCKETLLM_QWEN_DECODE_TARGET_SPLITS");
         const int parsed = env != nullptr ? std::atoi(env) : 0;
         return parsed > 0 ? parsed : 0;
     }();
@@ -196,7 +196,7 @@ int decode_target_splits(int attended_positions, bool mma) {
 // the fixed-positions geometry that shipped before can still be measured.
 int decode_forced_positions() {
     static const int value = [] {
-        const char* env = std::getenv("DSV4_QWEN_DECODE_SPLIT_POSITIONS");
+        const char* env = std::getenv("POCKETLLM_QWEN_DECODE_SPLIT_POSITIONS");
         const int parsed = env != nullptr ? std::atoi(env) : 0;
         return parsed > 0 ? parsed : 0;
     }();
@@ -205,7 +205,7 @@ int decode_forced_positions() {
 
 int decode_max_splits() {
     static const int value = [] {
-        const char* env = std::getenv("DSV4_QWEN_DECODE_MAX_SPLITS");
+        const char* env = std::getenv("POCKETLLM_QWEN_DECODE_MAX_SPLITS");
         const int parsed = env != nullptr ? std::atoi(env) : 0;
         return parsed > 0 ? std::min(parsed, kDecodeSplitCeiling)
                           : kDecodeSplitCeiling;
@@ -969,12 +969,12 @@ __global__ void gqa_prefill_hpg6_f16_kernel(
 // in the sense that matters here (full causal history, no window, no sink) but
 // not bit-identical to hpg6; it carries its own numerical and token-parity gates.
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 750
-#define DSV4_QWEN_MMA_AVAILABLE 1
+#define POCKET_QWEN_MMA_AVAILABLE 1
 #endif
 
 __device__ __forceinline__ void mma_m16n8k8_f16_f32(
     float (&d)[4], const uint32_t (&a)[2], uint32_t b) {
-#ifdef DSV4_QWEN_MMA_AVAILABLE
+#ifdef POCKET_QWEN_MMA_AVAILABLE
     asm volatile(
         "mma.sync.aligned.m16n8k8.row.col.f32.f16.f16.f32 "
         "{%0, %1, %2, %3}, {%4, %5}, {%6}, {%0, %1, %2, %3};"
@@ -2625,8 +2625,8 @@ bool qwen_gqa_prefill_attention_f16_tiled_cuda(
                     static_cast<unsigned>((seq_len + kQueryRows - 1) / kQueryRows), 1);
     // The batched-position kernel amortises the per-history-element barriers
     // over kPosTile positions while preserving the online-softmax order, so it
-    // is bit-identical. Set DSV4_QWEN_GQA_POS_TILE=0 to fall back.
-    const char* pos_tile = std::getenv("DSV4_QWEN_GQA_POS_TILE");
+    // is bit-identical. Set POCKETLLM_QWEN_GQA_POS_TILE=0 to fall back.
+    const char* pos_tile = std::getenv("POCKETLLM_QWEN_GQA_POS_TILE");
     const bool use_pos_tile = pos_tile == nullptr ||
         std::strcmp(pos_tile, "0") != 0;
     if (use_pos_tile) {
@@ -2644,7 +2644,7 @@ bool qwen_gqa_prefill_attention_f16_tiled_cuda(
         if (q_per_kv % 4 == 0) hpg = 4;
         else if (q_per_kv % 2 == 0) hpg = 2;
         else if (q_per_kv == 1) hpg = 1;
-        if (const char* hpg_env = std::getenv("DSV4_QWEN_GQA_HEADS_PER_GROUP")) {
+        if (const char* hpg_env = std::getenv("POCKETLLM_QWEN_GQA_HEADS_PER_GROUP")) {
             const int requested = std::atoi(hpg_env);
             if (requested >= 1 && requested <= 6 && q_per_kv % requested == 0) {
                 hpg = requested;
@@ -2658,7 +2658,7 @@ bool qwen_gqa_prefill_attention_f16_tiled_cuda(
         // divides that traffic; the accumulator lives in registers, so the width
         // is capped to keep occupancy.
         int qr = 2;
-        const char* qr_env = std::getenv("DSV4_QWEN_GQA_QUERY_ROWS");
+        const char* qr_env = std::getenv("POCKETLLM_QWEN_GQA_QUERY_ROWS");
         const bool query_rows_explicit = qr_env != nullptr;
         if (qr_env != nullptr) {
             const int requested = std::atoi(qr_env);
@@ -2679,7 +2679,7 @@ bool qwen_gqa_prefill_attention_f16_tiled_cuda(
         // hpg=2 group. It uses a different dot-product reassociation, so the
         // numerical and real-model token-parity gates are kept separate below.
         const int total_context = position_offset + seq_len;
-        const char* long_tile = std::getenv("DSV4_QWEN_GQA_LONG_TILE");
+        const char* long_tile = std::getenv("POCKETLLM_QWEN_GQA_LONG_TILE");
         // The TP4 Q=6/KV=1 path is the measured production candidate for exact
         // long-context prefill. Keep an explicit `=0` escape hatch for A/B and
         // fallback debugging; an unset variable selects the faster path.
@@ -2704,7 +2704,7 @@ bool qwen_gqa_prefill_attention_f16_tiled_cuda(
         // both dot products and rounds the softmax numerator to half for the MMA
         // operand, so `=0` selects the scalar path for A/B and for any future
         // divergence hunt.
-        const char* mma_tile = std::getenv("DSV4_QWEN_GQA_MMA_TILE");
+        const char* mma_tile = std::getenv("POCKETLLM_QWEN_GQA_MMA_TILE");
         const bool mma_enabled =
             mma_tile == nullptr || std::strcmp(mma_tile, "0") != 0;
         // Windowed and sink attention stay on the scalar kernels: this kernel
@@ -2722,7 +2722,7 @@ bool qwen_gqa_prefill_attention_f16_tiled_cuda(
             // extra barrier and a second address/load pass per KV tile. Serial
             // same-binary real TP4 65K A/B measured 1400.67/1396.26 tok/s for the
             // non-aliased path against 1368.73/1352.86 for aliasing, with rank
-            // parity PASS. Set DSV4_QWEN_GQA_MMA_OCC=1 to restore the alias path
+            // parity PASS. Set POCKETLLM_QWEN_GQA_MMA_OCC=1 to restore the alias path
             // for controlled A/B.
             // Pairing two Q heads of one KV head into a CTA was tried and
             // rejected: it halves the KV traffic on paper, but two sets of Q
@@ -2731,7 +2731,7 @@ bool qwen_gqa_prefill_attention_f16_tiled_cuda(
             // against 83.6 at 4096 rows, offset 61440) despite bit-identical
             // output. Sharing a tile across heads needs the accumulators moved to
             // shared memory first.
-            const char* mma_occ = std::getenv("DSV4_QWEN_GQA_MMA_OCC");
+            const char* mma_occ = std::getenv("POCKETLLM_QWEN_GQA_MMA_OCC");
             if (mma_occ != nullptr && std::strcmp(mma_occ, "0") != 0) {
                 gqa_prefill_mma_occ_f16_kernel<<<
                     mma_grid, kMmaWarps * 32, 0,
@@ -2750,7 +2750,7 @@ bool qwen_gqa_prefill_attention_f16_tiled_cuda(
         // Two-phase flash tile: one warp reduction per 32 positions instead of
         // one per position. It remains opt-in because it is not faster than the
         // hpg6 path on the measured TP4 long-context cases.
-        const char* flash_tile = std::getenv("DSV4_QWEN_GQA_FLASH_TILE");
+        const char* flash_tile = std::getenv("POCKETLLM_QWEN_GQA_FLASH_TILE");
         if (flash_tile != nullptr && std::strcmp(flash_tile, "0") != 0 &&
             tp4_long_shape) {
             const int flash_qr = qr >= 4 ? 4 : 2;
@@ -2802,35 +2802,35 @@ bool qwen_gqa_prefill_attention_f16_tiled_cuda(
         // reduction, so the last FP32 bits differ from the per-position kernel and
         // a near-tie greedy argmax could flip. Requires head_dim to split evenly
         // across a warp and the combo count to cover the warps.
-        const char* warp_combo = std::getenv("DSV4_QWEN_GQA_WARP_COMBO");
+        const char* warp_combo = std::getenv("POCKETLLM_QWEN_GQA_WARP_COMBO");
         if (warp_combo != nullptr && std::strcmp(warp_combo, "0") != 0 &&
             (head_dim == 128 || head_dim == 256) && attention_window <= 0) {
             const int combos = hpg * qr;
             const int dpl = head_dim / 32;
             if (combos % kWarps == 0) {
-#define DSV4_LAUNCH_WARP_COMBO_D(HPG, QR, DPL) \
+#define POCKET_LAUNCH_WARP_COMBO_D(HPG, QR, DPL) \
                 gqa_prefill_warp_combo_f16_kernel<HPG, QR, DPL> \
                     <<<batched_grid, kThreads, 0, \
                        static_cast<cudaStream_t>(stream)>>>( \
                         q, k_cache, v_cache, output, seq_len, q_heads, kv_heads, \
                         head_dim, position_offset, attention_window, sink_tokens)
-#define DSV4_LAUNCH_WARP_COMBO(HPG, QR) \
+#define POCKET_LAUNCH_WARP_COMBO(HPG, QR) \
                 do { \
-                    if (dpl == 8) { DSV4_LAUNCH_WARP_COMBO_D(HPG, QR, 8); } \
-                    else { DSV4_LAUNCH_WARP_COMBO_D(HPG, QR, 4); } \
+                    if (dpl == 8) { POCKET_LAUNCH_WARP_COMBO_D(HPG, QR, 8); } \
+                    else { POCKET_LAUNCH_WARP_COMBO_D(HPG, QR, 4); } \
                 } while (0)
                 bool launched = true;
-                if (hpg == 4 && qr == 4) { DSV4_LAUNCH_WARP_COMBO(4, 4); }
-                else if (hpg == 4 && qr == 2) { DSV4_LAUNCH_WARP_COMBO(4, 2); }
-                else if (hpg == 4 && qr == 8) { DSV4_LAUNCH_WARP_COMBO(4, 8); }
-                else if (hpg == 2 && qr == 2) { DSV4_LAUNCH_WARP_COMBO(2, 2); }
-                else if (hpg == 2 && qr == 4) { DSV4_LAUNCH_WARP_COMBO(2, 4); }
-                else if (hpg == 2 && qr == 8) { DSV4_LAUNCH_WARP_COMBO(2, 8); }
-                else if (hpg == 1 && qr == 4) { DSV4_LAUNCH_WARP_COMBO(1, 4); }
-                else if (hpg == 1 && qr == 8) { DSV4_LAUNCH_WARP_COMBO(1, 8); }
+                if (hpg == 4 && qr == 4) { POCKET_LAUNCH_WARP_COMBO(4, 4); }
+                else if (hpg == 4 && qr == 2) { POCKET_LAUNCH_WARP_COMBO(4, 2); }
+                else if (hpg == 4 && qr == 8) { POCKET_LAUNCH_WARP_COMBO(4, 8); }
+                else if (hpg == 2 && qr == 2) { POCKET_LAUNCH_WARP_COMBO(2, 2); }
+                else if (hpg == 2 && qr == 4) { POCKET_LAUNCH_WARP_COMBO(2, 4); }
+                else if (hpg == 2 && qr == 8) { POCKET_LAUNCH_WARP_COMBO(2, 8); }
+                else if (hpg == 1 && qr == 4) { POCKET_LAUNCH_WARP_COMBO(1, 4); }
+                else if (hpg == 1 && qr == 8) { POCKET_LAUNCH_WARP_COMBO(1, 8); }
                 else { launched = false; }
-#undef DSV4_LAUNCH_WARP_COMBO
-#undef DSV4_LAUNCH_WARP_COMBO_D
+#undef POCKET_LAUNCH_WARP_COMBO
+#undef POCKET_LAUNCH_WARP_COMBO_D
                 if (launched) return cudaGetLastError() == cudaSuccess;
             }
         }
@@ -2838,30 +2838,30 @@ bool qwen_gqa_prefill_attention_f16_tiled_cuda(
         // GQA head_dim is 128, which leaves half of every register array and half
         // of each inner loop doing nothing, so specialise on the exact count.
         const int vpt = (head_dim + kThreads - 1) / kThreads;
-#define DSV4_LAUNCH_POS_TILE(HPG, VPT, QR) \
+#define POCKET_LAUNCH_POS_TILE(HPG, VPT, QR) \
         gqa_prefill_tiled_batched_f16_kernel<HPG, VPT, QR> \
             <<<batched_grid, kThreads, 0, static_cast<cudaStream_t>(stream)>>>( \
                 q, k_cache, v_cache, output, seq_len, q_heads, kv_heads, \
                 head_dim, position_offset, attention_window, sink_tokens)
-#define DSV4_LAUNCH_POS_TILE_QR(HPG, VPT) \
+#define POCKET_LAUNCH_POS_TILE_QR(HPG, VPT) \
         do { \
-            if (qr == 8) { DSV4_LAUNCH_POS_TILE(HPG, VPT, 8); } \
-            else if (qr == 4) { DSV4_LAUNCH_POS_TILE(HPG, VPT, 4); } \
-            else { DSV4_LAUNCH_POS_TILE(HPG, VPT, 2); } \
+            if (qr == 8) { POCKET_LAUNCH_POS_TILE(HPG, VPT, 8); } \
+            else if (qr == 4) { POCKET_LAUNCH_POS_TILE(HPG, VPT, 4); } \
+            else { POCKET_LAUNCH_POS_TILE(HPG, VPT, 2); } \
         } while (0)
-#define DSV4_LAUNCH_POS_TILE_HPG(HPG) \
+#define POCKET_LAUNCH_POS_TILE_HPG(HPG) \
         do { \
-            if (vpt == 1) { DSV4_LAUNCH_POS_TILE_QR(HPG, 1); } \
-            else { DSV4_LAUNCH_POS_TILE_QR(HPG, kValuesPerThread); } \
+            if (vpt == 1) { POCKET_LAUNCH_POS_TILE_QR(HPG, 1); } \
+            else { POCKET_LAUNCH_POS_TILE_QR(HPG, kValuesPerThread); } \
         } while (0)
-        if (hpg == 6) { DSV4_LAUNCH_POS_TILE_HPG(6); }
-        else if (hpg == 4) { DSV4_LAUNCH_POS_TILE_HPG(4); }
-        else if (hpg == 2) { DSV4_LAUNCH_POS_TILE_HPG(2); }
-        else if (hpg == 1) { DSV4_LAUNCH_POS_TILE_HPG(1); }
-        else { DSV4_LAUNCH_POS_TILE_HPG(3); }
-#undef DSV4_LAUNCH_POS_TILE_HPG
-#undef DSV4_LAUNCH_POS_TILE_QR
-#undef DSV4_LAUNCH_POS_TILE
+        if (hpg == 6) { POCKET_LAUNCH_POS_TILE_HPG(6); }
+        else if (hpg == 4) { POCKET_LAUNCH_POS_TILE_HPG(4); }
+        else if (hpg == 2) { POCKET_LAUNCH_POS_TILE_HPG(2); }
+        else if (hpg == 1) { POCKET_LAUNCH_POS_TILE_HPG(1); }
+        else { POCKET_LAUNCH_POS_TILE_HPG(3); }
+#undef POCKET_LAUNCH_POS_TILE_HPG
+#undef POCKET_LAUNCH_POS_TILE_QR
+#undef POCKET_LAUNCH_POS_TILE
         return cudaGetLastError() == cudaSuccess;
     }
     gqa_prefill_tiled_f16_kernel<<<grid, kThreads, 0,
@@ -2941,22 +2941,22 @@ bool qwen_gqa_verify_attention_f16_exact_cuda(
         static_cast<uint64_t>(kv_heads) * groups_per_kv * context_len;
     if (score_blocks > static_cast<uint64_t>(UINT32_MAX)) return false;
     const cudaStream_t cuda_stream = static_cast<cudaStream_t>(stream);
-#define DSV4_LAUNCH_EXACT_SCORES(ROWS) \
+#define POCKET_LAUNCH_EXACT_SCORES(ROWS) \
     gqa_verify_scores_exact_f16_kernel<ROWS> \
         <<<static_cast<unsigned>(score_blocks), kThreads, 0, cuda_stream>>>( \
             q, k_cache, score_scratch, rows, q_heads, kv_heads, head_dim, \
             position_offset, context_len)
     switch (rows) {
-        case 2: DSV4_LAUNCH_EXACT_SCORES(2); break;
-        case 3: DSV4_LAUNCH_EXACT_SCORES(3); break;
-        case 4: DSV4_LAUNCH_EXACT_SCORES(4); break;
-        case 5: DSV4_LAUNCH_EXACT_SCORES(5); break;
-        case 6: DSV4_LAUNCH_EXACT_SCORES(6); break;
-        case 7: DSV4_LAUNCH_EXACT_SCORES(7); break;
-        case 8: DSV4_LAUNCH_EXACT_SCORES(8); break;
+        case 2: POCKET_LAUNCH_EXACT_SCORES(2); break;
+        case 3: POCKET_LAUNCH_EXACT_SCORES(3); break;
+        case 4: POCKET_LAUNCH_EXACT_SCORES(4); break;
+        case 5: POCKET_LAUNCH_EXACT_SCORES(5); break;
+        case 6: POCKET_LAUNCH_EXACT_SCORES(6); break;
+        case 7: POCKET_LAUNCH_EXACT_SCORES(7); break;
+        case 8: POCKET_LAUNCH_EXACT_SCORES(8); break;
         default: return false;
     }
-#undef DSV4_LAUNCH_EXACT_SCORES
+#undef POCKET_LAUNCH_EXACT_SCORES
     if (cudaGetLastError() != cudaSuccess) return false;
     const dim3 softmax_grid(static_cast<unsigned>(q_heads),
                             static_cast<unsigned>(rows), 1);
@@ -2989,22 +2989,22 @@ bool qwen_gqa_verify_attention_f16_cuda(
         (q_per_kv + kHeadsPerGroup - 1) / kHeadsPerGroup;
     const int blocks = kv_heads * groups_per_kv * splits;
     const cudaStream_t cuda_stream = static_cast<cudaStream_t>(stream);
-#define DSV4_LAUNCH_VERIFY(ROWS) \
+#define POCKET_LAUNCH_VERIFY(ROWS) \
     gqa_verify_split_f16_kernel<ROWS, kHeadsPerGroup> \
         <<<blocks, kThreads, 0, cuda_stream>>>( \
             q, k_cache, v_cache, partial_scratch, rows, q_heads, kv_heads, \
             head_dim, position_offset, splits, positions_per_split)
     switch (rows) {
-        case 2: DSV4_LAUNCH_VERIFY(2); break;
-        case 3: DSV4_LAUNCH_VERIFY(3); break;
-        case 4: DSV4_LAUNCH_VERIFY(4); break;
-        case 5: DSV4_LAUNCH_VERIFY(5); break;
-        case 6: DSV4_LAUNCH_VERIFY(6); break;
-        case 7: DSV4_LAUNCH_VERIFY(7); break;
-        case 8: DSV4_LAUNCH_VERIFY(8); break;
+        case 2: POCKET_LAUNCH_VERIFY(2); break;
+        case 3: POCKET_LAUNCH_VERIFY(3); break;
+        case 4: POCKET_LAUNCH_VERIFY(4); break;
+        case 5: POCKET_LAUNCH_VERIFY(5); break;
+        case 6: POCKET_LAUNCH_VERIFY(6); break;
+        case 7: POCKET_LAUNCH_VERIFY(7); break;
+        case 8: POCKET_LAUNCH_VERIFY(8); break;
         default: return false;
     }
-#undef DSV4_LAUNCH_VERIFY
+#undef POCKET_LAUNCH_VERIFY
     if (cudaGetLastError() != cudaSuccess) return false;
     const dim3 merge_grid(static_cast<unsigned>(q_heads),
                           static_cast<unsigned>(rows), 1);
@@ -3037,7 +3037,7 @@ constexpr int kDecodeMaxHeadsPerGroup = 6;
 // read once. An override only exists for A/B sweeps.
 int decode_group_width_override() {
     static const int value = [] {
-        const char* env = std::getenv("DSV4_QWEN_DECODE_GROUP_HEADS");
+        const char* env = std::getenv("POCKETLLM_QWEN_DECODE_GROUP_HEADS");
         const int parsed = env != nullptr ? std::atoi(env) : 0;
         return parsed > 0 ? parsed : 0;
     }();
@@ -3106,21 +3106,21 @@ bool launch_decode_fused(
         return cudaGetLastError() == cudaSuccess;
     }
     const int blocks = kv_heads * groups_per_kv * splits;
-#define DSV4_LAUNCH_DECODE_SPLIT(HPG) \
+#define POCKET_LAUNCH_DECODE_SPLIT(HPG) \
     gqa_decode_split_f16_kernel<HPG><<<blocks, kThreads, 0, cuda_stream>>>( \
         q, k_cache, v_cache, partial_scratch, q_heads, kv_heads, head_dim, \
         context_len, splits, positions_per_split, attention_window, \
         sink_tokens)
     switch (group_heads) {
-        case 1: DSV4_LAUNCH_DECODE_SPLIT(1); break;
-        case 2: DSV4_LAUNCH_DECODE_SPLIT(2); break;
-        case 3: DSV4_LAUNCH_DECODE_SPLIT(3); break;
-        case 4: DSV4_LAUNCH_DECODE_SPLIT(4); break;
-        case 5: DSV4_LAUNCH_DECODE_SPLIT(5); break;
-        case 6: DSV4_LAUNCH_DECODE_SPLIT(6); break;
+        case 1: POCKET_LAUNCH_DECODE_SPLIT(1); break;
+        case 2: POCKET_LAUNCH_DECODE_SPLIT(2); break;
+        case 3: POCKET_LAUNCH_DECODE_SPLIT(3); break;
+        case 4: POCKET_LAUNCH_DECODE_SPLIT(4); break;
+        case 5: POCKET_LAUNCH_DECODE_SPLIT(5); break;
+        case 6: POCKET_LAUNCH_DECODE_SPLIT(6); break;
         default: return false;
     }
-#undef DSV4_LAUNCH_DECODE_SPLIT
+#undef POCKET_LAUNCH_DECODE_SPLIT
     if (cudaGetLastError() != cudaSuccess) return false;
     gqa_decode_merge_f16_kernel<<<q_heads, kThreads, 0, cuda_stream>>>(
         partial_scratch, output, q_heads, head_dim, splits);
@@ -3191,30 +3191,30 @@ bool qwen_gqa_decode_attention_f16_batched_cuda(
     const cudaStream_t cuda_stream = static_cast<cudaStream_t>(stream);
     const dim3 grid(static_cast<unsigned>(kv_heads * groups_per_kv * splits),
                     static_cast<unsigned>(rows), 1);
-#define DSV4_LAUNCH_DECODE_SPLIT_BATCHED(HPG, PAGED) \
+#define POCKET_LAUNCH_DECODE_SPLIT_BATCHED(HPG, PAGED) \
     gqa_decode_split_f16_kernel<HPG, true, PAGED> \
         <<<grid, kThreads, 0, cuda_stream>>>( \
         q, k_cache, v_cache, partial_scratch, q_heads, kv_heads, head_dim, \
         max_context_len, splits, positions_per_split, attention_window, \
         sink_tokens, d_context_lens, d_slot_ids, kv_slot_stride, \
         d_block_table, block_size, max_blocks_per_seq)
-#define DSV4_LAUNCH_DECODE_SPLIT_BATCHED_WIDTH(PAGED) \
+#define POCKET_LAUNCH_DECODE_SPLIT_BATCHED_WIDTH(PAGED) \
     switch (group_heads) { \
-        case 1: DSV4_LAUNCH_DECODE_SPLIT_BATCHED(1, PAGED); break; \
-        case 2: DSV4_LAUNCH_DECODE_SPLIT_BATCHED(2, PAGED); break; \
-        case 3: DSV4_LAUNCH_DECODE_SPLIT_BATCHED(3, PAGED); break; \
-        case 4: DSV4_LAUNCH_DECODE_SPLIT_BATCHED(4, PAGED); break; \
-        case 5: DSV4_LAUNCH_DECODE_SPLIT_BATCHED(5, PAGED); break; \
-        case 6: DSV4_LAUNCH_DECODE_SPLIT_BATCHED(6, PAGED); break; \
+        case 1: POCKET_LAUNCH_DECODE_SPLIT_BATCHED(1, PAGED); break; \
+        case 2: POCKET_LAUNCH_DECODE_SPLIT_BATCHED(2, PAGED); break; \
+        case 3: POCKET_LAUNCH_DECODE_SPLIT_BATCHED(3, PAGED); break; \
+        case 4: POCKET_LAUNCH_DECODE_SPLIT_BATCHED(4, PAGED); break; \
+        case 5: POCKET_LAUNCH_DECODE_SPLIT_BATCHED(5, PAGED); break; \
+        case 6: POCKET_LAUNCH_DECODE_SPLIT_BATCHED(6, PAGED); break; \
         default: return false; \
     }
     if (paged) {
-        DSV4_LAUNCH_DECODE_SPLIT_BATCHED_WIDTH(true);
+        POCKET_LAUNCH_DECODE_SPLIT_BATCHED_WIDTH(true);
     } else {
-        DSV4_LAUNCH_DECODE_SPLIT_BATCHED_WIDTH(false);
+        POCKET_LAUNCH_DECODE_SPLIT_BATCHED_WIDTH(false);
     }
-#undef DSV4_LAUNCH_DECODE_SPLIT_BATCHED_WIDTH
-#undef DSV4_LAUNCH_DECODE_SPLIT_BATCHED
+#undef POCKET_LAUNCH_DECODE_SPLIT_BATCHED_WIDTH
+#undef POCKET_LAUNCH_DECODE_SPLIT_BATCHED
     if (cudaGetLastError() != cudaSuccess) return false;
     const dim3 merge_grid(static_cast<unsigned>(q_heads),
                           static_cast<unsigned>(rows), 1);
@@ -3235,4 +3235,4 @@ bool qwen_gqa_decode_attention_f16_fused_variant_cuda(
         variant, split_count_override, stream);
 }
 
-}  // namespace dsv4
+}  // namespace pocket

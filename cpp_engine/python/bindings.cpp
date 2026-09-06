@@ -2,7 +2,7 @@
 //
 // The module exposes value types and token-oriented engine methods only.  It does
 // not expose vendor handles or tensors, so Python callers cannot depend on the
-// CUDA/Ascend implementation details that remain inside dsv4_cpp_core.
+// CUDA/Ascend implementation details that remain inside pocket_cpp_core.
 
 #include "persistent_engine.hpp"
 #include "qwen_config.hpp"
@@ -18,7 +18,7 @@
 #include <utility>
 
 namespace py = pybind11;
-using namespace dsv4;
+using namespace pocket;
 
 namespace {
 

@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace dsv4_test {
+namespace pocket_test {
 
 constexpr uint32_t kDFlash2TensorMagic = 0x32464451u;  // "QDF2"
 constexpr uint32_t kDFlash2TensorVersion = 1;
@@ -19,32 +19,32 @@ constexpr uint32_t kDFlash2TensorVersion = 1;
 struct DFlash2TensorFile {
     int32_t position_offset = 0;
     int32_t anchor_token = 0;
-    std::vector<dsv4::QwenDFlash2DebugTensor> tensors;
+    std::vector<pocket::QwenDFlash2DebugTensor> tensors;
 };
 
-inline uint32_t dtype_code(dsv4::QwenDFlash2DebugDType dtype) {
+inline uint32_t dtype_code(pocket::QwenDFlash2DebugDType dtype) {
     switch (dtype) {
-        case dsv4::QwenDFlash2DebugDType::F16: return 1;
-        case dsv4::QwenDFlash2DebugDType::F32: return 2;
-        case dsv4::QwenDFlash2DebugDType::I32: return 3;
+        case pocket::QwenDFlash2DebugDType::F16: return 1;
+        case pocket::QwenDFlash2DebugDType::F32: return 2;
+        case pocket::QwenDFlash2DebugDType::I32: return 3;
     }
     throw std::runtime_error("unknown DFlash2 debug dtype");
 }
 
-inline dsv4::QwenDFlash2DebugDType debug_dtype(uint32_t code) {
+inline pocket::QwenDFlash2DebugDType debug_dtype(uint32_t code) {
     switch (code) {
-        case 1: return dsv4::QwenDFlash2DebugDType::F16;
-        case 2: return dsv4::QwenDFlash2DebugDType::F32;
-        case 3: return dsv4::QwenDFlash2DebugDType::I32;
+        case 1: return pocket::QwenDFlash2DebugDType::F16;
+        case 2: return pocket::QwenDFlash2DebugDType::F32;
+        case 3: return pocket::QwenDFlash2DebugDType::I32;
         default: throw std::runtime_error("unknown DFlash2 tensor dtype code");
     }
 }
 
-inline size_t dtype_size(dsv4::QwenDFlash2DebugDType dtype) {
+inline size_t dtype_size(pocket::QwenDFlash2DebugDType dtype) {
     switch (dtype) {
-        case dsv4::QwenDFlash2DebugDType::F16: return 2;
-        case dsv4::QwenDFlash2DebugDType::F32: return 4;
-        case dsv4::QwenDFlash2DebugDType::I32: return 4;
+        case pocket::QwenDFlash2DebugDType::F16: return 2;
+        case pocket::QwenDFlash2DebugDType::F32: return 4;
+        case pocket::QwenDFlash2DebugDType::I32: return 4;
     }
     throw std::runtime_error("unknown DFlash2 debug dtype");
 }
@@ -128,7 +128,7 @@ inline DFlash2TensorFile read_tensor_file(const std::string& path) {
             byte_size > (1ull << 34)) {
             throw std::runtime_error("invalid DFlash2 tensor record");
         }
-        dsv4::QwenDFlash2DebugTensor tensor;
+        pocket::QwenDFlash2DebugTensor tensor;
         tensor.name.resize(name_size);
         input.read(tensor.name.data(), name_size);
         tensor.dtype = dtype;
@@ -152,9 +152,9 @@ inline DFlash2TensorFile read_tensor_file(const std::string& path) {
     return file;
 }
 
-inline const dsv4::QwenDFlash2DebugTensor& require_tensor(
+inline const pocket::QwenDFlash2DebugTensor& require_tensor(
     const DFlash2TensorFile& file, const std::string& name) {
-    const dsv4::QwenDFlash2DebugTensor* found = nullptr;
+    const pocket::QwenDFlash2DebugTensor* found = nullptr;
     for (const auto& tensor : file.tensors) {
         if (tensor.name != name) continue;
         if (found != nullptr) throw std::runtime_error("duplicate DFlash2 tensor: " + name);
@@ -164,4 +164,4 @@ inline const dsv4::QwenDFlash2DebugTensor& require_tensor(
     return *found;
 }
 
-}  // namespace dsv4_test
+}  // namespace pocket_test

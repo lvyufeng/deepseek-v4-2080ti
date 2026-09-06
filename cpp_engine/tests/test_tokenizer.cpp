@@ -11,7 +11,7 @@ void require(bool cond, const std::string& msg) {
     if (!cond) throw std::runtime_error(msg);
 }
 
-void check_encode(const dsv4::Tokenizer& tok, const std::string& text, const std::vector<int>& expected) {
+void check_encode(const pocket::Tokenizer& tok, const std::string& text, const std::vector<int>& expected) {
     auto ids = tok.encode_basic(text, false);
     if (ids != expected) {
         std::string got;
@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
         return 2;
     }
     try {
-        dsv4::Tokenizer tok(argv[1]);
+        pocket::Tokenizer tok(argv[1]);
         require(tok.vocab_size() >= 129280, "bad vocab size");
         require(tok.token(0) == "<｜begin▁of▁sentence｜>", "bad bos token");
         require(tok.token(1) == "<｜end▁of▁sentence｜>", "bad eos token");

@@ -2,7 +2,7 @@
 // Embed -> attn_norm -> Q & KV projections -> sparse attention with attn_sink
 // -> inverse RoPE -> grouped wo_a Q8_0 -> wo_b Q8_0 -> attn_out[dim].
 
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
     const int token = argc >= 3 ? std::atoi(argv[2]) : 1234;
     const int position = argc >= 4 ? std::atoi(argv[3]) : 0;
     try {
-        auto r = dsv4::run_gguf_attn_full_smoke(argv[1], token, position);
+        auto r = pocket::run_gguf_attn_full_smoke(argv[1], token, position);
         std::printf("token=%d position=%d dim=%d heads=%d head_dim=%d kv_dim=%d rope_dim=%d\n",
                     token, position, r.dim, r.heads, r.head_dim, r.kv_dim, r.rope_dim);
         std::printf("o_groups=%d o_lora_rank=%d attn_mid=%d\n",

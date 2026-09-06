@@ -104,7 +104,7 @@ int main(int argc, char** argv) {
         ck(cudaMemcpy(s, hs.data(), hs.size() * 2, cudaMemcpyHostToDevice), "cs");
 
         // Materialize the FP16 weight once so gemm_only measures a pure GEMM.
-        if (!dsv4::qwen_fp8_e4m3_fp16scale_dequantize_f16_cuda(
+        if (!pocket::qwen_fp8_e4m3_fp16scale_dequantize_f16_cuda(
                 w, s, wf16, sh.rows, sh.cols, sh.cols, sc)) {
             std::fprintf(stderr, "dequant failed\n");
             return 1;
@@ -117,19 +117,19 @@ int main(int argc, char** argv) {
                     double(sh.rows) * sh.cols * 2 / (1024.0 * 1024.0));
 
         const double dq = timed([&]() {
-            return dsv4::qwen_fp8_e4m3_fp16scale_dequantize_f16_cuda(
+            return pocket::qwen_fp8_e4m3_fp16scale_dequantize_f16_cuda(
                 w, s, wf16, sh.rows, sh.cols, sh.cols, sc);
         }, iters);
 
         for (int b : batches) {
             setenv("QWEN_FP8_F16_PREFILL_CUBLAS", "1", 1);
             const double combined = timed([&]() {
-                return dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
+                return pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
                     x, w, s, y, b, sh.rows, sh.cols, sh.cols, sh.rows, sh.cols,
                     sc);
             }, iters);
             const double gemm = timed([&]() {
-                return dsv4::qwen_fp16_matmul_rows_f16_cublas_cuda(
+                return pocket::qwen_fp16_matmul_rows_f16_cublas_cuda(
                     x, wf16, y, b, sh.rows, sh.cols, sh.cols, sh.rows, sh.cols);
             }, iters);
             const double flops = 2.0 * b * sh.rows * sh.cols;

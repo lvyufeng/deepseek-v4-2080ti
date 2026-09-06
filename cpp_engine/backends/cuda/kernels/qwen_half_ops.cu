@@ -12,7 +12,7 @@
 #include <cstring>
 #include <type_traits>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 constexpr int kFp8WeightBlock = 128;
@@ -4496,4 +4496,4 @@ bool qwen_gqa_prefill_attention_fp8_cuda(
         position_offset, max_context, static_cast<cudaStream_t>(stream));
 }
 
-}  // namespace dsv4
+}  // namespace pocket

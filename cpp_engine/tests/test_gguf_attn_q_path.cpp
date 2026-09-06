@@ -1,7 +1,7 @@
 // Phase 3 step: full GGUF attention Q-path smoke for layer 0.
 // Embed -> attn_norm -> wq_a -> q_norm -> wq_b -> head_rmsnorm_rope.
 
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
     const int token = argc >= 3 ? std::atoi(argv[2]) : 1234;
     const int position = argc >= 4 ? std::atoi(argv[3]) : 0;
     try {
-        auto r = dsv4::run_gguf_attn_q_path_smoke(argv[1], token, position);
+        auto r = pocket::run_gguf_attn_q_path_smoke(argv[1], token, position);
         std::printf("token=%d position=%d dim=%d q_a_dim=%d heads=%d head_dim=%d rope_dim=%d\n",
                     token, position, r.dim, r.q_a_dim, r.heads, r.head_dim, r.rope_dim);
         std::printf("q_normed_rms    = %.4f\n", r.q_normed_rms);

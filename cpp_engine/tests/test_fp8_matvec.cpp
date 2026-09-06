@@ -118,7 +118,7 @@ void run_matmul_case(const std::vector<float>& x, const uint8_t* w, const uint8_
     check_cuda(cudaMemcpy(d_x, x.data(), x.size() * sizeof(float), cudaMemcpyHostToDevice), "copy matmul x");
     check_cuda(cudaMemcpy(d_w, w, weight_bytes, cudaMemcpyHostToDevice), "copy matmul weight");
     check_cuda(cudaMemcpy(d_scale, scale, scale_bytes, cudaMemcpyHostToDevice), "copy matmul scale");
-    if (!dsv4::fp8_e4m3_e8m0_matmul_cuda(d_x, d_w, d_scale, d_y, batch, rows, cols)) {
+    if (!pocket::fp8_e4m3_e8m0_matmul_cuda(d_x, d_w, d_scale, d_y, batch, rows, cols)) {
         throw std::runtime_error("fp8_e4m3_e8m0_matmul_cuda launch failed");
     }
     check_cuda(cudaDeviceSynchronize(), "sync matmul kernel");
@@ -160,7 +160,7 @@ void run_case(const std::vector<float>& x, const uint8_t* w, const uint8_t* scal
     check_cuda(cudaMemcpy(d_x, x.data(), x.size() * sizeof(float), cudaMemcpyHostToDevice), "copy x");
     check_cuda(cudaMemcpy(d_w, w, weight_bytes, cudaMemcpyHostToDevice), "copy weight");
     check_cuda(cudaMemcpy(d_scale, scale, scale_bytes, cudaMemcpyHostToDevice), "copy scale");
-    if (!dsv4::fp8_e4m3_e8m0_matvec_cuda(d_x, d_w, d_scale, d_y, rows, cols)) {
+    if (!pocket::fp8_e4m3_e8m0_matvec_cuda(d_x, d_w, d_scale, d_y, rows, cols)) {
         throw std::runtime_error("fp8_e4m3_e8m0_matvec_cuda launch failed");
     }
     check_cuda(cudaDeviceSynchronize(), "sync kernel");
@@ -198,25 +198,25 @@ std::string scale_name_for(const std::string& tensor) {
 
 int main(int argc, char** argv) {
     try {
-        if (!dsv4::cuda_runtime_available()) {
+        if (!pocket::cuda_runtime_available()) {
             std::cout << "[SKIP] CUDA runtime is not available\n";
             return 0;
         }
         Args args = parse_args(argc, argv);
         if (args.ckpt.empty() || args.tensor.empty()) throw std::runtime_error("--ckpt and --tensor are required");
-        dsv4::SafeTensorsIndex index(args.ckpt);
+        pocket::SafeTensorsIndex index(args.ckpt);
         const std::string* shard_name = index.shard_for_tensor(args.tensor);
         if (shard_name == nullptr) throw std::runtime_error("tensor not found: " + args.tensor);
         const std::string scale_name = scale_name_for(args.tensor);
         const std::string* scale_shard = index.shard_for_tensor(scale_name);
         if (scale_shard == nullptr) throw std::runtime_error("scale tensor not found: " + scale_name);
         if (*shard_name != *scale_shard) throw std::runtime_error("weight and scale are in different shards");
-        dsv4::SafeTensorsShard shard(index.shard_path(*shard_name));
+        pocket::SafeTensorsShard shard(index.shard_path(*shard_name));
         const auto* weight = shard.find_tensor(args.tensor);
         const auto* scale = shard.find_tensor(scale_name);
         if (weight == nullptr || scale == nullptr) throw std::runtime_error("tensor missing from shard header");
-        if (weight->dtype != dsv4::SafeDType::F8_E4M3 || weight->shape.size() != 2) throw std::runtime_error("expected 2D F8_E4M3 weight");
-        if (scale->dtype != dsv4::SafeDType::F8_E8M0 || scale->shape.size() != 2) throw std::runtime_error("expected 2D F8_E8M0 scale");
+        if (weight->dtype != pocket::SafeDType::F8_E4M3 || weight->shape.size() != 2) throw std::runtime_error("expected 2D F8_E4M3 weight");
+        if (scale->dtype != pocket::SafeDType::F8_E8M0 || scale->shape.size() != 2) throw std::runtime_error("expected 2D F8_E8M0 scale");
         const int rows = std::min(args.rows, static_cast<int>(weight->shape[0]));
         const int cols = static_cast<int>(weight->shape[1]);
         if (rows % 128 != 0 || cols % 128 != 0) throw std::runtime_error("rows and cols must be multiples of 128");

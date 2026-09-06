@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
                      "--tp-world N --tp-rank R [--device D] [--iters N]\n");
         return 1;
     }
-    if (!dsv4::tp_comm_available()) {
+    if (!pocket::tp_comm_available()) {
         std::fprintf(stderr, "this build has no NCCL support\n");
         return 1;
     }
@@ -76,13 +76,13 @@ int main(int argc, char** argv) {
                              cudaMemcpyHostToDevice), "copy reduce buffer");
             // Warm up the communicator so connection setup is not timed.
             for (int i = 0; i < 5; ++i) {
-                dsv4::tp_all_reduce_sum_f16_inplace(
+                pocket::tp_all_reduce_sum_f16_inplace(
                     world, rank, device, id_path.c_str(), buffer, count);
             }
             check(cudaDeviceSynchronize(), "warmup sync");
             const auto started = std::chrono::steady_clock::now();
             for (int i = 0; i < iters; ++i) {
-                dsv4::tp_all_reduce_sum_f16_inplace(
+                pocket::tp_all_reduce_sum_f16_inplace(
                     world, rank, device, id_path.c_str(), buffer, count);
             }
             check(cudaDeviceSynchronize(), "reduce sync");

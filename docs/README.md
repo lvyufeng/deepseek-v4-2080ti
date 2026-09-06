@@ -7,6 +7,8 @@ This directory contains model-specific support notes, reproducible benchmark def
 - [Project home](../README.md) · [中文首页](../README_CN.md)
 - [Benchmarking and reporting rules](benchmarking.md)
 - [C++/CUDA engine notes](../cpp_engine/README.md)
+- [Migration: `dsv4` → `pocket`](migration/dsv4-to-pocket-rename.md) — breaking rename of the
+  namespace, build targets, executable, and every `DSV4_*` environment variable
 
 ## Model guides
 

@@ -61,9 +61,9 @@ double time_ms(void (*fn)(const Buffers&, int, int, int, int), const Buffers& b,
 
 void run_opt(const Buffers& b, int batch, int rows, int cols, int scale_cols) {
     if (batch == 1) {
-        dsv4::qwen_fp8_e4m3_fp16scale_matvec_cuda(b.x, b.w, b.s, b.y, rows, cols, cols, scale_cols);
+        pocket::qwen_fp8_e4m3_fp16scale_matvec_cuda(b.x, b.w, b.s, b.y, rows, cols, cols, scale_cols);
     } else {
-        dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_cuda(b.x, b.w, b.s, b.y, batch, rows, cols,
+        pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_cuda(b.x, b.w, b.s, b.y, batch, rows, cols,
                                                        cols, rows, cols, scale_cols);
     }
 }
@@ -75,9 +75,9 @@ void run_ref(const Buffers& b, int batch, int rows, int cols, int scale_cols) {
     // branch (stride not divisible by 4 is checked on weight_stride).
     const int stride = cols + 1;
     if (batch == 1) {
-        dsv4::qwen_fp8_e4m3_fp16scale_matvec_cuda(b.x, b.w, b.s, b.y, rows, cols, stride, scale_cols);
+        pocket::qwen_fp8_e4m3_fp16scale_matvec_cuda(b.x, b.w, b.s, b.y, rows, cols, stride, scale_cols);
     } else {
-        dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_cuda(b.x, b.w, b.s, b.y, batch, rows, cols,
+        pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_cuda(b.x, b.w, b.s, b.y, batch, rows, cols,
                                                        cols, rows, stride, scale_cols);
     }
 }
@@ -86,7 +86,7 @@ void run_simt(const Buffers& b, int batch, int rows, int cols, int scale_cols) {
     if (batch == 1) {
         run_opt(b, batch, rows, cols, scale_cols);
     } else {
-        dsv4::qwen_fp8_e4m3_fp16scale_matmul_simt_cuda(
+        pocket::qwen_fp8_e4m3_fp16scale_matmul_simt_cuda(
             b.x, b.w, b.s, b.y, batch, rows, cols, cols, rows, cols, scale_cols);
     }
 }
@@ -95,7 +95,7 @@ void run_half_prefill_online(const Buffers& b, int batch, int rows, int cols,
                              int scale_cols) {
     if (batch == 1) return;
     unsetenv("QWEN_FP8_F16_PREFILL_CUBLAS");
-    dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
+    pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
         b.x_half, b.w, b.s, reinterpret_cast<uint16_t*>(b.y), batch, rows,
         cols, cols, rows, cols, scale_cols);
 }
@@ -104,28 +104,28 @@ void run_half_prefill_cublas(const Buffers& b, int batch, int rows, int cols,
                              int scale_cols) {
     if (batch == 1) return;
     setenv("QWEN_FP8_F16_PREFILL_CUBLAS", "1", 1);
-    dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
+    pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
         b.x_half, b.w, b.s, reinterpret_cast<uint16_t*>(b.y), batch, rows,
         cols, cols, rows, cols, scale_cols);
 }
 
 void run_swiglu_separate(const Buffers& b, int batch, int rows, int cols, int scale_cols) {
     if (batch != 1) return;
-    dsv4::qwen_fp8_e4m3_fp16scale_matvec_cuda(b.x, b.w, b.s, b.y, rows, cols, cols, scale_cols);
-    dsv4::qwen_fp8_e4m3_fp16scale_matvec_cuda(b.x, b.w2, b.s2, b.y2, rows, cols, cols, scale_cols);
-    dsv4::qwen_silu_mul_rows_cuda(b.y, b.y2, b.y3, 1, rows);
+    pocket::qwen_fp8_e4m3_fp16scale_matvec_cuda(b.x, b.w, b.s, b.y, rows, cols, cols, scale_cols);
+    pocket::qwen_fp8_e4m3_fp16scale_matvec_cuda(b.x, b.w2, b.s2, b.y2, rows, cols, cols, scale_cols);
+    pocket::qwen_silu_mul_rows_cuda(b.y, b.y2, b.y3, 1, rows);
 }
 
 void run_swiglu_fused(const Buffers& b, int batch, int rows, int cols, int scale_cols) {
     if (batch != 1) return;
-    dsv4::qwen_fp8_e4m3_fp16scale_swiglu_matvec_cuda(
+    pocket::qwen_fp8_e4m3_fp16scale_swiglu_matvec_cuda(
         b.x, b.w, b.s, b.w2, b.s2, b.y3, rows, cols, cols, scale_cols);
 }
 
 }  // namespace
 
 int main() {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::printf("[SKIP] bench_qwen_fp8_kernels requires a CUDA device\n");
         return 0;
     }

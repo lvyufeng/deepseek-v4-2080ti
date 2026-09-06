@@ -10,7 +10,7 @@ from typing import Iterable
 
 import torch
 
-_HEADER_MAGIC = b"DSV4MOE1"
+_HEADER_MAGIC = b"PKTLMOE1"
 _HEADER_VERSION = 1
 _HEADER_STRUCT = struct.Struct("<8sQQQQQQ")
 _ALIGN = 64
@@ -109,7 +109,7 @@ class SharedCPUMoEWeightArena:
 
     def _default_shm_name(self) -> str:
         run_name = _safe_name(os.path.basename(self.root_dir.rstrip(os.sep)) or "run")
-        return f"dsv4_moe_{run_name}_rank{self.rank}"
+        return f"pocketllm_moe_{run_name}_rank{self.rank}"
 
     def _layout_entries(self) -> Iterable[tuple[int, int, TensorSpec]]:
         specs = self.build_specs(self.dim, self.moe_inter_dim)

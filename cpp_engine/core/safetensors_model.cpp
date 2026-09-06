@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 SafeTensorRef make_ref(const std::string& name, const std::string& shard, const SafeTensorInfo& info) {
@@ -79,4 +79,4 @@ SafeFp4TensorPair SafeTensorsModelMap::require_fp4_pair(const std::string& weigh
     return resolve_fp4_tensor_pair(index_, shard, weight_name);
 }
 
-}  // namespace dsv4
+}  // namespace pocket

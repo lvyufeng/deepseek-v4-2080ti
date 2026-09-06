@@ -2,10 +2,10 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TMP_ROOT="${DSV4_TMP_DIR:-$REPO_ROOT/.tmp}"
+TMP_ROOT="${POCKETLLM_TMP_DIR:-$REPO_ROOT/.tmp}"
 mkdir -p "$TMP_ROOT"
 
-LOCK_FILE="${LOCK_FILE:-$TMP_ROOT/dsv4_gguf_q2_layer_pp.lock}"
+LOCK_FILE="${LOCK_FILE:-$TMP_ROOT/pocketllm_gguf_q2_layer_pp.lock}"
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
   echo "another GGUF Q2 layer-PP benchmark is already running: $LOCK_FILE" >&2

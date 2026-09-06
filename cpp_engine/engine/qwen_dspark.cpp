@@ -16,7 +16,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 const JsonValue& required(const JsonObject& object, const std::string& key) {
@@ -549,15 +549,15 @@ struct QwenDSparkRuntime::Impl {
     // generic FP32 kernel launches a rows x batch grid, so it re-reads the
     // whole vocab-sized weight matrix once per draft row and lands about an
     // order of magnitude off the memory-bound floor. cuBLAS reuses the weights
-    // across rows instead. Set DSV4_DSPARK_LM_HEAD_CUBLAS=0 to fall back.
+    // across rows instead. Set POCKETLLM_DSPARK_LM_HEAD_CUBLAS=0 to fall back.
     static bool lm_head_cublas_enabled() {
-        const char* value = std::getenv("DSV4_DSPARK_LM_HEAD_CUBLAS");
+        const char* value = std::getenv("POCKETLLM_DSPARK_LM_HEAD_CUBLAS");
         return value == nullptr || std::strcmp(value, "0") != 0;
     }
 
     void all_reduce_half(uint16_t* values, int count) {
         if (tp_world == 1) return;
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (nccl_id_path.empty()) {
             throw std::runtime_error("Qwen DSpark TP requires NCCL ID path");
         }
@@ -653,7 +653,7 @@ struct QwenDSparkRuntime::Impl {
             static_cast<int>(target_head.vocab_start)), "local Markov argmax");
         int token = 0;
         float value = 0.0f;
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (tp_world > 1) {
             if (nccl_id_path.empty()) {
                 throw std::runtime_error("Qwen DSpark TP requires NCCL ID path");
@@ -911,4 +911,4 @@ std::vector<float> qwen_dspark_yarn_inv_freqs(
     return output;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
-TMP_ROOT="${DSV4_TMP_DIR:-$REPO_ROOT/.tmp}"
+TMP_ROOT="${POCKETLLM_TMP_DIR:-$REPO_ROOT/.tmp}"
 mkdir -p "$TMP_ROOT"
 
 LOCK_FILE="${LOCK_FILE:-$TMP_ROOT/dspark_parity_bench.lock}"
@@ -49,7 +49,7 @@ CKPT="$CKPT" FIXTURES="$FIXTURES" LONG_PROMPT_TOKENS="$LONG_PROMPT_TOKENS" "$PYT
 import os
 from pathlib import Path
 from transformers import AutoTokenizer
-from src.encoding.dsv4 import encode_messages
+from src.encoding.deepseek_v4 import encode_messages
 
 ckpt = os.environ["CKPT"]
 out = Path(os.environ["FIXTURES"])
@@ -87,10 +87,10 @@ rm -f "${CPP_LOG_PREFIX}"{0,1,2,3}.log
 pids=()
 for rank in 0 1 2 3; do
   echo "  Starting rank $rank..."
-  DSV4_BENCH_MODE=dspark_suite \
-  DSV4_CPP_BATCHED_VERIFY=0 \
-  DSV4_CPP_TOPK_DIAG="$TOPK_DIAG" \
-  DSV4_CPP_NCCL_ID_WAIT_ATTEMPTS=18000 \
+  POCKETLLM_BENCH_MODE=dspark_suite \
+  POCKETLLM_CPP_BATCHED_VERIFY=0 \
+  POCKETLLM_CPP_TOPK_DIAG="$TOPK_DIAG" \
+  POCKETLLM_CPP_NCCL_ID_WAIT_ATTEMPTS=18000 \
     "$CPP_BIN" "$CKPT" "$FIXTURES" "$DECODE_TOKENS" "$REPEATS" 43 4 "$rank" "$NCCL_ID" \
       > "${CPP_LOG_PREFIX}${rank}.log" 2>&1 &
   pids+=("$!")

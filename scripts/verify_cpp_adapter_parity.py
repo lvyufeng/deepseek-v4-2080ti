@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the PocketLLM C++ adapter against the reference dsv4_cpp_engine.
+"""Verify the PocketLLM C++ adapter against the reference pocketllm_engine.
 
 Both sides load the same real checkpoint and drive the same native QwenEngine
 with identical greedy settings, so the generated token ids must agree. The
@@ -41,7 +41,7 @@ DEFAULT_PROMPTS = [
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ckpt", required=True)
-    parser.add_argument("--binary", default="cpp_engine/build/dsv4_cpp_engine")
+    parser.add_argument("--binary", default="cpp_engine/build/pocketllm_engine")
     parser.add_argument("--native-path", default="cpp_engine/build-python/python")
     parser.add_argument("--tp-world", type=int, default=2)
     parser.add_argument("--devices", default="0,1")

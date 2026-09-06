@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-namespace dsv4 {
+namespace pocket {
 
 namespace {
 
@@ -213,4 +213,4 @@ WeightView GGUFWeightSource::get_expert(const std::string& routed_name_3d,
     return view;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

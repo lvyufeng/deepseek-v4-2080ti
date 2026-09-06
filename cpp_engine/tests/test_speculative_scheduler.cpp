@@ -27,7 +27,7 @@
 #include <string>
 #include <vector>
 
-using namespace dsv4;
+using namespace pocket;
 
 namespace {
 
@@ -194,8 +194,8 @@ int main(int argc, char** argv) {
     // A batched GEMM changes reduction order, so batched greedy successors can
     // differ from plain decode even when transaction commit/rollback is correct.
     const bool require_plain_exact =
-        std::getenv("DSV4_CPP_BATCHED_VERIFY") == nullptr ||
-        std::atoi(std::getenv("DSV4_CPP_BATCHED_VERIFY")) == 0;
+        std::getenv("POCKETLLM_CPP_BATCHED_VERIFY") == nullptr ||
+        std::atoi(std::getenv("POCKETLLM_CPP_BATCHED_VERIFY")) == 0;
 
     // Near-certain continuation: exercises full acceptance and amortization.
     const std::vector<int> cyclic = {

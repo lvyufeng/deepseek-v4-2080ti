@@ -124,7 +124,7 @@ void test_head_rmsnorm_rope_kernel() {
     float* d_x = nullptr;
     check_cuda(cudaMalloc(&d_x, x.size() * sizeof(float)), "cudaMalloc rope x");
     check_cuda(cudaMemcpy(d_x, x.data(), x.size() * sizeof(float), cudaMemcpyHostToDevice), "copy rope x");
-    if (!dsv4::head_rmsnorm_rope_cuda(d_x, heads, head_dim, rope_dim, position, theta, false, eps)) throw std::runtime_error("head rmsnorm rope launch failed");
+    if (!pocket::head_rmsnorm_rope_cuda(d_x, heads, head_dim, rope_dim, position, theta, false, eps)) throw std::runtime_error("head rmsnorm rope launch failed");
     check_cuda(cudaDeviceSynchronize(), "sync head rmsnorm rope");
     std::vector<float> got(x.size());
     check_cuda(cudaMemcpy(got.data(), d_x, got.size() * sizeof(float), cudaMemcpyDeviceToHost), "copy rope x");
@@ -176,7 +176,7 @@ void test_cached_attention_kernel() {
     check_cuda(cudaMemcpy(d_q, q.data(), q.size() * sizeof(float), cudaMemcpyHostToDevice), "copy cached q");
     check_cuda(cudaMemcpy(d_kv, kv.data(), kv.size() * sizeof(float), cudaMemcpyHostToDevice), "copy cached kv");
     check_cuda(cudaMemcpy(d_sink, sink.data(), sink.size() * sizeof(float), cudaMemcpyHostToDevice), "copy cached sink");
-    if (!dsv4::cached_single_token_attention_cuda(d_q, d_kv, d_sink, d_y, heads, head_dim, cache_len, scale)) throw std::runtime_error("cached attention launch failed");
+    if (!pocket::cached_single_token_attention_cuda(d_q, d_kv, d_sink, d_y, heads, head_dim, cache_len, scale)) throw std::runtime_error("cached attention launch failed");
     check_cuda(cudaDeviceSynchronize(), "sync cached attention");
     std::vector<float> got(q.size());
     check_cuda(cudaMemcpy(got.data(), d_y, got.size() * sizeof(float), cudaMemcpyDeviceToHost), "copy cached y");
@@ -224,8 +224,8 @@ void test_prefill_headpair_serial_matches_indexed() {
     check_cuda(cudaMemcpy(d_kv, kv.data(), kv.size() * sizeof(float), cudaMemcpyHostToDevice), "copy prefill kv");
     check_cuda(cudaMemcpy(d_sink, sink.data(), sink.size() * sizeof(float), cudaMemcpyHostToDevice), "copy prefill sink");
     check_cuda(cudaMemcpy(d_indices, indices.data(), indices.size() * sizeof(int32_t), cudaMemcpyHostToDevice), "copy prefill indices");
-    if (!dsv4::prefill_sparse_attention_indexed_cuda(d_q, d_kv, d_sink, d_indices, d_indexed, tokens, heads, kv_len, topk, head_dim, scale)) throw std::runtime_error("prefill indexed attention launch failed");
-    if (!dsv4::prefill_sparse_attention_headpair_serial_cuda(d_q, d_kv, d_sink, d_indices, d_serial, tokens, heads, kv_len, topk, head_dim, scale)) throw std::runtime_error("prefill headpair serial attention launch failed");
+    if (!pocket::prefill_sparse_attention_indexed_cuda(d_q, d_kv, d_sink, d_indices, d_indexed, tokens, heads, kv_len, topk, head_dim, scale)) throw std::runtime_error("prefill indexed attention launch failed");
+    if (!pocket::prefill_sparse_attention_headpair_serial_cuda(d_q, d_kv, d_sink, d_indices, d_serial, tokens, heads, kv_len, topk, head_dim, scale)) throw std::runtime_error("prefill headpair serial attention launch failed");
     check_cuda(cudaDeviceSynchronize(), "sync prefill attention compare");
     std::vector<float> indexed(out_elems);
     std::vector<float> serial(out_elems);
@@ -274,7 +274,7 @@ void test_single_token_attention_kernel() {
     check_cuda(cudaMemcpy(d_q, q.data(), q.size() * sizeof(float), cudaMemcpyHostToDevice), "copy attn q");
     check_cuda(cudaMemcpy(d_kv, kv.data(), kv.size() * sizeof(float), cudaMemcpyHostToDevice), "copy attn kv");
     check_cuda(cudaMemcpy(d_sink, sink.data(), sink.size() * sizeof(float), cudaMemcpyHostToDevice), "copy attn sink");
-    if (!dsv4::single_token_sparse_attention_cuda(d_q, d_kv, d_sink, d_y, heads, head_dim, scale)) throw std::runtime_error("single token attention launch failed");
+    if (!pocket::single_token_sparse_attention_cuda(d_q, d_kv, d_sink, d_y, heads, head_dim, scale)) throw std::runtime_error("single token attention launch failed");
     check_cuda(cudaDeviceSynchronize(), "sync single token attention");
     std::vector<float> got(q.size());
     check_cuda(cudaMemcpy(got.data(), d_y, got.size() * sizeof(float), cudaMemcpyDeviceToHost), "copy attn y");
@@ -291,7 +291,7 @@ void test_single_token_attention_kernel() {
 
 int main(int argc, char** argv) {
     try {
-        if (!dsv4::cuda_runtime_available()) {
+        if (!pocket::cuda_runtime_available()) {
             std::cout << "[SKIP] CUDA runtime is not available\n";
             return 0;
         }
@@ -301,15 +301,15 @@ int main(int argc, char** argv) {
         test_prefill_headpair_serial_matches_indexed();
         Args args = parse_args(argc, argv);
         if (args.ckpt.empty()) throw std::runtime_error("--ckpt is required");
-        dsv4::SafeTensorsIndex index(args.ckpt);
+        pocket::SafeTensorsIndex index(args.ckpt);
 
         const std::string norm_name = "layers.0.attn_norm.weight";
         const std::string scale_name = scale_name_for(args.weight);
         const std::string* norm_shard_name = index.shard_for_tensor(norm_name);
         const std::string* weight_shard_name = index.shard_for_tensor(args.weight);
         if (norm_shard_name == nullptr || weight_shard_name == nullptr) throw std::runtime_error("missing tensor in index");
-        dsv4::SafeTensorsShard norm_shard(index.shard_path(*norm_shard_name));
-        dsv4::SafeTensorsShard weight_shard(index.shard_path(*weight_shard_name));
+        pocket::SafeTensorsShard norm_shard(index.shard_path(*norm_shard_name));
+        pocket::SafeTensorsShard weight_shard(index.shard_path(*weight_shard_name));
         const auto* norm_info = norm_shard.find_tensor(norm_name);
         const auto* weight_info = weight_shard.find_tensor(args.weight);
         const auto* scale_info = weight_shard.find_tensor(scale_name);
@@ -340,8 +340,8 @@ int main(int argc, char** argv) {
         check_cuda(cudaMemcpy(d_gamma, gamma, norm_info->nbytes, cudaMemcpyHostToDevice), "copy gamma");
         check_cuda(cudaMemcpy(d_w, weight_shard.tensor_data(*weight_info), static_cast<size_t>(rows) * cols, cudaMemcpyHostToDevice), "copy weight");
         check_cuda(cudaMemcpy(d_scale, weight_shard.tensor_data(*scale_info), static_cast<size_t>(rows / 128) * (cols / 128), cudaMemcpyHostToDevice), "copy scale");
-        if (!dsv4::rmsnorm_bf16_gamma_cuda(d_x, d_gamma, d_norm, cols, 1e-6f)) throw std::runtime_error("rmsnorm launch failed");
-        if (!dsv4::fp8_e4m3_e8m0_matvec_cuda(d_norm, d_w, d_scale, d_y, rows, cols)) throw std::runtime_error("fp8 matvec launch failed");
+        if (!pocket::rmsnorm_bf16_gamma_cuda(d_x, d_gamma, d_norm, cols, 1e-6f)) throw std::runtime_error("rmsnorm launch failed");
+        if (!pocket::fp8_e4m3_e8m0_matvec_cuda(d_norm, d_w, d_scale, d_y, rows, cols)) throw std::runtime_error("fp8 matvec launch failed");
         check_cuda(cudaDeviceSynchronize(), "sync kernels");
         std::vector<float> got(rows);
         check_cuda(cudaMemcpy(got.data(), d_y, got.size() * sizeof(float), cudaMemcpyDeviceToHost), "copy y");

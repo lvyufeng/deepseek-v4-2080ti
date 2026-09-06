@@ -135,7 +135,7 @@ Args parse_args(int argc, char** argv) {
     return args;
 }
 
-void print_context_info(const dsv4::GGUFFile& gguf, const dsv4::ModelConfig& cfg, bool as_json) {
+void print_context_info(const pocket::GGUFFile& gguf, const pocket::ModelConfig& cfg, bool as_json) {
     const uint64_t kv_bytes_per_token = cfg.n_layers * cfg.kv_heads * cfg.head_dim * 2ull * 2ull;
     const double kv_mib = static_cast<double>(kv_bytes_per_token) * static_cast<double>(cfg.context_length) / 1024.0 / 1024.0;
     if (as_json) {
@@ -167,9 +167,9 @@ int main(int argc, char** argv) {
     try {
         Args args = parse_args(argc, argv);
         const std::string gguf_path = first_gguf_path(args.gguf);
-        dsv4::GGUFFile gguf(gguf_path);
-        dsv4::Tokenizer tokenizer = dsv4::Tokenizer::from_gguf(gguf);
-        dsv4::ModelConfig cfg = dsv4::ModelConfig::from_gguf(gguf);
+        pocket::GGUFFile gguf(gguf_path);
+        pocket::Tokenizer tokenizer = pocket::Tokenizer::from_gguf(gguf);
+        pocket::ModelConfig cfg = pocket::ModelConfig::from_gguf(gguf);
 
         if (args.context_info) print_context_info(gguf, cfg, args.json);
 

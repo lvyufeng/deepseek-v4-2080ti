@@ -135,7 +135,7 @@
 #   cuda_kernel_impl.cu fused_kv_rope_actquant_kernel (kv_cache_out arm).
 #
 #
-# Reference numbers (4x RTX 2080 Ti, $TMP_ROOT/dsv4_long_input_single.txt ~2k tokens,
+# Reference numbers (4x RTX 2080 Ti, $TMP_ROOT/pocketllm_long_input_single.txt ~2k tokens,
 # arena ON + thread_local kernel + OMP=12 + fused attn prefuse + async overlap,
 # src.cli.generate max_new=64 unless noted):
 #   schedutil governor (default):
@@ -155,9 +155,9 @@ set -eo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="$REPO_ROOT"
-TMP_ROOT="${DSV4_TMP_DIR:-$REPO_ROOT/.tmp}"
+TMP_ROOT="${POCKETLLM_TMP_DIR:-$REPO_ROOT/.tmp}"
 mkdir -p "$TMP_ROOT"
-LOCK_FILE="${LOCK_FILE:-$TMP_ROOT/dsv4_best_scheduler.lock}"
+LOCK_FILE="${LOCK_FILE:-$TMP_ROOT/pocketllm_best_scheduler.lock}"
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
   echo "another best-scheduler benchmark is already running: $LOCK_FILE" >&2
@@ -209,7 +209,7 @@ if [[ "${DEEPSEEK_BENCH_GOVERNOR_PIN:-0}" == "1" ]]; then
   if ! sudo -n true 2>/dev/null; then
     echo "DEEPSEEK_BENCH_GOVERNOR_PIN=1 set but passwordless sudo unavailable; skipping governor pinning" >&2
   else
-    GOV_BACKUP_FILE="$(mktemp "$TMP_ROOT/dsv4_gov_backup.XXXXXX")"
+    GOV_BACKUP_FILE="$(mktemp "$TMP_ROOT/pocketllm_gov_backup.XXXXXX")"
     for f in "$GOV_DIR"/cpu*/cpufreq/scaling_governor; do
       [[ -e "$f" ]] || continue
       printf '%s\t%s\n' "$f" "$(cat "$f")" >> "$GOV_BACKUP_FILE"
@@ -236,12 +236,12 @@ CKPT_PATH="${CKPT_PATH:-$DEFAULT_CKPT_PATH}"
 CONFIG="${CONFIG:-$REPO_ROOT/configs/config_w8a8.json}"
 
 SHORT_INPUT_FILE="${SHORT_INPUT_FILE:-$REPO_ROOT/tests/fixtures/smoke_input.txt}"
-LONG_INPUT_FILE="${LONG_INPUT_FILE:-$TMP_ROOT/dsv4_long_input_single.txt}"
+LONG_INPUT_FILE="${LONG_INPUT_FILE:-$TMP_ROOT/pocketllm_long_input_single.txt}"
 SHORT_MAX_NEW_TOKENS="${SHORT_MAX_NEW_TOKENS:-8}"
 LONG_MAX_NEW_TOKENS="${LONG_MAX_NEW_TOKENS:-64}"
 
 PD_CASE="${PD_CASE:-all}"   # all | short_short | short_long | long_short | long_long
-LOG_DIR="${LOG_DIR:-$TMP_ROOT/dsv4_best_scheduler}"
+LOG_DIR="${LOG_DIR:-$TMP_ROOT/pocketllm_best_scheduler}"
 mkdir -p "$LOG_DIR"
 
 # Generate the long single-prompt input file if it does not exist yet.

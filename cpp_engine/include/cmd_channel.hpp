@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-namespace dsv4 {
+namespace pocket {
 
 // CPU-only command channel between TP rank 0 and worker ranks. Implemented as
 // a unix domain socket bound by rank 0 and connected by ranks 1..world-1.
@@ -39,4 +39,4 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace dsv4
+}  // namespace pocket

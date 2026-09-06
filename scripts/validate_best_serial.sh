@@ -3,9 +3,9 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="$REPO_ROOT"
-TMP_ROOT="${DSV4_TMP_DIR:-$REPO_ROOT/.tmp}"
+TMP_ROOT="${POCKETLLM_TMP_DIR:-$REPO_ROOT/.tmp}"
 mkdir -p "$TMP_ROOT"
-LOCK_FILE="${LOCK_FILE:-$TMP_ROOT/dsv4_full_network_benchmark.lock}"
+LOCK_FILE="${LOCK_FILE:-$TMP_ROOT/pocketllm_full_network_benchmark.lock}"
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
   echo "another full-network benchmark is already running: $LOCK_FILE" >&2
@@ -22,7 +22,7 @@ if [[ ! -e "$CKPT_PATH" ]]; then
 fi
 BEST_SCRIPT="$REPO_ROOT/scripts/run_best_external_cpu_moe.sh"
 SHORT_INPUT_FILE="${SHORT_INPUT_FILE:-$REPO_ROOT/tests/fixtures/smoke_input.txt}"
-LONG_INPUT_FILE="${LONG_INPUT_FILE:-$TMP_ROOT/dsv4_long_input.txt}"
+LONG_INPUT_FILE="${LONG_INPUT_FILE:-$TMP_ROOT/pocketllm_long_input.txt}"
 SHORT_MAX_NEW_TOKENS="${SHORT_MAX_NEW_TOKENS:-8}"
 LONG_MAX_NEW_TOKENS="${LONG_MAX_NEW_TOKENS:-32}"
 SHORT_MASTER_PORT="${SHORT_MASTER_PORT:-29682}"
@@ -43,17 +43,17 @@ text = base
 while len(tok.encode(text)) < 2048:
     text += base
 text += "\n请用三句话总结以上内容。"
-with open("$TMP_ROOT/dsv4_long_input.txt", "w") as f:
+with open("$TMP_ROOT/pocketllm_long_input.txt", "w") as f:
     f.write(text)
-print(f"wrote $TMP_ROOT/dsv4_long_input.txt tokens={len(tok.encode(text))}", flush=True)
+print(f"wrote $TMP_ROOT/pocketllm_long_input.txt tokens={len(tok.encode(text))}", flush=True)
 PY
 fi
 
 echo "=== short sequence correctness/performance ==="
 DEEPSEEK_SKIP_BENCHMARK_LOCK=1 \
 MASTER_PORT="$SHORT_MASTER_PORT" \
-SERVER_LOG="$TMP_ROOT/dsv4_validate_short_server.log" \
-CLIENT_LOG="$TMP_ROOT/dsv4_validate_short_client.log" \
+SERVER_LOG="$TMP_ROOT/pocketllm_validate_short_server.log" \
+CLIENT_LOG="$TMP_ROOT/pocketllm_validate_short_client.log" \
 INPUT_FILE="$SHORT_INPUT_FILE" \
 MAX_NEW_TOKENS="$SHORT_MAX_NEW_TOKENS" \
 "$BEST_SCRIPT"
@@ -61,8 +61,8 @@ MAX_NEW_TOKENS="$SHORT_MAX_NEW_TOKENS" \
 echo "=== long sequence correctness/performance ==="
 DEEPSEEK_SKIP_BENCHMARK_LOCK=1 \
 MASTER_PORT="$LONG_MASTER_PORT" \
-SERVER_LOG="$TMP_ROOT/dsv4_validate_long_server.log" \
-CLIENT_LOG="$TMP_ROOT/dsv4_validate_long_client.log" \
+SERVER_LOG="$TMP_ROOT/pocketllm_validate_long_server.log" \
+CLIENT_LOG="$TMP_ROOT/pocketllm_validate_long_client.log" \
 INPUT_FILE="$LONG_INPUT_FILE" \
 MAX_NEW_TOKENS="$LONG_MAX_NEW_TOKENS" \
 "$BEST_SCRIPT"

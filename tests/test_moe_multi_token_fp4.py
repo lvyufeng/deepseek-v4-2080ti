@@ -301,7 +301,7 @@ def test_backend_route_layout_matches_reference_contiguous():
     _assert_within_reference_noise(got, ref_runs[0], ref_runs, "contiguous indices")
 
 
-# Production shapes: the TP4 rank slice of DSV4-Flash (dim 4096, moe_inter_dim
+# Production shapes: the TP4 rank slice of DeepSeek-V4-Flash (dim 4096, moe_inter_dim
 # 2048, n_activated_experts 6, 256/4 = 64 local experts). The small shapes above
 # exercise the code paths; this one pins the tolerance at the arithmetic width
 # the model actually runs, where more routes per token widen the atomicAdd floor.

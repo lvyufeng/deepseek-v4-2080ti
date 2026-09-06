@@ -127,9 +127,9 @@ class EngineArgs:
                 _env_int("MAX_MODEL_LEN", _env_int("DEEPSEEK_MAX_MODEL_LEN", 0)) or None
             ),
             "dtype": os.getenv("DTYPE") or None,
-            "kv_cache_dtype": os.getenv("DSV4_QWEN_KV_CACHE_DTYPE", os.getenv("KV_CACHE_DTYPE", "auto")),
+            "kv_cache_dtype": os.getenv("POCKETLLM_QWEN_KV_CACHE_DTYPE", os.getenv("KV_CACHE_DTYPE", "auto")),
             "prefill_chunk_tokens": _env_int(
-                "PREFILL_CHUNK_TOKENS", _env_int("DSV4_CPP_PREFILL_CHUNK", 0)
+                "PREFILL_CHUNK_TOKENS", _env_int("POCKETLLM_CPP_PREFILL_CHUNK", 0)
             ),
             "enable_prefix_caching": _env_bool("ENABLE_PREFIX_CACHING", True),
             "attention_window": _env_int("QWEN_ATTENTION_WINDOW", 0),

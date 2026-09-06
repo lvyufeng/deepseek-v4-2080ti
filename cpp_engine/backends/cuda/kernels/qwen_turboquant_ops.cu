@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 // The full-attention head dimension is a runtime value (128 on some configs,
@@ -597,4 +597,4 @@ bool qwen_gqa_prefill_attention_turboquant_k8v4_cuda(
     return cudaGetLastError() == cudaSuccess;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

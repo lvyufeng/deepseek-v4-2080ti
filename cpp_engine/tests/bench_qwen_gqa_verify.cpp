@@ -108,17 +108,17 @@ int main(int argc, char** argv) {
     check(cudaMemcpy(v, host_v.data(), host_v.size() * sizeof(uint16_t), cudaMemcpyHostToDevice), "copy v");
 
     auto split = [&]() {
-        return dsv4::qwen_gqa_verify_attention_f16(
+        return pocket::qwen_gqa_verify_attention_f16(
             q, k, v, split_output, split_scratch, rows, q_heads, kv_heads,
             head_dim, position_offset, context, splits);
     };
     auto exact = [&]() {
-        return dsv4::qwen_gqa_verify_attention_f16_exact_cuda(
+        return pocket::qwen_gqa_verify_attention_f16_exact_cuda(
             q, k, v, exact_output, exact_scratch, rows, q_heads, kv_heads,
             head_dim, position_offset, context);
     };
     auto cublas_qk = [&]() {
-        return dsv4::qwen_gqa_verify_attention_f16_cublas_qk_cuda(
+        return pocket::qwen_gqa_verify_attention_f16_cublas_qk_cuda(
             q, k, v, cublas_output, exact_scratch, rows, q_heads, kv_heads,
             head_dim, position_offset, context);
     };

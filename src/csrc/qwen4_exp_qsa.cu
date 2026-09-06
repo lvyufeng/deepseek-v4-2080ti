@@ -461,7 +461,7 @@ torch::Tensor qwen4_exp_qsa_bf16_forward_cuda(
     const int kv_len = static_cast<int>(key.size(2));
     const int selected_len = static_cast<int>(selected.size(2));
     const int heads_per_kv = query_heads / kv_heads;
-    const char* mma_env = std::getenv("DSV4_QWEN4_QSA_MMA");
+    const char* mma_env = std::getenv("POCKETLLM_QWEN4_QSA_MMA");
     const bool use_mma = selected_len >= kMmaKvTile && mma_env != nullptr &&
         std::strcmp(mma_env, "0") != 0;
     auto output = torch::empty(query.sizes(), query.options());

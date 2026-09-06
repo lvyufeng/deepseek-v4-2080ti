@@ -7,9 +7,9 @@ set(POCKET_BACKEND "cuda" CACHE STRING "Device backend: cuda or ascend")
 set_property(CACHE POCKET_BACKEND PROPERTY STRINGS cuda ascend)
 
 if(POCKET_BACKEND STREQUAL "cuda")
-    project(dsv4_cpp_engine LANGUAGES CXX CUDA)
+    project(pocketllm_engine LANGUAGES CXX CUDA)
 elseif(POCKET_BACKEND STREQUAL "ascend")
-    project(dsv4_cpp_engine LANGUAGES CXX)
+    project(pocketllm_engine LANGUAGES CXX)
 else()
     message(FATAL_ERROR "Unsupported POCKET_BACKEND '${POCKET_BACKEND}' (expected cuda or ascend)")
 endif()
@@ -70,7 +70,7 @@ set(POCKET_ENGINE_SOURCES
 set(POCKET_CUDA_ONLY_ENGINE_SOURCES
     engine/qwen_dspark.cpp
     engine/qwen_dflash2.cpp
-    engine/dsv4_engine.cpp
+    engine/deepseek_v4_engine.cpp
     engine/dspark_engine.cpp
 )
 
@@ -101,12 +101,12 @@ if(POCKET_BACKEND STREQUAL "cuda")
 
     find_package(CUDAToolkit REQUIRED)
 
-    # DSV4_HAVE_TP_COMM means "a collective library is linked", not "NCCL is
+    # POCKET_HAVE_TP_COMM means "a collective library is linked", not "NCCL is
     # linked": the Ascend branch below sets the same flag from HCCL. The engine's
     # TP paths are guarded on the neutral flag so they compile on either backend.
     set(NCCL_ROOT "" CACHE PATH "Optional NCCL root directory")
-    option(DSV4_REQUIRE_NCCL "Fail configuration when NCCL is unavailable" OFF)
-    set(DSV4_HAVE_TP_COMM OFF)
+    option(POCKET_REQUIRE_NCCL "Fail configuration when NCCL is unavailable" OFF)
+    set(POCKET_HAVE_TP_COMM OFF)
     if(NCCL_ROOT)
         find_path(NCCL_INCLUDE_DIR nccl.h PATHS "${NCCL_ROOT}/include" NO_DEFAULT_PATH)
         find_library(NCCL_LIBRARY NAMES nccl libnccl.so.2 PATHS "${NCCL_ROOT}/lib" NO_DEFAULT_PATH)
@@ -115,10 +115,10 @@ if(POCKET_BACKEND STREQUAL "cuda")
         find_library(NCCL_LIBRARY NAMES nccl libnccl.so.2)
     endif()
     if(NCCL_INCLUDE_DIR AND NCCL_LIBRARY)
-        set(DSV4_HAVE_TP_COMM ON)
+        set(POCKET_HAVE_TP_COMM ON)
         message(STATUS "NCCL found: ${NCCL_LIBRARY}")
     else()
-        if(DSV4_REQUIRE_NCCL)
+        if(POCKET_REQUIRE_NCCL)
             message(FATAL_ERROR "NCCL is required but was not found; set NCCL_ROOT")
         endif()
         message(STATUS "NCCL not found; distributed C++ TP helpers disabled")
@@ -157,16 +157,16 @@ if(POCKET_BACKEND STREQUAL "cuda")
     else()
         message(FATAL_ERROR "NVTX is required but was not found in the CUDA toolkit")
     endif()
-    if(DSV4_HAVE_TP_COMM)
+    if(POCKET_HAVE_TP_COMM)
         list(APPEND POCKET_BACKEND_INCLUDES ${NCCL_INCLUDE_DIR})
         list(APPEND POCKET_BACKEND_LIBS ${NCCL_LIBRARY})
-        list(APPEND POCKET_BACKEND_DEFINES DSV4_HAVE_TP_COMM=1)
+        list(APPEND POCKET_BACKEND_DEFINES POCKET_HAVE_TP_COMM=1)
     endif()
 else()
     # Ascend: ACL runtime, AscendC kernels and HCCL collectives under
     # backends/ascend. The dense-FP16 Qwen path is complete through the linked
     # engine; CUDA-only engines and quantized Qwen modes stay outside this build.
-    set(DSV4_HAVE_TP_COMM OFF)
+    set(POCKET_HAVE_TP_COMM OFF)
 
     # CANN layout: $ASCEND_TOOLKIT_HOME/<arch>-linux/{include,lib64}. The arch
     # directory name is not always the uname value (arm64-linux exists alongside
@@ -223,11 +223,11 @@ else()
     # HCCL. Every init entry point in hccl_comm.h is declared
     # __attribute__((weak)), so omitting this library is not a link error: the
     # call goes to address zero and segfaults at run time. Treat a missing
-    # libhccl as fatal rather than letting DSV4_HAVE_TP_COMM silently stay off.
+    # libhccl as fatal rather than letting POCKET_HAVE_TP_COMM silently stay off.
     find_library(ASCEND_HCCL_LIBRARY NAMES hccl
         PATHS "${ASCEND_ARCH_DIR}/lib64" NO_DEFAULT_PATH)
     if(ASCEND_HCCL_LIBRARY)
-        set(DSV4_HAVE_TP_COMM ON)
+        set(POCKET_HAVE_TP_COMM ON)
         message(STATUS "HCCL found: ${ASCEND_HCCL_LIBRARY}")
     else()
         message(STATUS "libhccl not found; tensor parallelism disabled on Ascend")
@@ -277,22 +277,22 @@ else()
     # `extern "C" __global__ __aicore__` entry point into
     # ${CMAKE_BINARY_DIR}/include/<target>. The launcher below is the only file
     # that includes them, but the directory has to be on the include path of
-    # whatever compiles it, which is dsv4_cpp_core.
+    # whatever compiles it, which is pocket_cpp_core.
     list(APPEND POCKET_BACKEND_SOURCES backends/ascend/kernels/qwen_ascend_ops_launch.cpp)
     list(APPEND POCKET_ASCEND_KERNEL_INCLUDES
         "${CMAKE_BINARY_DIR}/include/pocket_ascend_kernels")
     list(APPEND POCKET_ASCEND_KERNEL_LIBS pocket_ascend_kernels)
 
-    if(DSV4_HAVE_TP_COMM)
+    if(POCKET_HAVE_TP_COMM)
         list(APPEND POCKET_BACKEND_SOURCES backends/ascend/collective/tp_comm.cpp)
         list(APPEND POCKET_BACKEND_LIBS "${ASCEND_HCCL_LIBRARY}")
-        list(APPEND POCKET_BACKEND_DEFINES DSV4_HAVE_TP_COMM=1)
+        list(APPEND POCKET_BACKEND_DEFINES POCKET_HAVE_TP_COMM=1)
     endif()
 
     message(STATUS
         "POCKET_BACKEND=ascend builds the Qwen FP16 path: device runtime, HCCL "
-        "collectives, the neutral operator set and dsv4_cpp_engine. Quantized "
-        "weights and KV caches, external drafters, device sampling and the DSV4 "
+        "collectives, the neutral operator set and pocketllm_engine. Quantized "
+        "weights and KV caches, external drafters, device sampling and the DeepSeek-V4 "
         "engine are rejected at runtime, not implemented.")
 endif()
 
@@ -326,42 +326,42 @@ if(POCKET_BACKEND_DEFINES)
     target_compile_definitions(pocket_runtime PUBLIC ${POCKET_BACKEND_DEFINES})
 endif()
 
-add_library(dsv4_cpp_core STATIC
+add_library(pocket_cpp_core STATIC
     ${POCKET_ENGINE_SOURCES}
     ${POCKET_BACKEND_SOURCES}
 )
-set_target_properties(dsv4_cpp_core PROPERTIES POSITION_INDEPENDENT_CODE ${POCKET_STATIC_PIC})
+set_target_properties(pocket_cpp_core PROPERTIES POSITION_INDEPENDENT_CODE ${POCKET_STATIC_PIC})
 
-target_link_libraries(dsv4_cpp_core PUBLIC pocket_core pocket_runtime)
+target_link_libraries(pocket_cpp_core PUBLIC pocket_core pocket_runtime)
 
-target_include_directories(dsv4_cpp_core PUBLIC
+target_include_directories(pocket_cpp_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party
 )
 if(POCKET_BACKEND_INCLUDES)
-    target_include_directories(dsv4_cpp_core PUBLIC ${POCKET_BACKEND_INCLUDES})
+    target_include_directories(pocket_cpp_core PUBLIC ${POCKET_BACKEND_INCLUDES})
 endif()
 if(POCKET_BACKEND_LIBS)
-    target_link_libraries(dsv4_cpp_core PUBLIC ${POCKET_BACKEND_LIBS})
+    target_link_libraries(pocket_cpp_core PUBLIC ${POCKET_BACKEND_LIBS})
 endif()
 if(POCKET_ASCEND_KERNEL_INCLUDES)
-    target_include_directories(dsv4_cpp_core PUBLIC ${POCKET_ASCEND_KERNEL_INCLUDES})
+    target_include_directories(pocket_cpp_core PUBLIC ${POCKET_ASCEND_KERNEL_INCLUDES})
 endif()
 if(POCKET_ASCEND_KERNEL_LIBS)
-    target_link_libraries(dsv4_cpp_core PUBLIC ${POCKET_ASCEND_KERNEL_LIBS})
+    target_link_libraries(pocket_cpp_core PUBLIC ${POCKET_ASCEND_KERNEL_LIBS})
 endif()
 if(POCKET_BACKEND_DEFINES)
-    target_compile_definitions(dsv4_cpp_core PUBLIC ${POCKET_BACKEND_DEFINES})
+    target_compile_definitions(pocket_cpp_core PUBLIC ${POCKET_BACKEND_DEFINES})
 endif()
 if(POCKET_BACKEND STREQUAL "cuda")
-    set_target_properties(dsv4_cpp_core PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+    set_target_properties(pocket_cpp_core PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 else()
     # Keep legacy CUDA-heavy methods in discardable sections while the Ascend
     # executable uses only the dense FP16 Qwen path. This prevents unused GGUF,
     # DSpark and DFlash2 methods from imposing link-time CUDA dependencies; all
     # reachable unsupported paths still reject their formats at runtime.
-    target_compile_options(dsv4_cpp_core PRIVATE -ffunction-sections -fdata-sections)
-    target_link_options(dsv4_cpp_core INTERFACE -Wl,--gc-sections)
+    target_compile_options(pocket_cpp_core PRIVATE -ffunction-sections -fdata-sections)
+    target_link_options(pocket_cpp_core INTERFACE -Wl,--gc-sections)
 endif()
 
 # Fail the build if a vendor SDK leaks into the shared layers. This is the
@@ -374,8 +374,8 @@ add_custom_target(check_layering
     COMMENT "Checking that core/ and include/ pull in no vendor SDK headers"
 )
 
-add_executable(dsv4_cpp_engine engine/main.cpp)
-target_link_libraries(dsv4_cpp_engine PRIVATE dsv4_cpp_core)
+add_executable(pocketllm_engine engine/main.cpp)
+target_link_libraries(pocketllm_engine PRIVATE pocket_cpp_core)
 
 if(POCKET_BUILD_PYTHON)
     find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
@@ -384,7 +384,7 @@ if(POCKET_BUILD_PYTHON)
     # contains CUDA device-link objects whose fatbin registration data must stay
     # visible while the shared extension is linked.
     pybind11_add_module(pocketllm_cpp NO_EXTRAS python/bindings.cpp)
-    target_link_libraries(pocketllm_cpp PRIVATE dsv4_cpp_core)
+    target_link_libraries(pocketllm_cpp PRIVATE pocket_cpp_core)
     target_include_directories(pocketllm_cpp PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party
@@ -408,11 +408,11 @@ if(POCKET_BUILD_PYTHON)
 endif()
 
 add_executable(inspect_gguf tools/inspect_gguf.cpp)
-target_link_libraries(inspect_gguf PRIVATE dsv4_cpp_core)
+target_link_libraries(inspect_gguf PRIVATE pocket_cpp_core)
 set_target_properties(inspect_gguf PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools)
 
 add_executable(inspect_safetensors tools/inspect_safetensors.cpp)
-target_link_libraries(inspect_safetensors PRIVATE dsv4_cpp_core)
+target_link_libraries(inspect_safetensors PRIVATE pocket_cpp_core)
 set_target_properties(inspect_safetensors PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools)
 
 # Links pocket_core only, so it builds and runs without a vendor SDK.
@@ -431,213 +431,213 @@ target_link_libraries(test_qwen_bf16_checkpoint PRIVATE pocket_core)
 set_target_properties(test_qwen_bf16_checkpoint PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(minimax_gguf_tokenizer tools/minimax_gguf_tokenizer.cpp)
-target_link_libraries(minimax_gguf_tokenizer PRIVATE dsv4_cpp_core)
+target_link_libraries(minimax_gguf_tokenizer PRIVATE pocket_cpp_core)
 set_target_properties(minimax_gguf_tokenizer PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools)
 
 add_executable(test_gguf_reader tests/test_gguf_reader.cpp)
-target_link_libraries(test_gguf_reader PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_reader PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_reader PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_gguf_iq1m_reader tests/test_gguf_iq1m_reader.cpp)
-target_link_libraries(test_gguf_iq1m_reader PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_iq1m_reader PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_iq1m_reader PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_safetensors_reader tests/test_safetensors_reader.cpp)
-target_link_libraries(test_safetensors_reader PRIVATE dsv4_cpp_core)
+target_link_libraries(test_safetensors_reader PRIVATE pocket_cpp_core)
 set_target_properties(test_safetensors_reader PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_flashmemory_scorer tests/test_flashmemory_scorer.cpp)
-target_link_libraries(test_flashmemory_scorer PRIVATE dsv4_cpp_core)
+target_link_libraries(test_flashmemory_scorer PRIVATE pocket_cpp_core)
 set_target_properties(test_flashmemory_scorer PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_safetensors_model tests/test_safetensors_model.cpp)
-target_link_libraries(test_safetensors_model PRIVATE dsv4_cpp_core)
+target_link_libraries(test_safetensors_model PRIVATE pocket_cpp_core)
 set_target_properties(test_safetensors_model PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_weight_source tests/test_weight_source.cpp)
-target_link_libraries(test_weight_source PRIVATE dsv4_cpp_core)
+target_link_libraries(test_weight_source PRIVATE pocket_cpp_core)
 set_target_properties(test_weight_source PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_dspark_weight_load tests/test_dspark_weight_load.cpp)
-target_link_libraries(test_dspark_weight_load PRIVATE dsv4_cpp_core)
+target_link_libraries(test_dspark_weight_load PRIVATE pocket_cpp_core)
 set_target_properties(test_dspark_weight_load PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_perfect_draft tests/test_perfect_draft.cpp)
-target_link_libraries(test_perfect_draft PRIVATE dsv4_cpp_core)
+target_link_libraries(test_perfect_draft PRIVATE pocket_cpp_core)
 set_target_properties(test_perfect_draft PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_moe_fp4_determinism tests/test_moe_fp4_determinism.cpp)
-target_link_libraries(test_moe_fp4_determinism PRIVATE dsv4_cpp_core)
+target_link_libraries(test_moe_fp4_determinism PRIVATE pocket_cpp_core)
 set_target_properties(test_moe_fp4_determinism PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_dspark_attention_parity tests/test_dspark_attention_parity.cpp)
-target_link_libraries(test_dspark_attention_parity PRIVATE dsv4_cpp_core)
+target_link_libraries(test_dspark_attention_parity PRIVATE pocket_cpp_core)
 set_target_properties(test_dspark_attention_parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_dspark_moe_parity tests/test_dspark_moe_parity.cpp)
-target_link_libraries(test_dspark_moe_parity PRIVATE dsv4_cpp_core)
+target_link_libraries(test_dspark_moe_parity PRIVATE pocket_cpp_core)
 set_target_properties(test_dspark_moe_parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_dspark_draft tests/test_dspark_draft.cpp)
-target_link_libraries(test_dspark_draft PRIVATE dsv4_cpp_core)
+target_link_libraries(test_dspark_draft PRIVATE pocket_cpp_core)
 set_target_properties(test_dspark_draft PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_verify_overwrite_safety tests/test_verify_overwrite_safety.cpp)
-target_link_libraries(test_verify_overwrite_safety PRIVATE dsv4_cpp_core)
+target_link_libraries(test_verify_overwrite_safety PRIVATE pocket_cpp_core)
 set_target_properties(test_verify_overwrite_safety PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_speculative_scheduler tests/test_speculative_scheduler.cpp)
-target_link_libraries(test_speculative_scheduler PRIVATE dsv4_cpp_core)
+target_link_libraries(test_speculative_scheduler PRIVATE pocket_cpp_core)
 set_target_properties(test_speculative_scheduler PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_dspark_decode tests/bench_dspark_decode.cpp)
-target_link_libraries(bench_dspark_decode PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_dspark_decode PRIVATE pocket_cpp_core)
 set_target_properties(bench_dspark_decode PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_batch_verify_transaction tests/test_batch_verify_transaction.cpp)
-target_link_libraries(test_batch_verify_transaction PRIVATE dsv4_cpp_core)
+target_link_libraries(test_batch_verify_transaction PRIVATE pocket_cpp_core)
 set_target_properties(test_batch_verify_transaction PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_dspark_tp_consistency tests/test_dspark_tp_consistency.cpp)
-target_link_libraries(test_dspark_tp_consistency PRIVATE dsv4_cpp_core)
+target_link_libraries(test_dspark_tp_consistency PRIVATE pocket_cpp_core)
 set_target_properties(test_dspark_tp_consistency PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_dspark_draft_sensitivity tests/test_dspark_draft_sensitivity.cpp)
-target_link_libraries(test_dspark_draft_sensitivity PRIVATE dsv4_cpp_core)
+target_link_libraries(test_dspark_draft_sensitivity PRIVATE pocket_cpp_core)
 set_target_properties(test_dspark_draft_sensitivity PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_dspark_hidden_capture tests/test_dspark_hidden_capture.cpp)
-target_link_libraries(test_dspark_hidden_capture PRIVATE dsv4_cpp_core)
+target_link_libraries(test_dspark_hidden_capture PRIVATE pocket_cpp_core)
 set_target_properties(test_dspark_hidden_capture PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_dspark_head_parity tests/test_dspark_head_parity.cpp)
-target_link_libraries(test_dspark_head_parity PRIVATE dsv4_cpp_core)
+target_link_libraries(test_dspark_head_parity PRIVATE pocket_cpp_core)
 set_target_properties(test_dspark_head_parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_q2_matvec tests/test_q2_matvec.cpp)
-target_link_libraries(test_q2_matvec PRIVATE dsv4_cpp_core)
+target_link_libraries(test_q2_matvec PRIVATE pocket_cpp_core)
 set_target_properties(test_q2_matvec PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_gguf_dense_smoke tests/test_gguf_dense_smoke.cpp)
-target_link_libraries(test_gguf_dense_smoke PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_dense_smoke PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_dense_smoke PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_gguf_min_layer_smoke tests/test_gguf_min_layer_smoke.cpp)
-target_link_libraries(test_gguf_min_layer_smoke PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_min_layer_smoke PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_min_layer_smoke PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_gguf_attn_norm_wqa tests/test_gguf_attn_norm_wqa.cpp)
-target_link_libraries(test_gguf_attn_norm_wqa PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_attn_norm_wqa PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_attn_norm_wqa PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_gguf_attn_q_path tests/test_gguf_attn_q_path.cpp)
-target_link_libraries(test_gguf_attn_q_path PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_attn_q_path PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_attn_q_path PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_gguf_attn_kv_path tests/test_gguf_attn_kv_path.cpp)
-target_link_libraries(test_gguf_attn_kv_path PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_attn_kv_path PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_attn_kv_path PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_gguf_attn_full tests/test_gguf_attn_full.cpp)
-target_link_libraries(test_gguf_attn_full PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_attn_full PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_attn_full PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_gguf_shared_expert tests/test_gguf_shared_expert.cpp)
-target_link_libraries(test_gguf_shared_expert PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_shared_expert PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_shared_expert PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_gguf_routed_expert tests/test_gguf_routed_expert.cpp)
-target_link_libraries(test_gguf_routed_expert PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_routed_expert PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_routed_expert PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_gguf_routed_moe tests/test_gguf_routed_moe.cpp)
-target_link_libraries(test_gguf_routed_moe PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_routed_moe PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_routed_moe PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_gguf_layer0_full tests/test_gguf_layer0_full.cpp)
-target_link_libraries(test_gguf_layer0_full PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_layer0_full PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_layer0_full PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_gguf_full_forward tests/test_gguf_full_forward.cpp)
-target_link_libraries(test_gguf_full_forward PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_full_forward PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_full_forward PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_gguf_generate tests/test_gguf_generate.cpp)
-target_link_libraries(test_gguf_generate PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_generate PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_generate PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(probe_host_register tests/probe_host_register.cpp)
-target_link_libraries(probe_host_register PRIVATE dsv4_cpp_core)
+target_link_libraries(probe_host_register PRIVATE pocket_cpp_core)
 set_target_properties(probe_host_register PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_quant_gemm tests/test_quant_gemm.cpp)
-target_link_libraries(test_quant_gemm PRIVATE dsv4_cpp_core)
+target_link_libraries(test_quant_gemm PRIVATE pocket_cpp_core)
 set_target_properties(test_quant_gemm PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_fp4_matvec tests/test_fp4_matvec.cpp)
-target_link_libraries(test_fp4_matvec PRIVATE dsv4_cpp_core)
+target_link_libraries(test_fp4_matvec PRIVATE pocket_cpp_core)
 set_target_properties(test_fp4_matvec PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_fp8_matvec tests/test_fp8_matvec.cpp)
-target_link_libraries(test_fp8_matvec PRIVATE dsv4_cpp_core)
+target_link_libraries(test_fp8_matvec PRIVATE pocket_cpp_core)
 set_target_properties(test_fp8_matvec PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_rmsnorm tests/test_rmsnorm.cpp)
-target_link_libraries(test_rmsnorm PRIVATE dsv4_cpp_core)
+target_link_libraries(test_rmsnorm PRIVATE pocket_cpp_core)
 set_target_properties(test_rmsnorm PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_attention_projection tests/test_attention_projection.cpp)
-target_link_libraries(test_attention_projection PRIVATE dsv4_cpp_core)
+target_link_libraries(test_attention_projection PRIVATE pocket_cpp_core)
 set_target_properties(test_attention_projection PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_moe_single_expert tests/test_moe_single_expert.cpp)
-target_link_libraries(test_moe_single_expert PRIVATE dsv4_cpp_core)
+target_link_libraries(test_moe_single_expert PRIVATE pocket_cpp_core)
 set_target_properties(test_moe_single_expert PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_moe_grouped_fp4 tests/test_moe_grouped_fp4.cpp)
-target_link_libraries(test_moe_grouped_fp4 PRIVATE dsv4_cpp_core)
+target_link_libraries(test_moe_grouped_fp4 PRIVATE pocket_cpp_core)
 set_target_properties(test_moe_grouped_fp4 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_moe_multi_token_fp4 tests/test_moe_multi_token_fp4.cpp)
-target_link_libraries(test_moe_multi_token_fp4 PRIVATE dsv4_cpp_core)
+target_link_libraries(test_moe_multi_token_fp4 PRIVATE pocket_cpp_core)
 set_target_properties(test_moe_multi_token_fp4 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_continuation_attention tests/test_continuation_attention.cpp)
-target_link_libraries(test_continuation_attention PRIVATE dsv4_cpp_core)
+target_link_libraries(test_continuation_attention PRIVATE pocket_cpp_core)
 set_target_properties(test_continuation_attention PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_moe_grouped_iq1 tests/test_moe_grouped_iq1.cpp)
-target_link_libraries(test_moe_grouped_iq1 PRIVATE dsv4_cpp_core)
+target_link_libraries(test_moe_grouped_iq1 PRIVATE pocket_cpp_core)
 set_target_properties(test_moe_grouped_iq1 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_moe_grouped_q2 tests/test_moe_grouped_q2.cpp)
-target_link_libraries(test_moe_grouped_q2 PRIVATE dsv4_cpp_core)
+target_link_libraries(test_moe_grouped_q2 PRIVATE pocket_cpp_core)
 set_target_properties(test_moe_grouped_q2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_embedding_head tests/test_embedding_head.cpp)
-target_link_libraries(test_embedding_head PRIVATE dsv4_cpp_core)
+target_link_libraries(test_embedding_head PRIVATE pocket_cpp_core)
 set_target_properties(test_embedding_head PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_tokenizer tests/test_tokenizer.cpp)
-target_link_libraries(test_tokenizer PRIVATE dsv4_cpp_core)
+target_link_libraries(test_tokenizer PRIVATE pocket_cpp_core)
 set_target_properties(test_tokenizer PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_gguf_tokenizer tests/test_gguf_tokenizer.cpp)
-target_link_libraries(test_gguf_tokenizer PRIVATE dsv4_cpp_core)
+target_link_libraries(test_gguf_tokenizer PRIVATE pocket_cpp_core)
 set_target_properties(test_gguf_tokenizer PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_min_layer_smoke tests/test_min_layer_smoke.cpp)
-target_link_libraries(test_min_layer_smoke PRIVATE dsv4_cpp_core)
+target_link_libraries(test_min_layer_smoke PRIVATE pocket_cpp_core)
 set_target_properties(test_min_layer_smoke PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_tp_comm_smoke tests/test_tp_comm_smoke.cpp)
-target_link_libraries(test_tp_comm_smoke PRIVATE dsv4_cpp_core)
+target_link_libraries(test_tp_comm_smoke PRIVATE pocket_cpp_core)
 set_target_properties(test_tp_comm_smoke PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 # Calls the operators through their neutral names in qwen_ops.hpp and checks them
 # against double-precision host references, so it is meaningful on either backend.
 add_executable(test_qwen_ascend_ops tests/test_qwen_ascend_ops.cpp)
-target_link_libraries(test_qwen_ascend_ops PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_ascend_ops PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_ascend_ops PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 # The twelve operators with no aclnn equivalent, i.e. the hand-written AscendC
@@ -645,13 +645,13 @@ set_target_properties(test_qwen_ascend_ops PROPERTIES RUNTIME_OUTPUT_DIRECTORY $
 # binary because these are the kernels most likely to fault the device, and a fault
 # there should not take the aclnn coverage with it.
 add_executable(test_qwen_ascend_group_b tests/test_qwen_ascend_group_b.cpp)
-target_link_libraries(test_qwen_ascend_group_b PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_ascend_group_b PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_ascend_group_b PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 # The (1 + weight) gamma fold is host arithmetic on the staged bytes, so this needs
-# no device. It still links dsv4_cpp_core because the policy body is backend-gated.
+# no device. It still links pocket_cpp_core because the policy body is backend-gated.
 add_executable(test_qwen_ascend_norm_gamma tests/test_qwen_ascend_norm_gamma.cpp)
-target_link_libraries(test_qwen_ascend_norm_gamma PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_ascend_norm_gamma PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_ascend_norm_gamma PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 # Config parsing is device-agnostic, so this test links pocket_core and runs on a
@@ -661,265 +661,265 @@ target_link_libraries(test_qwen_config PRIVATE pocket_core)
 set_target_properties(test_qwen_config PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_dspark tests/test_qwen_dspark.cpp)
-target_link_libraries(test_qwen_dspark PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_dspark PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_dspark PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_dflash2 tests/test_qwen_dflash2.cpp)
-target_link_libraries(test_qwen_dflash2 PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_dflash2 PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_dflash2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_dflash2_parity tests/test_qwen_dflash2_parity.cpp)
-target_link_libraries(test_qwen_dflash2_parity PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_dflash2_parity PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_dflash2_parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_dspark_ops tests/test_qwen_dspark_ops.cpp)
-target_link_libraries(test_qwen_dspark_ops PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_dspark_ops PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_dspark_ops PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_dflash2_ops tests/test_qwen_dflash2_ops.cpp)
-target_link_libraries(test_qwen_dflash2_ops PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_dflash2_ops PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_dflash2_ops PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_sampler tests/test_qwen_sampler.cpp)
-target_link_libraries(test_qwen_sampler PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_sampler PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_sampler PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_fp8_online tests/test_qwen_fp8_online.cpp)
-target_link_libraries(test_qwen_fp8_online PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_fp8_online PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_fp8_online PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_weights tests/test_qwen_weights.cpp)
-target_link_libraries(test_qwen_weights PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_weights PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_weights PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_engine tests/test_qwen_engine.cpp)
-target_link_libraries(test_qwen_engine PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_engine PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_engine PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_delta_rule tests/test_qwen_delta_rule.cpp)
-target_link_libraries(test_qwen_delta_rule PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_delta_rule PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_delta_rule PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_gqa_attention tests/test_qwen_gqa_attention.cpp)
-target_link_libraries(test_qwen_gqa_attention PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_gqa_attention PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_gqa_attention PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_half_ops tests/test_qwen_half_ops.cpp)
-target_link_libraries(test_qwen_half_ops PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_half_ops PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_half_ops PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_batched_decode tests/test_qwen_batched_decode.cpp)
-target_link_libraries(test_qwen_batched_decode PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_batched_decode PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_batched_decode PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_batched_engine_parity tests/test_qwen_batched_engine_parity.cpp)
-target_link_libraries(test_qwen_batched_engine_parity PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_batched_engine_parity PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_batched_engine_parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_batched_throughput tests/bench_qwen_batched_throughput.cpp)
-target_link_libraries(bench_qwen_batched_throughput PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_batched_throughput PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_batched_throughput PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_prefill_saturation tests/bench_qwen_prefill_saturation.cpp)
-target_link_libraries(bench_qwen_prefill_saturation PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_prefill_saturation PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_prefill_saturation PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_chunked_prefill tests/test_qwen_chunked_prefill.cpp)
-target_link_libraries(test_qwen_chunked_prefill PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_chunked_prefill PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_chunked_prefill PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_eos_stop tests/test_qwen_eos_stop.cpp)
-target_link_libraries(test_qwen_eos_stop PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_eos_stop PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_eos_stop PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_block_pool tests/test_qwen_block_pool.cpp)
-target_link_libraries(test_qwen_block_pool PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_block_pool PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_block_pool PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_paged_kv_kernels tests/test_qwen_paged_kv_kernels.cpp)
-target_link_libraries(test_qwen_paged_kv_kernels PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_paged_kv_kernels PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_paged_kv_kernels PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_paged_engine_parity tests/test_qwen_paged_engine_parity.cpp)
-target_link_libraries(test_qwen_paged_engine_parity PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_paged_engine_parity PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_paged_engine_parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_paged_tp_slot_free tests/test_qwen_paged_tp_slot_free.cpp)
-target_link_libraries(test_qwen_paged_tp_slot_free PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_paged_tp_slot_free PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_paged_tp_slot_free PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_scheduler_paged_admission tests/test_qwen_scheduler_paged_admission.cpp)
-target_link_libraries(test_qwen_scheduler_paged_admission PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_scheduler_paged_admission PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_scheduler_paged_admission PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_prefill_interleave tests/bench_qwen_prefill_interleave.cpp)
-target_link_libraries(bench_qwen_prefill_interleave PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_prefill_interleave PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_prefill_interleave PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_paged_admission tests/bench_qwen_paged_admission.cpp)
-target_link_libraries(bench_qwen_paged_admission PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_paged_admission PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_paged_admission PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_paged_tp_parity tests/bench_qwen_paged_tp_parity.cpp)
-target_link_libraries(bench_qwen_paged_tp_parity PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_paged_tp_parity PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_paged_tp_parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_nvfp4 tests/test_qwen_nvfp4.cpp)
-target_link_libraries(test_qwen_nvfp4 PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_nvfp4 PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_nvfp4 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_nvfp4 tests/bench_qwen_nvfp4.cpp)
-target_link_libraries(bench_qwen_nvfp4 PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_nvfp4 PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_nvfp4 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_conv_tail tests/test_qwen_conv_tail.cpp)
-target_link_libraries(test_qwen_conv_tail PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_conv_tail PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_conv_tail PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_fp8_kernels tests/bench_qwen_fp8_kernels.cpp)
-target_link_libraries(bench_qwen_fp8_kernels PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_fp8_kernels PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_fp8_kernels PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_draft_lm_head tests/bench_qwen_draft_lm_head.cpp)
-target_link_libraries(bench_qwen_draft_lm_head PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_draft_lm_head PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_draft_lm_head PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_verify_batch tests/bench_qwen_verify_batch.cpp)
-target_link_libraries(bench_qwen_verify_batch PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_verify_batch PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_verify_batch PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_delta_f16 tests/bench_qwen_delta_f16.cpp)
-target_link_libraries(bench_qwen_delta_f16 PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_delta_f16 PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_delta_f16 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_gdn_flashqla tests/test_qwen_gdn_flashqla.cpp)
-target_link_libraries(test_qwen_gdn_flashqla PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_gdn_flashqla PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_gdn_flashqla PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_turboquant_k8v4 tests/test_qwen_turboquant_k8v4.cpp)
-target_link_libraries(test_qwen_turboquant_k8v4 PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_turboquant_k8v4 PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_turboquant_k8v4 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_transaction_copy tests/bench_qwen_transaction_copy.cpp)
-target_link_libraries(bench_qwen_transaction_copy PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_transaction_copy PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_transaction_copy PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 if(POCKET_BACKEND STREQUAL "cuda")
     add_executable(test_qwen_gqa_mma_occ tests/test_qwen_gqa_mma_occ.cpp)
-    target_link_libraries(test_qwen_gqa_mma_occ PRIVATE dsv4_cpp_core)
+    target_link_libraries(test_qwen_gqa_mma_occ PRIVATE pocket_cpp_core)
     set_target_properties(test_qwen_gqa_mma_occ PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 else()
     # Experimental MMAD probe test targets temporarily disabled (source files removed)
     # add_executable(test_qwen_gqa_mmad_qk_probe tests/test_qwen_gqa_mmad_qk_probe.cpp)
-    # target_link_libraries(test_qwen_gqa_mmad_qk_probe PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_mmad_qk_probe PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_mmad_qk_probe PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
     # Experimental MMAD probe test targets temporarily disabled (source files removed)
     # add_executable(test_qwen_gqa_mmad_qk_fulltile_probe tests/test_qwen_gqa_mmad_qk_fulltile_probe.cpp)
-    # target_link_libraries(test_qwen_gqa_mmad_qk_fulltile_probe PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_mmad_qk_fulltile_probe PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_mmad_qk_fulltile_probe PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
     # add_executable(test_qwen_gqa_mmad_qk_multihead_probe tests/test_qwen_gqa_mmad_qk_multihead_probe.cpp)
-    # target_link_libraries(test_qwen_gqa_mmad_qk_multihead_probe PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_mmad_qk_multihead_probe PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_mmad_qk_multihead_probe PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
     # add_executable(test_qwen_gqa_mmad_qk_queryrow_probe tests/test_qwen_gqa_mmad_qk_queryrow_probe.cpp)
-    # target_link_libraries(test_qwen_gqa_mmad_qk_queryrow_probe PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_mmad_qk_queryrow_probe PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_mmad_qk_queryrow_probe PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
     # add_executable(test_qwen_gqa_mmad_qk_queryrow_optimized tests/test_qwen_gqa_mmad_qk_queryrow_optimized.cpp)
-    # target_link_libraries(test_qwen_gqa_mmad_qk_queryrow_optimized PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_mmad_qk_queryrow_optimized PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_mmad_qk_queryrow_optimized PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
     # add_executable(test_qwen_gqa_mmad_qk_batched tests/test_qwen_gqa_mmad_qk_batched.cpp)
-    # target_link_libraries(test_qwen_gqa_mmad_qk_batched PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_mmad_qk_batched PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_mmad_qk_batched PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
     # Experimental MMAD QK test variants temporarily disabled (source files removed)
     # add_executable(test_qwen_gqa_mmad_qk_batched_30core tests/test_qwen_gqa_mmad_qk_batched_30core.cpp)
-    # target_link_libraries(test_qwen_gqa_mmad_qk_batched_30core PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_mmad_qk_batched_30core PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_mmad_qk_batched_30core PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
     # add_executable(test_qwen_gqa_mmad_qk_batched_30core_n128 tests/test_qwen_gqa_mmad_qk_batched_30core_n128.cpp)
-    # target_link_libraries(test_qwen_gqa_mmad_qk_batched_30core_n128 PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_mmad_qk_batched_30core_n128 PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_mmad_qk_batched_30core_n128 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
     # add_executable(test_qwen_gqa_mmad_qk_batched_30core_n128_fused tests/test_qwen_gqa_mmad_qk_batched_30core_n128_fused.cpp)
-    # target_link_libraries(test_qwen_gqa_mmad_qk_batched_30core_n128_fused PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_mmad_qk_batched_30core_n128_fused PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_mmad_qk_batched_30core_n128_fused PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
     # add_executable(test_qwen_gqa_mmad_qk_batched_30core_n128_pingpong tests/test_qwen_gqa_mmad_qk_batched_30core_n128_pingpong.cpp)
-    # target_link_libraries(test_qwen_gqa_mmad_qk_batched_30core_n128_pingpong PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_mmad_qk_batched_30core_n128_pingpong PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_mmad_qk_batched_30core_n128_pingpong PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
     # add_executable(test_qwen_gqa_mmad_qk_batched_30core_n128_persistent_a2 tests/test_qwen_gqa_mmad_qk_batched_30core_n128_persistent_a2.cpp)
-    # target_link_libraries(test_qwen_gqa_mmad_qk_batched_30core_n128_persistent_a2 PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_mmad_qk_batched_30core_n128_persistent_a2 PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_mmad_qk_batched_30core_n128_persistent_a2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
     # add_executable(test_qwen_gqa_mmad_qk_batched_30core_n128_batched_extraction tests/test_qwen_gqa_mmad_qk_batched_30core_n128_batched_extraction.cpp)
-    # target_link_libraries(test_qwen_gqa_mmad_qk_batched_30core_n128_batched_extraction PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_mmad_qk_batched_30core_n128_batched_extraction PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_mmad_qk_batched_30core_n128_batched_extraction PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
     # Experimental MMAD test targets temporarily disabled (source files removed)
     # add_executable(test_qwen_gqa_decode_mmad_integrated tests/test_qwen_gqa_decode_mmad_integrated.cpp)
-    # target_link_libraries(test_qwen_gqa_decode_mmad_integrated PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_decode_mmad_integrated PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_decode_mmad_integrated PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
     # add_executable(test_qwen_gqa_mmad_smoke tests/test_qwen_gqa_mmad_smoke.cpp)
-    # target_link_libraries(test_qwen_gqa_mmad_smoke PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_mmad_smoke PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_mmad_smoke PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
     # add_executable(test_qwen_gqa_fused_online_softmax tests/test_qwen_gqa_fused_online_softmax.cpp)
-    # target_link_libraries(test_qwen_gqa_fused_online_softmax PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_fused_online_softmax PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_fused_online_softmax PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
     # add_executable(test_qwen_gqa_fused_online_softmax_direct tests/test_qwen_gqa_fused_online_softmax_direct.cpp)
-    # target_link_libraries(test_qwen_gqa_fused_online_softmax_direct PRIVATE dsv4_cpp_core)
+    # target_link_libraries(test_qwen_gqa_fused_online_softmax_direct PRIVATE pocket_cpp_core)
     # set_target_properties(test_qwen_gqa_fused_online_softmax_direct PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 endif()
 
-if(DSV4_HAVE_TP_COMM)
+if(POCKET_HAVE_TP_COMM)
     add_executable(bench_qwen_tp_allreduce tests/bench_qwen_tp_allreduce.cpp)
-    target_link_libraries(bench_qwen_tp_allreduce PRIVATE dsv4_cpp_core)
+    target_link_libraries(bench_qwen_tp_allreduce PRIVATE pocket_cpp_core)
     set_target_properties(bench_qwen_tp_allreduce PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 endif()
 
 add_executable(test_persistent_engine tests/test_persistent_engine.cpp)
-target_link_libraries(test_persistent_engine PRIVATE dsv4_cpp_core)
+target_link_libraries(test_persistent_engine PRIVATE pocket_cpp_core)
 set_target_properties(test_persistent_engine PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_batch_scheduler tests/test_qwen_batch_scheduler.cpp)
-target_link_libraries(test_qwen_batch_scheduler PRIVATE dsv4_cpp_core)
+target_link_libraries(test_qwen_batch_scheduler PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_batch_scheduler PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_fp8_batch_crossover tests/bench_qwen_fp8_batch_crossover.cpp)
-target_link_libraries(bench_qwen_fp8_batch_crossover PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_fp8_batch_crossover PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_fp8_batch_crossover PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_fp8_dequant_overhead tests/bench_qwen_fp8_dequant_overhead.cpp)
-target_link_libraries(bench_qwen_fp8_dequant_overhead PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_fp8_dequant_overhead PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_fp8_dequant_overhead PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_gqa_prefill tests/bench_qwen_gqa_prefill.cpp)
-target_link_libraries(bench_qwen_gqa_prefill PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_gqa_prefill PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_gqa_prefill PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 if(POCKET_BACKEND STREQUAL "cuda")
     add_executable(bench_qwen_gqa_decode tests/bench_qwen_gqa_decode.cpp)
-    target_link_libraries(bench_qwen_gqa_decode PRIVATE dsv4_cpp_core)
+    target_link_libraries(bench_qwen_gqa_decode PRIVATE pocket_cpp_core)
     set_target_properties(bench_qwen_gqa_decode PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 else()
     # Ascend bench temporarily disabled (source file removed)
     # add_executable(bench_qwen_gqa_decode tests/bench_qwen_gqa_decode_ascend.cpp)
-    # target_link_libraries(bench_qwen_gqa_decode PRIVATE dsv4_cpp_core)
+    # target_link_libraries(bench_qwen_gqa_decode PRIVATE pocket_cpp_core)
     # set_target_properties(bench_qwen_gqa_decode PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 endif()
 
 add_executable(bench_qwen_fp8_swiglu_decode tests/bench_qwen_fp8_swiglu_decode.cpp)
-target_link_libraries(bench_qwen_fp8_swiglu_decode PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_fp8_swiglu_decode PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_fp8_swiglu_decode PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_gqa_verify tests/bench_qwen_gqa_verify.cpp)
-target_link_libraries(bench_qwen_gqa_verify PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_gqa_verify PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_gqa_verify PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_dflash2_topk tests/bench_qwen_dflash2_topk.cpp)
-target_link_libraries(bench_qwen_dflash2_topk PRIVATE dsv4_cpp_core)
+target_link_libraries(bench_qwen_dflash2_topk PRIVATE pocket_cpp_core)
 set_target_properties(bench_qwen_dflash2_topk PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)

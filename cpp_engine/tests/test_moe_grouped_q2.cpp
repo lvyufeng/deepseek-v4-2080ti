@@ -205,7 +205,7 @@ int main() {
         check_cuda(cudaMemcpy(d_w2, w2.data(), w2.size(), cudaMemcpyHostToDevice), "copy w2");
         check_cuda(cudaMemcpy(d_w3, w3.data(), w3.size(), cudaMemcpyHostToDevice), "copy w3");
 
-        dsv4::MoePrefillQ2GroupedWorkspace ws;
+        pocket::MoePrefillQ2GroupedWorkspace ws;
         ws.d_x_route = d_x_route;
         ws.d_x_q = d_x_q;
         ws.d_x_scale = d_x_scale;
@@ -217,7 +217,7 @@ int main() {
         ws.routes_cap = routes;
         ws.dim = dim;
         ws.inter_dim = inter_dim;
-        if (!dsv4::moe_prefill_q2_grouped_cuda_with_workspace(
+        if (!pocket::moe_prefill_q2_grouped_cuda_with_workspace(
                 d_x, d_route_tokens, d_route_weights, d_seg_starts,
                 d_w1, d_w2, d_w3, d_y,
                 tokens, routes, n_local_experts, max_count,
@@ -250,21 +250,21 @@ int main() {
             check_cuda(cudaMemcpy(d_slots, slots.data(), slots.size() * sizeof(int64_t), cudaMemcpyHostToDevice), "copy slots");
             check_cuda(cudaMemcpy(d_weights, token_weights[t].data(), token_weights[t].size() * sizeof(float), cudaMemcpyHostToDevice), "copy weights");
             check_cuda(cudaMemset(d_y_token, 0, dim * sizeof(float)), "zero y token");
-            if (!dsv4::q2_quantize_x_q8_1_cuda(d_x_token, d_x_q_token, d_x_scale_token, 1, dim)) {
+            if (!pocket::q2_quantize_x_q8_1_cuda(d_x_token, d_x_q_token, d_x_scale_token, 1, dim)) {
                 throw std::runtime_error("single x quant launch failed");
             }
-            if (!dsv4::q2_moe_single_w13_iq2_xxs_cuda(
+            if (!pocket::q2_moe_single_w13_iq2_xxs_cuda(
                     d_x_q_token, d_x_scale_token, d_slots, d_w1, d_w3,
                     d_gate_token, d_up_token,
                     topk, n_local_experts, dim, inter_dim)) {
                 throw std::runtime_error("single w13 launch failed");
             }
-            if (!dsv4::q2_route_swiglu_quantize_hidden_q8_1_cuda(
+            if (!pocket::q2_route_swiglu_quantize_hidden_q8_1_cuda(
                     d_gate_token, d_up_token, d_weights, d_hidden_q_token, d_hidden_scale_token,
                     topk, inter_dim, swiglu_limit)) {
                 throw std::runtime_error("single swiglu quant launch failed");
             }
-            if (!dsv4::q2_moe_single_w2_q2k_cuda(
+            if (!pocket::q2_moe_single_w2_q2k_cuda(
                     d_hidden_q_token, d_hidden_scale_token, d_slots, d_w2, d_y_token,
                     topk, n_local_experts, dim, inter_dim)) {
                 throw std::runtime_error("single w2 launch failed");

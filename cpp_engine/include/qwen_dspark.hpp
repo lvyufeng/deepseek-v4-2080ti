@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 class QwenDSparkWeightMap;
 
@@ -155,4 +155,4 @@ private:
 std::vector<float> qwen_dspark_yarn_inv_freqs(
     const QwenDSparkConfig& config);
 
-}  // namespace dsv4
+}  // namespace pocket

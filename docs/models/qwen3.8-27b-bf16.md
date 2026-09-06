@@ -102,7 +102,7 @@ build/cpp_engine/tools/qwen_audit /path/to/Qwen3.8-27B --tp-world 4 --strict
 The same audit through the engine CLI, which also stays on the host in audit mode:
 
 ```bash
-build/cpp_engine/dsv4_cpp_engine \
+build/cpp_engine/pocketllm_engine \
   --ckpt /path/to/Qwen3.8-27B \
   --tp-world 4 --tp-rank 0 --qwen-audit-strict
 ```
@@ -125,7 +125,7 @@ Generation follows the FP8 page's four-rank NCCL procedure with this checkpoint 
 - BF16 weights are materialized as FP16 for RTX 2080 Ti. This is a precision-narrowing conversion at load time, not a lossless path, and it is specific to Turing. An accelerator with native BF16 must supply its own dtype policy rather than reusing `qwen_device_dtype`.
 - Resident BF16 weights are 12.8 GiB per rank at TP4, well above the FP8 and NVFP4 checkpoints. Long-context headroom on 22 GiB cards is correspondingly smaller.
 - Text-only: no image or video preprocessing, and the vision tower is never mapped or uploaded.
-- CLI only: Qwen remains rejected by the DSV4 OpenAI server path.
+- CLI only: Qwen remains rejected by the DeepSeek-V4 OpenAI server path.
 - The Ascend backend configures but does not link; no kernels exist yet.
 
 ## Evidence and related notes

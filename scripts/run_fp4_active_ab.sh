@@ -15,9 +15,9 @@
 set -eo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TMP_ROOT="${DSV4_TMP_DIR:-$REPO_ROOT/.tmp}"
+TMP_ROOT="${POCKETLLM_TMP_DIR:-$REPO_ROOT/.tmp}"
 mkdir -p "$TMP_ROOT"
-LOCK_FILE="${LOCK_FILE:-$TMP_ROOT/dsv4_fp4_active_ab.lock}"
+LOCK_FILE="${LOCK_FILE:-$TMP_ROOT/pocketllm_fp4_active_ab.lock}"
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
   echo "another fp4 A/B benchmark is already running: $LOCK_FILE" >&2
@@ -31,10 +31,10 @@ INT8_CONFIG="${INT8_CONFIG:-$REPO_ROOT/configs/config_w8a8.json}"
 FP4_CKPT_PATH="${FP4_CKPT_PATH:-/mnt/data1/modelscope/deepseek-ai/DeepSeek-V4-Flash}"
 FP4_CONFIG="${FP4_CONFIG:-$REPO_ROOT/configs/config_fp4_active.json}"
 SHORT_INPUT_FILE="${SHORT_INPUT_FILE:-$REPO_ROOT/tests/fixtures/smoke_input.txt}"
-LONG_INPUT_FILE="${LONG_INPUT_FILE:-$TMP_ROOT/dsv4_long_input_single.txt}"
+LONG_INPUT_FILE="${LONG_INPUT_FILE:-$TMP_ROOT/pocketllm_long_input_single.txt}"
 SHORT_MAX_NEW_TOKENS="${SHORT_MAX_NEW_TOKENS:-8}"
 LONG_MAX_NEW_TOKENS="${LONG_MAX_NEW_TOKENS:-64}"
-LOG_DIR="${LOG_DIR:-$TMP_ROOT/dsv4_fp4_active_ab}"
+LOG_DIR="${LOG_DIR:-$TMP_ROOT/pocketllm_fp4_active_ab}"
 mkdir -p "$LOG_DIR"
 
 if [[ ! -s "$LONG_INPUT_FILE" ]]; then

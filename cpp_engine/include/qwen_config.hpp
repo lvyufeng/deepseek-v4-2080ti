@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 enum class QwenLayerType {
     LinearAttention,
@@ -76,7 +76,7 @@ struct QwenConfig {
 };
 
 // Read only config.json. This deliberately does not inspect tensor files, so it
-// can be used by CLI dispatch before constructing either the DSV4 or Qwen engine.
+// can be used by CLI dispatch before constructing either the DeepSeek-V4 or Qwen engine.
 bool is_qwen3_5_checkpoint(const std::string& ckpt_dir);
 
-}  // namespace dsv4
+}  // namespace pocket

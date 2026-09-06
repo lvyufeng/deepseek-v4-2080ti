@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 class QwenDFlash2WeightMap;
 
@@ -190,4 +190,4 @@ private:
     size_t tensor_count_ = 0;
 };
 
-}  // namespace dsv4
+}  // namespace pocket

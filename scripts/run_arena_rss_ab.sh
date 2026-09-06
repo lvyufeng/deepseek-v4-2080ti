@@ -4,7 +4,7 @@
 set -eo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="$REPO_ROOT"
-TMP_ROOT="${DSV4_TMP_DIR:-$REPO_ROOT/.tmp}"
+TMP_ROOT="${POCKETLLM_TMP_DIR:-$REPO_ROOT/.tmp}"
 mkdir -p "$TMP_ROOT"
 TORCHRUN="${TORCHRUN:-torchrun}"
 PYTHON="${PYTHON:-python}"
@@ -17,8 +17,8 @@ if [[ ! -e "$CKPT" ]]; then
   echo "Set CKPT_PATH or place the checkpoint under $DEFAULT_CKPT_PATH" >&2
   exit 1
 fi
-LONG="$TMP_ROOT/dsv4_long_input_single.txt"
-LOGDIR="$TMP_ROOT/dsv4_arena_rss"
+LONG="$TMP_ROOT/pocketllm_long_input_single.txt"
+LOGDIR="$TMP_ROOT/pocketllm_arena_rss"
 rm -rf "$LOGDIR"
 mkdir -p "$LOGDIR"
 
@@ -132,7 +132,7 @@ run_case arena_on  29912 1
 
 "$PYTHON" - <<'PY'
 import os
-LOGDIR = "$TMP_ROOT/dsv4_arena_rss"
+LOGDIR = "$TMP_ROOT/pocketllm_arena_rss"
 for name in ["arena_off", "arena_on"]:
     rss_path = os.path.join(LOGDIR, f"{name}.rss")
     if not os.path.exists(rss_path):

@@ -9,7 +9,7 @@ from src.components.moe.registry import detect_spec, get_spec, known_architectur
 from tests.gguf_test_utils import write_gguf, write_minimax_bundle
 
 
-def test_known_architectures_include_dsv4_and_minimax() -> None:
+def test_known_architectures_include_deepseek_v4_and_minimax() -> None:
     assert "deepseek4" in known_architectures()
     assert "minimax-m2" in known_architectures()
 

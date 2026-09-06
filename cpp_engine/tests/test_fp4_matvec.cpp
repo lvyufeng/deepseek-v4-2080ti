@@ -117,7 +117,7 @@ void run_case(const std::vector<float>& x, const uint8_t* w, const uint8_t* scal
     check_cuda(cudaMemcpy(d_x, x.data(), x.size() * sizeof(float), cudaMemcpyHostToDevice), "copy x");
     check_cuda(cudaMemcpy(d_w, w, weight_bytes, cudaMemcpyHostToDevice), "copy weight");
     check_cuda(cudaMemcpy(d_scale, scale, scale_bytes, cudaMemcpyHostToDevice), "copy scale");
-    if (!dsv4::fp4_e2m1_e8m0_matvec_cuda(d_x, d_w, d_scale, d_y, rows, cols)) {
+    if (!pocket::fp4_e2m1_e8m0_matvec_cuda(d_x, d_w, d_scale, d_y, rows, cols)) {
         throw std::runtime_error("fp4_e2m1_e8m0_matvec_cuda launch failed");
     }
     check_cuda(cudaDeviceSynchronize(), "sync kernel");
@@ -155,7 +155,7 @@ std::string scale_name_for(const std::string& tensor) {
 
 int main(int argc, char** argv) {
     try {
-        if (!dsv4::cuda_runtime_available()) {
+        if (!pocket::cuda_runtime_available()) {
             std::cout << "[SKIP] CUDA runtime is not available\n";
             return 0;
         }
@@ -164,11 +164,11 @@ int main(int argc, char** argv) {
             if (args.tensor.empty()) {
                 throw std::runtime_error("--tensor is required with --ckpt");
             }
-            dsv4::SafeTensorsIndex index(args.ckpt);
+            pocket::SafeTensorsIndex index(args.ckpt);
             const std::string* weight_shard_name = index.shard_for_tensor(args.tensor);
             if (weight_shard_name == nullptr) throw std::runtime_error("tensor not found: " + args.tensor);
-            dsv4::SafeTensorsShard shard(index.shard_path(*weight_shard_name));
-            const dsv4::SafeFp4TensorPair pair = dsv4::resolve_fp4_tensor_pair(index, shard, args.tensor);
+            pocket::SafeTensorsShard shard(index.shard_path(*weight_shard_name));
+            const pocket::SafeFp4TensorPair pair = pocket::resolve_fp4_tensor_pair(index, shard, args.tensor);
             const auto* weight_info = shard.find_tensor(pair.weight_name);
             const auto* scale_info = shard.find_tensor(pair.scale_name);
             const int cols = static_cast<int>(pair.cols);

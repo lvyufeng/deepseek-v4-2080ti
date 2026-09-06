@@ -35,7 +35,7 @@ bool throws(Fn&& call) {
 }
 
 void test_pool_basics() {
-    dsv4::QwenBlockPool pool(8, 16);
+    pocket::QwenBlockPool pool(8, 16);
     check(pool.total_blocks() == 8, "pool total_blocks");
     check(pool.free_blocks() == 8, "fresh pool is fully free");
     check(pool.block_size() == 16, "pool block_size");
@@ -57,7 +57,7 @@ void test_pool_basics() {
 }
 
 void test_pool_exhaustion() {
-    dsv4::QwenBlockPool pool(4, 16);
+    pocket::QwenBlockPool pool(4, 16);
     std::vector<int> all = pool.allocate(4);
     check(all.size() == 4, "the pool can be drained exactly");
     check(pool.free_blocks() == 0, "drained pool has nothing free");
@@ -78,7 +78,7 @@ void test_pool_exhaustion() {
 }
 
 void test_pool_refcounts() {
-    dsv4::QwenBlockPool pool(4, 16);
+    pocket::QwenBlockPool pool(4, 16);
     std::vector<int> blocks = pool.allocate(1);
     const int block = blocks[0];
 
@@ -96,19 +96,19 @@ void test_pool_refcounts() {
     check(throws([&] { pool.retain(block); }),
           "retaining a free block throws");
     check(throws([&] { pool.refcount(99); }), "an out-of-range id throws");
-    check(throws([&] { dsv4::QwenBlockPool(0, 16); }),
+    check(throws([&] { pocket::QwenBlockPool(0, 16); }),
           "a zero-block pool throws");
-    check(throws([&] { dsv4::QwenBlockPool(4, 0); }),
+    check(throws([&] { pocket::QwenBlockPool(4, 0); }),
           "a zero-size block throws");
 
     // kInvalidBlock is skipped so a caller can free a partially built row.
-    pool.free({dsv4::QwenBlockPool::kInvalidBlock});
+    pool.free({pocket::QwenBlockPool::kInvalidBlock});
     check(pool.free_blocks() == 4, "freeing kInvalidBlock is a no-op");
 }
 
 void test_table_growth() {
-    dsv4::QwenBlockPool pool(16, 16);
-    dsv4::QwenBlockTable table(&pool, 4, 256);
+    pocket::QwenBlockPool pool(16, 16);
+    pocket::QwenBlockTable table(&pool, 4, 256);
     check(table.max_blocks_per_seq() == 16, "max_blocks_per_seq from context");
     check(table.capacity_tokens(0) == 0, "a fresh slot backs no tokens");
 
@@ -130,8 +130,8 @@ void test_table_growth() {
 }
 
 void test_table_translation() {
-    dsv4::QwenBlockPool pool(8, 4);
-    dsv4::QwenBlockTable table(&pool, 2, 32);
+    pocket::QwenBlockPool pool(8, 4);
+    pocket::QwenBlockTable table(&pool, 2, 32);
     const size_t kv_stride = 8;  // kv_heads * head_dim, small enough to check
 
     check(table.ensure_capacity(0, 12), "slot 0 backed to 12 tokens");
@@ -161,8 +161,8 @@ void test_table_translation() {
 // an interleaved slot forces slot 2's row to be non-monotonic, and the offsets
 // must follow the row rather than the position.
 void test_table_fragmentation() {
-    dsv4::QwenBlockPool pool(6, 4);
-    dsv4::QwenBlockTable table(&pool, 3, 32);
+    pocket::QwenBlockPool pool(6, 4);
+    pocket::QwenBlockTable table(&pool, 3, 32);
 
     check(table.ensure_capacity(0, 8), "slot 0 takes two blocks");
     check(table.ensure_capacity(1, 8), "slot 1 takes two blocks");
@@ -202,8 +202,8 @@ void test_table_fragmentation() {
 }
 
 void test_table_backpressure() {
-    dsv4::QwenBlockPool pool(2, 4);
-    dsv4::QwenBlockTable table(&pool, 2, 64);
+    pocket::QwenBlockPool pool(2, 4);
+    pocket::QwenBlockTable table(&pool, 2, 64);
 
     check(table.ensure_capacity(0, 8), "slot 0 drains the pool");
     check(pool.free_blocks() == 0, "the pool is drained");
@@ -220,8 +220,8 @@ void test_table_backpressure() {
 }
 
 void test_device_image() {
-    dsv4::QwenBlockPool pool(8, 4);
-    dsv4::QwenBlockTable table(&pool, 2, 16);
+    pocket::QwenBlockPool pool(8, 4);
+    pocket::QwenBlockTable table(&pool, 2, 16);
     check(table.dirty(), "a fresh table needs its first upload");
 
     check(table.ensure_capacity(0, 8), "slot 0 backed");
@@ -233,9 +233,9 @@ void test_device_image() {
     check(image[0] == row[0] && image[1] == row[1], "row 0 is mirrored");
     // Unbacked entries must be kInvalidBlock, not zero: block 0 is a real block,
     // so zero padding would alias a live block into every short row.
-    check(image[2] == dsv4::QwenBlockPool::kInvalidBlock,
+    check(image[2] == pocket::QwenBlockPool::kInvalidBlock,
           "unbacked entries are kInvalidBlock");
-    check(image[4] == dsv4::QwenBlockPool::kInvalidBlock,
+    check(image[4] == pocket::QwenBlockPool::kInvalidBlock,
           "an empty slot's row is all kInvalidBlock");
 
     // A decode step that crosses no boundary must not force an upload.

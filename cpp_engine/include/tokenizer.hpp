@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 class GGUFFile;
 
@@ -39,4 +39,4 @@ private:
     std::vector<int> atomic_token_id_list_;
 };
 
-}  // namespace dsv4
+}  // namespace pocket

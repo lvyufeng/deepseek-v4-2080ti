@@ -3,7 +3,7 @@
 set -eo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="$REPO_ROOT"
-TMP_ROOT="${DSV4_TMP_DIR:-$REPO_ROOT/.tmp}"
+TMP_ROOT="${POCKETLLM_TMP_DIR:-$REPO_ROOT/.tmp}"
 mkdir -p "$TMP_ROOT"
 TORCHRUN="${TORCHRUN:-torchrun}"
 DEFAULT_CKPT_PATH="$REPO_ROOT/checkpoints/DeepSeek-V4-Flash-w8a8"
@@ -15,8 +15,8 @@ if [[ ! -e "$CKPT" ]]; then
   echo "Set CKPT_PATH or place the checkpoint under $DEFAULT_CKPT_PATH" >&2
   exit 1
 fi
-LONG="$TMP_ROOT/dsv4_long_input_single.txt"
-LOGDIR="${LOGDIR:-$TMP_ROOT/dsv4_inline_ab}"
+LONG="$TMP_ROOT/pocketllm_long_input_single.txt"
+LOGDIR="${LOGDIR:-$TMP_ROOT/pocketllm_inline_ab}"
 rm -rf "$LOGDIR"
 mkdir -p "$LOGDIR"
 

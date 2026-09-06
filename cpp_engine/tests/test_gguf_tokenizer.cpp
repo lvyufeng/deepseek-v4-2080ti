@@ -64,9 +64,9 @@ int main(int argc, char** argv) {
         return 2;
     }
     try {
-        dsv4::GGUFFile gguf(first_gguf_path(argv[1]));
-        dsv4::Tokenizer tok = dsv4::Tokenizer::from_gguf(gguf);
-        dsv4::ModelConfig cfg = dsv4::ModelConfig::from_gguf(gguf);
+        pocket::GGUFFile gguf(first_gguf_path(argv[1]));
+        pocket::Tokenizer tok = pocket::Tokenizer::from_gguf(gguf);
+        pocket::ModelConfig cfg = pocket::ModelConfig::from_gguf(gguf);
 
         require(cfg.architecture == "minimax-m2", "expected minimax-m2 architecture");
         require(cfg.context_length == 196608, "bad MiniMax context length");

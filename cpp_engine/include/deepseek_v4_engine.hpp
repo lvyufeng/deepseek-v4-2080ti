@@ -6,11 +6,11 @@
 #include <string>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
-class Dsv4Engine {
+class DeepSeekV4Engine {
 public:
-    explicit Dsv4Engine(const std::string& model_path);
+    explicit DeepSeekV4Engine(const std::string& model_path);
 
     const GGUFFile& gguf() const { return gguf_; }
     const ModelConfig& config() const { return config_; }
@@ -64,7 +64,7 @@ GenerateSmokeResult run_safetensors_generate_tokens_timed_with_options(const std
 // Sibling to the safetensors path. The full forward chain isn't wired in yet
 // (Phase 3); this initial entry point only verifies that we can construct a
 // GgufForwardContext and that the GGUF mapping table resolves the dense
-// metadata we'll need. Implementation is in dsv4_engine.cpp alongside the
+// metadata we'll need. Implementation is in deepseek_v4_engine.cpp alongside the
 // safetensors path so future GGUF forward operators can share helpers.
 
 struct GgufSmokeResult {
@@ -207,7 +207,7 @@ struct GgufRoutedMoeResult {
     // Real route weights from sqrt_softplus(W gate · x_normed), gathered at
     // the hash-selected expert ids, normalized to sum=1, then ×route_scale.
     float route_weights[8] = {0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f};
-    float route_weights_sum = 0.0f; // sanity: should equal route_scale (1.5 for DSV4-Flash)
+    float route_weights_sum = 0.0f; // sanity: should equal route_scale (1.5 for DeepSeek-V4-Flash)
     float ffn_normed_rms = 0.0f;
     float moe_out_rms = 0.0f;
     float moe_out_first[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -293,4 +293,4 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
                                           const std::vector<int>& seed_tokens,
                                           int max_new_tokens);
 
-}  // namespace dsv4
+}  // namespace pocket

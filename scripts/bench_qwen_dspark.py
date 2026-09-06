@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ckpt", required=True)
     parser.add_argument("--dspark", required=True)
-    parser.add_argument("--binary", default="build/cpp_engine/dsv4_cpp_engine")
+    parser.add_argument("--binary", default="build/cpp_engine/pocketllm_engine")
     parser.add_argument("--lengths", default="512,8192,32768")
     parser.add_argument("--max-new-tokens", type=int, default=64)
     parser.add_argument("--prefill-chunk-tokens", type=int, default=512)

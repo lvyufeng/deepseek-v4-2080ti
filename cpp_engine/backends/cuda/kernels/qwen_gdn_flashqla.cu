@@ -16,7 +16,7 @@
 #include <cstdint>
 #include <cstdlib>
 
-namespace dsv4 {
+namespace pocket {
 
 __device__ __forceinline__ float warp_reduce_sum(float value, int width) {
     for (int offset = width / 2; offset > 0; offset >>= 1) {
@@ -330,4 +330,4 @@ bool qwen_gated_delta_flashqla_sm75_f16_cuda(
     return cudaGetLastError() == cudaSuccess;
 }
 
-}  // namespace dsv4
+}  // namespace pocket
