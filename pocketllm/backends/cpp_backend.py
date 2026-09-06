@@ -310,6 +310,7 @@ class CppBackend(BackendBase):
                 "eos_token_ids": sorted(self._eos_ids),
                 "eos_source": self._eos_source or "none",
                 "max_batch_size": self._configured_max_batch_size() if self._batching_enabled else 1,
+                "kv_paged": bool(self.args.backend_options.get("kv_paged", False)),
             },
         )
 
@@ -397,6 +398,14 @@ class CppBackend(BackendBase):
             "dspark_checkpoint": str(self.args.backend_options.get("dspark_checkpoint", "")),
             "dflash2_checkpoint": str(self.args.backend_options.get("dflash2_checkpoint", "")),
             "nccl_id_path": nccl_id_path,
+            # Paged KV (Phase 3.7). Off by default; the contiguous arena
+            # reproduces the max_batch_size * max_context reservation. A zero
+            # kv_cache_bytes derives the pool from that same reservation, so
+            # turning paging on alone is memory-neutral until the budget is
+            # raised deliberately.
+            "kv_paged": bool(self.args.backend_options.get("kv_paged", False)),
+            "kv_block_size": int(self.args.backend_options.get("kv_block_size", 16)),
+            "kv_cache_bytes": int(self.args.backend_options.get("kv_cache_bytes", 0)),
         }
         for name, value in mappings.items():
             if hasattr(options, name):
@@ -654,6 +663,13 @@ class CppBackend(BackendBase):
                 sampling.temperature = request.sampling_params.temperature or 0.0
                 sampling.top_p = request.sampling_params.top_p or 1.0
                 sampling.top_k = request.sampling_params.top_k or 20
+                # The batch scheduler runs the model to max_new_tokens unless
+                # told otherwise. EOS truncation is the default for serving, but
+                # a benchmark (or any caller that wants the full budget) opts in
+                # through extra["ignore_eos"], mirroring the native parity driver
+                # which sets req.sampling.ignore_eos = true.
+                if bool(request.sampling_params.extra.get("ignore_eos", False)):
+                    sampling.ignore_eos = True
 
                 # Submit to scheduler
                 native_req_id = self._scheduler.submit_request(prompt_ids, sampling, None)

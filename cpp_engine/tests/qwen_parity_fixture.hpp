@@ -92,7 +92,7 @@ std::string config_json() {
 })JSON";
 }
 
-std::vector<TensorSpec> specs() {
+std::vector<TensorSpec> specs(bool bf16_mlp = false) {
     const std::vector<uint64_t> hidden = {128};
     const std::vector<uint64_t> vocab = {64, 128};
     // linear_attention QKV: (q_heads + 2*kv_heads) * head_dim = (4+2*4)*128 = 1536
@@ -134,13 +134,18 @@ std::vector<TensorSpec> specs() {
         {linear + "linear_attn.A_log", "BF16", vector4},
         {linear + "linear_attn.dt_bias", "BF16", vector4},
         {linear + "linear_attn.norm.weight", "BF16", hidden},
-        {linear + "mlp.gate_proj.weight", "F8_E4M3", mlp},
-        {linear + "mlp.gate_proj.weight_scale_inv", "BF16", mlp_scale},
-        {linear + "mlp.up_proj.weight", "F8_E4M3", mlp},
-        {linear + "mlp.up_proj.weight_scale_inv", "BF16", mlp_scale},
-        {linear + "mlp.down_proj.weight", "F8_E4M3", mlp},
-        {linear + "mlp.down_proj.weight_scale_inv", "BF16", mlp_scale},
+        {linear + "mlp.gate_proj.weight", bf16_mlp ? "BF16" : "F8_E4M3", mlp},
+        {linear + "mlp.up_proj.weight", bf16_mlp ? "BF16" : "F8_E4M3", mlp},
+        {linear + "mlp.down_proj.weight", bf16_mlp ? "BF16" : "F8_E4M3", mlp},
     };
+    if (!bf16_mlp) {
+        // FP8 block scales, swept into the list order above. BF16 MLPs need no
+        // scale tensor: require_linear only takes the FP8 path when a matching
+        // weight_scale_inv exists.
+        out.push_back({linear + "mlp.gate_proj.weight_scale_inv", "BF16", mlp_scale});
+        out.push_back({linear + "mlp.up_proj.weight_scale_inv", "BF16", mlp_scale});
+        out.push_back({linear + "mlp.down_proj.weight_scale_inv", "BF16", mlp_scale});
+    }
     out.insert(out.end(), {
         {full + "input_layernorm.weight", "BF16", hidden},
         {full + "post_attention_layernorm.weight", "BF16", hidden},
@@ -154,17 +159,19 @@ std::vector<TensorSpec> specs() {
         {full + "self_attn.o_proj.weight_scale_inv", "BF16", out_scale},
         {full + "self_attn.q_norm.weight", "BF16", hidden},
         {full + "self_attn.k_norm.weight", "BF16", hidden},
-        {full + "mlp.gate_proj.weight", "F8_E4M3", mlp},
-        {full + "mlp.gate_proj.weight_scale_inv", "BF16", mlp_scale},
-        {full + "mlp.up_proj.weight", "F8_E4M3", mlp},
-        {full + "mlp.up_proj.weight_scale_inv", "BF16", mlp_scale},
-        {full + "mlp.down_proj.weight", "F8_E4M3", mlp},
-        {full + "mlp.down_proj.weight_scale_inv", "BF16", mlp_scale},
+        {full + "mlp.gate_proj.weight", bf16_mlp ? "BF16" : "F8_E4M3", mlp},
+        {full + "mlp.up_proj.weight", bf16_mlp ? "BF16" : "F8_E4M3", mlp},
+        {full + "mlp.down_proj.weight", bf16_mlp ? "BF16" : "F8_E4M3", mlp},
     });
+    if (!bf16_mlp) {
+        out.push_back({full + "mlp.gate_proj.weight_scale_inv", "BF16", mlp_scale});
+        out.push_back({full + "mlp.up_proj.weight_scale_inv", "BF16", mlp_scale});
+        out.push_back({full + "mlp.down_proj.weight_scale_inv", "BF16", mlp_scale});
+    }
     return out;
 }
 
-bool write_fixture(const std::string& dir) {
+bool write_fixture(const std::string& dir, bool bf16_mlp = false) {
     const std::string mkdir_cmd = "mkdir -p '" + dir + "'";
     if (std::system(mkdir_cmd.c_str()) != 0) return false;
     std::ofstream config(dir + "/config.json",
@@ -173,7 +180,7 @@ bool write_fixture(const std::string& dir) {
     config << config_json();
     if (!config) return false;
 
-    const auto tensors = specs();
+    const auto tensors = specs(bf16_mlp);
     std::ostringstream header;
     header << '{';
     uint64_t offset = 0;

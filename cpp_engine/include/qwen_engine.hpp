@@ -419,6 +419,10 @@ public:
         Reset = 2,
         Shutdown = 3,
         BatchDecodeStep = 4,
+        // Releases one slot's paged blocks on every rank. Under the contiguous
+        // arena a slot owns max_context implicitly, so there is nothing to
+        // broadcast and this command is only sent when paging is on.
+        FreeSlot = 5,
     };
     // slot_id selects the KV cache slot the workers must use, so it has to match
     // the slot rank 0 computes into.  It defaults to 0 for the single-session
@@ -432,6 +436,7 @@ public:
                                      const std::vector<int>& slot_ids);
     void worker_command_reset();
     void worker_command_shutdown();
+    void worker_command_free_slot(int32_t slot_id);
 
 private:
     struct Impl;

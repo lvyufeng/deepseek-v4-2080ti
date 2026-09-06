@@ -11,6 +11,7 @@ with concurrent requests. Target improvements:
 
 import argparse
 import json
+import os
 import sys
 import time
 import threading
@@ -30,12 +31,12 @@ class ConcurrentBenchmark:
         self.sampling_params = sampling_params
         self.results_queue = Queue()
 
-    def run_request(self, request_id: int):
+    def run_request(self, request_id: int, prompt_tokens: List[int]):
         """Run a single generation request."""
         start = time.perf_counter()
         try:
             result = self.llm.generate(
-                [self.prompt_tokens],
+                [prompt_tokens],
                 sampling_params=self.sampling_params
             )
             end = time.perf_counter()
@@ -57,14 +58,24 @@ class ConcurrentBenchmark:
                 "latency": end - start,
             })
 
-    def run_concurrent(self, num_requests: int) -> List[Dict[str, Any]]:
-        """Run multiple requests concurrently."""
+    def run_concurrent(self, num_requests: int, prompt_tokens: List[int] | None = None) -> List[Dict[str, Any]]:
+        """Run multiple requests concurrently.
+
+        ``prompt_tokens`` may be supplied per call.  This is what makes the
+        measurement honest: the native engine keeps a slot's KV across runs, so
+        re-submitting byte-identical prompts means every run after the first
+        only pays decode and the numbers are not comparable across paged and
+        contiguous modes (contiguous reuses, paged re-allocates).  Each call
+        here uses a distinct prompt so both arms pay a full prefill every run.
+        """
+        if prompt_tokens is None:
+            prompt_tokens = self.prompt_tokens
         threads = []
 
         # Start all threads
         start_time = time.perf_counter()
         for i in range(num_requests):
-            thread = threading.Thread(target=self.run_request, args=(i,))
+            thread = threading.Thread(target=self.run_request, args=(i, prompt_tokens))
             thread.start()
             threads.append(thread)
 
@@ -94,7 +105,9 @@ def benchmark_concurrent(
     test_runs: int = 3,
     prompt_length: int = 32,
     tensor_parallel_size: int = 1,
+    tensor_parallel_rank: int = 0,
     max_model_len: int = 4096,
+    backend_options: dict | None = None,
 ):
     """Benchmark concurrent request throughput."""
 
@@ -104,21 +117,49 @@ def benchmark_concurrent(
     print(f"{'='*60}")
 
     # Create LLM with specified mode
+    extra_options = dict(backend_options) if backend_options else {}
+    # enable_prefix_caching is a top-level EngineArgs field, not a backend
+    # option, even though the CLI surface exposes it as --backend-option.
+    # The native engine (qwen_engine.cpp) honours this directly; an identical
+    # warmup prompt is otherwise prefix-reused, so the test run only pays decode
+    # and the contiguous arm looks ~4x too fast.  Pop it out of the option dict
+    # before merging so it does not get passed down twice.
+    prefix_caching = bool(extra_options.pop("enable_prefix_caching", True))
     args = EngineArgs(
         model=checkpoint,
         backend="cpp",
         tensor_parallel_size=tensor_parallel_size,
+        tensor_parallel_rank=tensor_parallel_rank,
         max_model_len=max_model_len,
+        enable_prefix_caching=prefix_caching,
         backend_options={
             "enable_batching": enable_batching,
             # Size the arena to this level's concurrency rather than a fixed 8.
             # max(8, n) made the 2-concurrent run reserve 8 slots' worth of KV
             # cache, so the low levels paid memory they never used.
             "max_batch_size": num_concurrent if enable_batching else 1,
+            # kv_paged / kv_block_size / kv_cache_bytes and anything else come
+            # from --backend-option KEY=VALUE (JSON-typed, like the server CLI).
+            **extra_options,
         }
     )
 
     llm = LLM(args)
+
+    # A nonzero TensorParallel rank is a worker: the engine is constructed here
+    # (so it joins the warmup_tp() barrier with rank 0), then this process
+    # enters the native command channel and does no driving of its own.
+    # run_worker() blocks until rank 0 sends shutdown, which happens when rank
+    # 0's LLM.close() for *this* level runs.  On return, close the engine here
+    # too so the worker does not linger across levels, then leave the function.
+    if tensor_parallel_rank > 0:
+        try:
+            llm.backend.run_worker()
+            print(f"[TP rank {tensor_parallel_rank}] worker loop exited for "
+                  f"{mode} mode, {num_concurrent} concurrent")
+        finally:
+            llm.close()
+        return None
 
     # Check capabilities
     caps = llm.backend.capabilities
@@ -126,6 +167,32 @@ def benchmark_concurrent(
     print(f"Scheduler: {caps.details.get('scheduler')}")
     print(f"Supports batch: {caps.supports_batch}")
     print(f"Max batch size: {caps.details.get('max_batch_size', 1)}")
+
+    # Realized KV footprint.  kv_cache_bytes() reports the arena/pool budget the
+    # engine committed at construction; kv_paged_blocks is nonzero for paged.
+    # This is what makes the two arms directly comparable: the paged pool can be
+    # bounded below the contiguous arena's `batch * max_context` reservation and
+    # still admit the same requests, because the solver only allocates blocks for
+    # tokens actually used.
+    engine = getattr(llm.backend, "_engine", None)
+    if engine is not None:
+        kv_bytes_attr = getattr(engine, "kv_cache_bytes", None)
+        if kv_bytes_attr is not None:
+            kv_bytes_value = kv_bytes_attr() if callable(kv_bytes_attr) else kv_bytes_attr
+            try:
+                kv_bytes_value = int(kv_bytes_value)
+                print(f"KV cache bytes: {kv_bytes_value} ({kv_bytes_value / (1024 * 1024):.1f} MiB)")
+            except (TypeError, ValueError):
+                print(f"KV cache bytes: {kv_bytes_value}")
+        for name in ("kv_total_blocks", "kv_free_blocks"):
+            attr = getattr(engine, name, None)
+            if attr is not None:
+                try:
+                    print(f"KV {name}: {attr() if callable(attr) else attr}")
+                except Exception:
+                    pass
+    else:
+        print("KV cache bytes: (no native engine exposed)")
 
     # A silent fall back to the serial path would be reported as a batch result
     # and make the comparison meaningless, so fail loudly instead.
@@ -138,8 +205,33 @@ def benchmark_concurrent(
         )
 
     # Create test configuration
-    prompt_tokens = list(range(1, prompt_length + 1))
-    sampling = SamplingParams(max_tokens=max_tokens, temperature=0.0)
+    # A real, tokenizer-produced prompt rather than the synthetic id range
+    # [1..n]: a model fed arbitrary vocab ids almost always emits EOS on the
+    # first step, which truncated every run to 2 tokens and made the timing
+    # meaningless (~10x too fast).  Natural text also exercises the KV cache
+    # through the same code path a server would.  The prompt is built to
+    # `prompt_length` tokens by repeating a natural sentence.
+    sampler = getattr(llm.backend, "_tokenizer", None)
+    if getattr(sampler, "encode", None) is not None:
+        sentence = "The quick brown fox jumps over the lazy dog and the party never ends. "
+        encoding = sampler.encode(sentence)
+        if not encoding:
+            raise SystemExit("tokenizer returned no tokens for the filler sentence")
+        prompt_tokens = []
+        while len(prompt_tokens) < prompt_length:
+            prompt_tokens.extend(encoding)
+        prompt_tokens = prompt_tokens[:prompt_length]
+    else:
+        # Fallback for a backend without a tokenizer: raw ids are better than a
+        # crash, but the numbers will not be meaningful.
+        prompt_tokens = list(range(1, prompt_length + 1))
+    # ignore_eos makes the model run the full max_tokens budget instead of
+    # stopping at whatever token it happens to emit first (which is what the
+    # synthetic prompt triggered).  This mirrors the native parity driver,
+    # which sets req.sampling.ignore_eos = true for exactly this reason.
+    sampling = SamplingParams(
+        max_tokens=max_tokens, temperature=0.0, extra={"ignore_eos": True}
+    )
 
     print(f"\nConfiguration:")
     print(f"  Prompt length: {prompt_length} tokens")
@@ -150,6 +242,16 @@ def benchmark_concurrent(
 
     benchmark = ConcurrentBenchmark(llm, prompt_tokens, sampling)
 
+    # Every measurement run gets a *distinct* prompt of the same length.  The
+    # native engine keeps a batch slot's KV across runs, so resubmitting the
+    # identical prompt means runs 2..N only pay decode; only the contiguous arm
+    # can reuse that (paged re-allocates), which is exactly what produced the
+    # false ~10x gap above.  Prepend a unique marker token and shave the tail so
+    # the length is held constant.
+    def _prompt_for(run_index: int) -> List[int]:
+        marker = [1_000_000 + run_index]
+        return marker + prompt_tokens[: max(0, prompt_length - len(marker))]
+
     all_total_times = []
     all_request_latencies = []
     failures = 0
@@ -157,15 +259,21 @@ def benchmark_concurrent(
         # Warmup
         print(f"\nWarmup ({warmup_runs} runs)...")
         for i in range(warmup_runs):
-            results, total_time = benchmark.run_concurrent(num_concurrent)
+            results, total_time = benchmark.run_concurrent(num_concurrent, _prompt_for(i))
             successful = sum(1 for r in results if r["success"])
-            print(f"  Run {i+1}: {total_time:.3f}s ({successful}/{num_concurrent} successful)")
+            detail = "; ".join(
+                f"req{r['request_id']}={r.get('tokens', '?')}tok/{r.get('finish_reason', '?')}"
+                for r in results
+            )
+            print(f"  Run {i+1}: {total_time:.3f}s ({successful}/{num_concurrent} successful) [{detail}]")
 
         # Benchmark
         print(f"\nBenchmark ({test_runs} runs)...")
 
         for i in range(test_runs):
-            results, total_time = benchmark.run_concurrent(num_concurrent)
+            results, total_time = benchmark.run_concurrent(
+                num_concurrent, _prompt_for(warmup_runs + i)
+            )
             all_total_times.append(total_time)
 
             successful = sum(1 for r in results if r["success"])
@@ -176,7 +284,11 @@ def benchmark_concurrent(
             for failed in (r for r in results if not r["success"]):
                 print(f"    request {failed['request_id']} failed: {failed.get('error')}")
 
-            print(f"  Run {i+1}: {total_time:.3f}s total, {avg_latency:.3f}s avg latency ({successful}/{num_concurrent} successful)")
+            detail = "; ".join(
+                f"req{r['request_id']}={r.get('tokens', '?')}tok/{r.get('finish_reason', '?')}"
+                for r in results if r["success"]
+            )
+            print(f"  Run {i+1}: {total_time:.3f}s total, {avg_latency:.3f}s avg latency ({successful}/{num_concurrent} successful) [{detail}]")
     finally:
         # Each concurrency level builds its own LLM.  Without an explicit close
         # the engine is only reclaimed at interpreter exit, so rank 0 never sends
@@ -225,6 +337,25 @@ def benchmark_concurrent(
     }
 
 
+def parse_backend_options(items) -> dict:
+    """Turn --backend-option KEY=VALUE pairs into a typed dict.
+
+    VALUE is JSON-parsed so numbers, booleans, and nested values stay typed; a
+    bare string that is not valid JSON stays a string, matching the server CLI.
+    """
+    options: dict = {}
+    for item in items or []:
+        key, sep, raw = str(item).partition("=")
+        if not sep or not key.strip():
+            raise SystemExit(f"--backend-option expects KEY=VALUE, got {item!r}")
+        try:
+            value = json.loads(raw)
+        except ValueError:
+            value = raw
+        options[key.strip()] = value
+    return options
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Benchmark concurrent request throughput"
@@ -247,6 +378,14 @@ def main():
     parser.add_argument(
         "--json-out",
         help="Write the --single measurement here as JSON"
+    )
+    parser.add_argument(
+        "--backend-option",
+        action="append",
+        default=None,
+        metavar="KEY=VALUE",
+        help="Backend option (JSON-typed VALUE). May repeat, e.g. "
+             "--backend-option kv_paged=True --backend-option kv_block_size=16"
     )
     parser.add_argument(
         "--num-concurrent",
@@ -293,12 +432,21 @@ def main():
     )
 
     args = parser.parse_args()
+    backend_options = parse_backend_options(args.backend_option)
+    # Set by the TP launcher; each process runs this script with a distinct rank.
+    # From_env also honours this, but we pass it explicitly so the worker branch
+    # and EngineArgs agree even when TP_WORLD is unset in a single-rank run.
+    tensor_parallel_rank = int(os.environ.get("TP_RANK", "0"))
+    tensor_parallel_size = max(args.tensor_parallel_size, int(os.environ.get("TP_WORLD", "1")))
 
     print("="*60)
     print("Concurrent Request Throughput Benchmark")
     print("="*60)
     print(f"Checkpoint: {args.checkpoint}")
-    print(f"Tensor parallel size: {args.tensor_parallel_size}")
+    print(f"Tensor parallel size: {tensor_parallel_size}")
+    print(f"Tensor parallel rank: {tensor_parallel_rank}")
+    if backend_options:
+        print(f"Backend options: {backend_options}")
 
     if args.single:
         if len(args.num_concurrent) != 1:
@@ -311,8 +459,10 @@ def main():
             warmup_runs=args.warmup_runs,
             test_runs=args.test_runs,
             prompt_length=args.prompt_length,
-            tensor_parallel_size=args.tensor_parallel_size,
+            tensor_parallel_size=tensor_parallel_size,
+            tensor_parallel_rank=tensor_parallel_rank,
             max_model_len=args.max_model_len,
+            backend_options=backend_options,
         )
         if args.json_out:
             Path(args.json_out).write_text(json.dumps(result, indent=2))
@@ -338,8 +488,10 @@ def main():
             warmup_runs=args.warmup_runs,
             test_runs=args.test_runs,
             prompt_length=args.prompt_length,
-            tensor_parallel_size=args.tensor_parallel_size,
+            tensor_parallel_size=tensor_parallel_size,
+            tensor_parallel_rank=tensor_parallel_rank,
             max_model_len=args.max_model_len,
+            backend_options=backend_options,
         )
 
         # Batch mode
@@ -351,8 +503,10 @@ def main():
             warmup_runs=args.warmup_runs,
             test_runs=args.test_runs,
             prompt_length=args.prompt_length,
-            tensor_parallel_size=args.tensor_parallel_size,
+            tensor_parallel_size=tensor_parallel_size,
+            tensor_parallel_rank=tensor_parallel_rank,
             max_model_len=args.max_model_len,
+            backend_options=backend_options,
         )
 
         all_results[num_concurrent] = {
