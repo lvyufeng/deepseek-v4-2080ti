@@ -744,6 +744,10 @@ add_executable(test_qwen_paged_engine_parity tests/test_qwen_paged_engine_parity
 target_link_libraries(test_qwen_paged_engine_parity PRIVATE dsv4_cpp_core)
 set_target_properties(test_qwen_paged_engine_parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
+add_executable(test_qwen_paged_tp_slot_free tests/test_qwen_paged_tp_slot_free.cpp)
+target_link_libraries(test_qwen_paged_tp_slot_free PRIVATE dsv4_cpp_core)
+set_target_properties(test_qwen_paged_tp_slot_free PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+
 add_executable(test_qwen_scheduler_paged_admission tests/test_qwen_scheduler_paged_admission.cpp)
 target_link_libraries(test_qwen_scheduler_paged_admission PRIVATE dsv4_cpp_core)
 set_target_properties(test_qwen_scheduler_paged_admission PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
@@ -755,6 +759,10 @@ set_target_properties(bench_qwen_prefill_interleave PROPERTIES RUNTIME_OUTPUT_DI
 add_executable(bench_qwen_paged_admission tests/bench_qwen_paged_admission.cpp)
 target_link_libraries(bench_qwen_paged_admission PRIVATE dsv4_cpp_core)
 set_target_properties(bench_qwen_paged_admission PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+
+add_executable(bench_qwen_paged_tp_parity tests/bench_qwen_paged_tp_parity.cpp)
+target_link_libraries(bench_qwen_paged_tp_parity PRIVATE dsv4_cpp_core)
+set_target_properties(bench_qwen_paged_tp_parity PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_nvfp4 tests/test_qwen_nvfp4.cpp)
 target_link_libraries(test_qwen_nvfp4 PRIVATE dsv4_cpp_core)

@@ -96,6 +96,9 @@ py::dict telemetry_dict(const QwenRuntimeTelemetry& telemetry) {
     out["target_head_path"] = telemetry.target_head_path;
     out["host_global_metadata_bytes"] = telemetry.host_global_metadata_bytes;
     out["nvfp4_q8_workspace_peak_bytes"] = telemetry.nvfp4_q8_workspace_peak_bytes;
+    out["kv_paged"] = telemetry.kv_paged_blocks > 0;
+    out["kv_paged_blocks"] = telemetry.kv_paged_blocks;
+    out["kv_paged_block_size"] = telemetry.kv_paged_block_size;
     return out;
 }
 
@@ -217,7 +220,10 @@ PYBIND11_MODULE(pocketllm_cpp, module) {
         .def_readwrite("temperature", &QwenEngineOptions::temperature)
         .def_readwrite("top_p", &QwenEngineOptions::top_p)
         .def_readwrite("top_k", &QwenEngineOptions::top_k)
-        .def_readwrite("sampling_seed", &QwenEngineOptions::sampling_seed);
+        .def_readwrite("sampling_seed", &QwenEngineOptions::sampling_seed)
+        .def_readwrite("kv_paged", &QwenEngineOptions::kv_paged)
+        .def_readwrite("kv_block_size", &QwenEngineOptions::kv_block_size)
+        .def_readwrite("kv_cache_bytes", &QwenEngineOptions::kv_cache_bytes);
 
     py::class_<QwenForwardResult>(module, "QwenForwardResult")
         .def(py::init<>())
@@ -321,6 +327,9 @@ PYBIND11_MODULE(pocketllm_cpp, module) {
         .def_property_readonly("activation_workspace_peak_bytes", &QwenEngine::activation_workspace_peak_bytes)
         .def_property_readonly("kv_cache_bytes", &QwenEngine::kv_cache_bytes)
         .def_property_readonly("kv_cache_scale_bytes", &QwenEngine::kv_cache_scale_bytes)
+        .def_property_readonly("kv_paged", &QwenEngine::kv_paged)
+        .def_property_readonly("kv_free_blocks", &QwenEngine::kv_free_blocks)
+        .def_property_readonly("kv_total_blocks", &QwenEngine::kv_total_blocks)
         .def_property_readonly("config", [](const QwenEngine& engine) {
             return qwen_config_dict(engine.config());
         })

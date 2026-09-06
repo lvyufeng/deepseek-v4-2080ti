@@ -662,6 +662,25 @@ struct QwenEngine::Impl {
         block_table->release(slot_id);
     }
 
+    // Tears down one slot's paged state as a unit: returns its blocks to the
+    // pool, uploads the table, and clears the reuse state that described KV no
+    // longer backed by those blocks. Rank 0's free_slot and the worker loop's
+    // FreeSlot command both call this, so a slot ends up in exactly the same
+    // state on every rank. A stale cached_prompt on a worker would otherwise let
+    // an exact-repeat prompt hit the previous request's logits while rank 0
+    // recomputes, silently desynchronizing the two.
+    void release_slot_paged_state(int slot_id, int& engine_position) {
+        if (!kv_paged()) return;
+        release_paged_slot(slot_id);
+        sync_block_table();
+        SlotPrefixState& prefix = prefix_for(slot_id);
+        prefix.cached_prompt.clear();
+        prefix.snapshots.clear();
+        prefix.cached_result = QwenForwardResult{};
+        prefix.has_cached_result = false;
+        set_slot_position(slot_id, 0, engine_position);
+    }
+
     // Phase 3.4: Element offsets into the per-slot recurrent state arenas. Both
     // tensors carry the slot count as their leading dimension, so the stride is
     // whatever remains. Deriving it from the shape keeps these correct without
@@ -4695,18 +4714,13 @@ void QwenEngine::free_slot(uint64_t request_id) {
     // Returning the slot returns its blocks. Under paging this is what makes
     // capacity dynamic: the next request draws from a pool the finished one has
     // already given back, rather than inheriting a fixed reservation.
-    impl_->release_paged_slot(slot_id);
-    impl_->sync_block_table();
-    // The slot's reuse state described KV that is no longer backed by these
-    // blocks, so it must not survive into the next request on this slot.
-    if (impl_->kv_paged()) {
-        Impl::SlotPrefixState& prefix = impl_->prefix_for(slot_id);
-        prefix.cached_prompt.clear();
-        prefix.snapshots.clear();
-        prefix.cached_result = QwenForwardResult{};
-        prefix.has_cached_result = false;
-        impl_->set_slot_position(slot_id, 0, position_);
-    }
+    //
+    // Under TP the workers hold their own copies of the block table, so they
+    // have to release the same slot too or their pools leak one row per freed
+    // slot and eventually run out. The command is a no-op unless a channel
+    // exists and paging is on, which keeps the contiguous path unchanged.
+    impl_->release_slot_paged_state(slot_id, position_);
+    worker_command_free_slot(slot_id);
 }
 
 QwenBatchPrefillResult QwenEngine::batch_prefill(
@@ -5404,6 +5418,12 @@ void QwenEngine::run_worker_loop() {
             case WorkerCommand::Reset:
                 reset();
                 break;
+            case WorkerCommand::FreeSlot:
+                // slot_id is header[2]. Releases this rank's copy of the slot's
+                // blocks and clears its reuse state, mirroring rank 0's
+                // free_slot, so the pool does not leak one row per freed slot.
+                impl_->release_slot_paged_state(slot_id, position_);
+                break;
             default:
                 throw std::runtime_error(
                     "run_worker_loop: unknown command " + std::to_string(header[0]));
@@ -5521,6 +5541,31 @@ void QwenEngine::worker_command_shutdown() {
         static_cast<int32_t>(WorkerCommand::Shutdown),
         0,
         0,
+        0
+    };
+    impl_->cmd->send_to_workers(header, 4);
+}
+
+void QwenEngine::worker_command_free_slot(int32_t slot_id) {
+    // No-op at world size 1: the scheduler's free_slot already released this
+    // rank's blocks, and there is no worker to keep in step.
+    if (options_.tp_world <= 1) return;
+    if (options_.tp_rank != 0) {
+        throw std::runtime_error("worker_command_free_slot: rank 0 only");
+    }
+    // Contiguous arena: a slot already owns max_context implicitly, so there is
+    // no per-slot block state for a worker to release. A worker's position and
+    // prefix state are re-derived at the next prefill on that slot, so leaving
+    // the command unsent keeps the non-paged path byte-for-byte unchanged.
+    if (!impl_->kv_paged()) return;
+    if (!impl_->cmd) {
+        throw std::runtime_error("worker_command_free_slot: command channel not initialized (call warmup_tp first)");
+    }
+
+    int32_t header[4] = {
+        static_cast<int32_t>(WorkerCommand::FreeSlot),
+        0,
+        slot_id,
         0
     };
     impl_->cmd->send_to_workers(header, 4);
