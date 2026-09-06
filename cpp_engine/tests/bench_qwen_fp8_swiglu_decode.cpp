@@ -186,7 +186,7 @@ int main() {
             setenv("QWEN_FP8_F16_SWIGLU_COLS_PER_LANE", width, 1);
             // The dispatch caches nothing, so the env var takes effect per call.
             auto launch = [&] {
-                return dsv4::qwen_fp8_e4m3_fp16scale_swiglu_matvec_f16_cuda(
+                return pocket::qwen_fp8_e4m3_fp16scale_swiglu_matvec_f16_cuda(
                     d_x, d_gw, d_gs, d_uw, d_us, d_y, c.rows, c.cols, c.cols,
                     scale_cols, nullptr);
             };
@@ -327,7 +327,7 @@ int main() {
                 unsetenv("QWEN_FP8_F16_MULTIROW_ROWS");
             }
             auto launch = [&] {
-                return dsv4::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
+                return pocket::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
                     d_x, d_w, d_s, d_y, c.rows, c.cols, c.cols, scale_cols,
                     nullptr);
             };
@@ -458,15 +458,15 @@ int main() {
         setenv("QWEN_FP8_F16_COLS_PER_LANE", "8", 1);
         unsetenv("QWEN_FP8_F16_MULTIROW");
         auto separate = [&] {
-            return dsv4::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
+            return pocket::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
                        d_x, d_qkv_weight, d_qkv_scale, d_qkv_reference,
                        qkv_rows, cols, cols, scale_cols) &&
-                   dsv4::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
+                   pocket::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
                        d_x, d_z_weight, d_z_scale, d_z_reference, z_rows, cols,
                        cols, scale_cols);
         };
         auto dual = [&] {
-            return dsv4::qwen_fp8_e4m3_fp16scale_matvec_dual_f16_cuda(
+            return pocket::qwen_fp8_e4m3_fp16scale_matvec_dual_f16_cuda(
                 d_x, d_qkv_weight, d_qkv_scale, d_qkv_dual, qkv_rows, cols,
                 scale_cols, d_z_weight, d_z_scale, d_z_dual, z_rows, cols,
                 scale_cols, cols);
@@ -595,18 +595,18 @@ int main() {
         setenv("QWEN_FP8_F16_COLS_PER_LANE", "8", 1);
         unsetenv("QWEN_FP8_F16_MULTIROW");
         auto separate = [&] {
-            return dsv4::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
+            return pocket::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
                        d_x, d_q_weight, d_q_scale, d_q_reference, q_rows, cols,
                        cols, scale_cols) &&
-                   dsv4::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
+                   pocket::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
                        d_x, d_k_weight, d_k_scale, d_k_reference, kv_rows, cols,
                        cols, scale_cols) &&
-                   dsv4::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
+                   pocket::qwen_fp8_e4m3_fp16scale_matvec_f16_cuda(
                        d_x, d_v_weight, d_v_scale, d_v_reference, kv_rows, cols,
                        cols, scale_cols);
         };
         auto triple = [&] {
-            return dsv4::qwen_fp8_e4m3_fp16scale_matvec_triple_f16_cuda(
+            return pocket::qwen_fp8_e4m3_fp16scale_matvec_triple_f16_cuda(
                 d_x, d_q_weight, d_q_scale, d_q_triple, q_rows, cols,
                 scale_cols, d_k_weight, d_k_scale, d_k_triple, kv_rows, cols,
                 scale_cols, d_v_weight, d_v_scale, d_v_triple, kv_rows, cols,

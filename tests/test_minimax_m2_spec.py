@@ -58,7 +58,7 @@ def test_minimax_capability_marks_runtime_deferred_but_placement_candidate(tmp_p
     assert placements["heterogeneous_routed_experts"].status == "candidate"
 
 
-def test_minimax_spec_does_not_require_dsv4_only_tensors(tmp_path: Path) -> None:
+def test_minimax_spec_does_not_require_deepseek_v4_only_tensors(tmp_path: Path) -> None:
     root = write_minimax_bundle(tmp_path / "bundle", n_layers=1)
     bundle = read_gguf_bundle(root)
     validation = MiniMaxM2Spec().validate_bundle(bundle)

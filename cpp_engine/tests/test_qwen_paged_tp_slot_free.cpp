@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::printf("[SKIP] test_qwen_paged_tp_slot_free requires CUDA\n");
         return 0;
     }
@@ -131,10 +131,10 @@ int main(int argc, char** argv) {
             }
         }
 
-        dsv4::QwenEngineOptions engine_opts;
+        pocket::QwenEngineOptions engine_opts;
         engine_opts.device = opts.device >= 0 ? opts.device : opts.tp_rank;
         engine_opts.max_batch_size = 2;
-        engine_opts.kv_cache_dtype = dsv4::QwenKvCacheDType::Fp16;
+        engine_opts.kv_cache_dtype = pocket::QwenKvCacheDType::Fp16;
         engine_opts.prefix_cache = false;
         engine_opts.kv_paged = true;
         engine_opts.kv_block_size = kBlockSize;
@@ -145,7 +145,7 @@ int main(int argc, char** argv) {
             engine_opts.nccl_id_path = opts.nccl_id_path;
         }
 
-        dsv4::QwenEngine engine(checkpoint, engine_opts, opts.layers,
+        pocket::QwenEngine engine(checkpoint, engine_opts, opts.layers,
                                 opts.max_context);
         engine.allocate_batch_slots(2);
         engine.warmup_tp();
@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
         // point: the sequence stays inside one 16-token block, so the working
         // set is one block and the pool floor is what dominates.
         const std::vector<int> prompt = {1, 2};
-        dsv4::QwenBatchSamplingParams sampling;
+        pocket::QwenBatchSamplingParams sampling;
         sampling.max_new_tokens = kCycles;  // never the stopping bound
         sampling.ignore_eos = true;
 
@@ -197,14 +197,14 @@ int main(int argc, char** argv) {
                 return 1;
             }
 
-            auto req = std::make_unique<dsv4::QwenBatchedRequest>();
+            auto req = std::make_unique<pocket::QwenBatchedRequest>();
             req->request_id = request_id;
             req->prompt_tokens = prompt;
             req->slot_id = slot;
             req->sampling = sampling;
-            std::vector<dsv4::QwenBatchedRequest*> batch{req.get()};
+            std::vector<pocket::QwenBatchedRequest*> batch{req.get()};
 
-            const dsv4::QwenBatchPrefillResult prefilled =
+            const pocket::QwenBatchPrefillResult prefilled =
                 engine.batch_prefill(batch, 0);
             if (prefilled.results.empty()) {
                 expect(false, "prefill returned no result");

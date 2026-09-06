@@ -30,18 +30,18 @@ def _env_enabled(name: str, default: str = "0") -> bool:
 def _dense_fp16_enabled(rows: int) -> bool:
     min_rows = max(
         1,
-        int(os.environ.get("DSV4_QWEN4_DENSE_FP16_MIN_ROWS", "128")),
+        int(os.environ.get("POCKETLLM_QWEN4_DENSE_FP16_MIN_ROWS", "128")),
     )
-    return _env_enabled("DSV4_QWEN4_DENSE_FP16", "0") and rows >= min_rows
+    return _env_enabled("POCKETLLM_QWEN4_DENSE_FP16", "0") and rows >= min_rows
 
 
 def _dense_fp16_fp32_output_enabled(rows: int) -> bool:
     min_rows = max(
         1,
-        int(os.environ.get("DSV4_QWEN4_DENSE_FP16_MIN_ROWS", "128")),
+        int(os.environ.get("POCKETLLM_QWEN4_DENSE_FP16_MIN_ROWS", "128")),
     )
     return (
-        _env_enabled("DSV4_QWEN4_DENSE_FP16_FP32_OUTPUT", "0")
+        _env_enabled("POCKETLLM_QWEN4_DENSE_FP16_FP32_OUTPUT", "0")
         and rows >= min_rows
     )
 
@@ -114,15 +114,15 @@ def prefill_linear(
 def _hc_fp16_components(rows: int) -> tuple[bool, bool, bool]:
     min_rows = max(
         1,
-        int(os.environ.get("DSV4_QWEN4_HC_FP16_MIN_ROWS", "128")),
+        int(os.environ.get("POCKETLLM_QWEN4_HC_FP16_MIN_ROWS", "128")),
     )
     if rows < min_rows:
         return False, False, False
-    all_enabled = _env_enabled("DSV4_QWEN4_HC_FP16", "0")
+    all_enabled = _env_enabled("POCKETLLM_QWEN4_HC_FP16", "0")
     return (
-        all_enabled or _env_enabled("DSV4_QWEN4_HC_FP16_MIX_DOWN", "0"),
-        all_enabled or _env_enabled("DSV4_QWEN4_HC_FP16_MIX_UP", "0"),
-        all_enabled or _env_enabled("DSV4_QWEN4_HC_FP16_INJECT", "0"),
+        all_enabled or _env_enabled("POCKETLLM_QWEN4_HC_FP16_MIX_DOWN", "0"),
+        all_enabled or _env_enabled("POCKETLLM_QWEN4_HC_FP16_MIX_UP", "0"),
+        all_enabled or _env_enabled("POCKETLLM_QWEN4_HC_FP16_INJECT", "0"),
     )
 
 
@@ -133,17 +133,17 @@ def _hc_fp16_enabled(rows: int) -> bool:
 def _hc_fp16_fp32_output_enabled(rows: int) -> bool:
     return (
         _hc_fp16_enabled(rows)
-        and _env_enabled("DSV4_QWEN4_HC_FP16_FP32_OUTPUT", "0")
+        and _env_enabled("POCKETLLM_QWEN4_HC_FP16_FP32_OUTPUT", "0")
     )
 
 
 def _hc_cuda_enabled(rows: int) -> bool:
     min_rows = max(
         1,
-        int(os.environ.get("DSV4_QWEN4_HC_CUDA_MIN_ROWS", "128")),
+        int(os.environ.get("POCKETLLM_QWEN4_HC_CUDA_MIN_ROWS", "128")),
     )
     return (
-        _env_enabled("DSV4_QWEN4_HC_CUDA", "0")
+        _env_enabled("POCKETLLM_QWEN4_HC_CUDA", "0")
         and rows >= min_rows
     ) or _hc_fp16_enabled(rows)
 

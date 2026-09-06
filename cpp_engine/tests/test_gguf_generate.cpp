@@ -10,7 +10,7 @@
 //
 // Positional args are: <model.gguf> [max_new_tokens] [seed1 seed2 ...]
 
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -39,7 +39,7 @@ void append_seed_file(const std::string& path, std::vector<int>& seeds) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    dsv4::ForwardSmokeOptions opts;
+    pocket::ForwardSmokeOptions opts;
     std::string ckpt;
     int max_new = 4;
     std::vector<int> seeds;
@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
     if (seeds.empty()) seeds = {1234};
 
     try {
-        auto r = dsv4::run_gguf_generate_smoke(ckpt, seeds, max_new, opts);
+        auto r = pocket::run_gguf_generate_smoke(ckpt, seeds, max_new, opts);
         const bool is_root = (opts.tp_rank == 0);
         if (is_root) {
             auto print_int_vector = [](const char* label, const std::vector<int>& values) {

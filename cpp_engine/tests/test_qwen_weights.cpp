@@ -293,36 +293,36 @@ void require(bool condition, const std::string& message) {
     if (!condition) throw std::runtime_error(message);
 }
 
-void require_segment(const dsv4::QwenTensorRef& ref, size_t index,
+void require_segment(const pocket::QwenTensorRef& ref, size_t index,
                      uint64_t start, uint64_t size, const std::string& label) {
     require(index < ref.segments.size(), label + " missing segment");
     require(ref.segments[index].first == start && ref.segments[index].second == size,
             label + " wrong segment");
 }
 
-void check_rank(const dsv4::SafeTensorsIndex& index, const dsv4::QwenConfig& config, int rank) {
-    dsv4::QwenWeightMap map(index, config, 4, rank);
+void check_rank(const pocket::SafeTensorsIndex& index, const pocket::QwenConfig& config, int rank) {
+    pocket::QwenWeightMap map(index, config, 4, rank);
     require(map.layers().size() == 2, "expected two mapped layers");
     const auto& linear = map.layers()[0].linear_attention;
     const auto& full = map.layers()[1].full_attention;
 
-    require(linear.in_proj_a.weight.dtype == dsv4::SafeDType::BF16,
+    require(linear.in_proj_a.weight.dtype == pocket::SafeDType::BF16,
             "in_proj_a must remain BF16 in storage");
     require(linear.in_proj_a.weight.local_shape == std::vector<uint64_t>({1, 128}),
             "in_proj_a local shape");
-    require(linear.in_proj_a.weight.device_dtype == dsv4::SafeDType::F16,
+    require(linear.in_proj_a.weight.device_dtype == pocket::SafeDType::F16,
             "in_proj_a must upload as FP16 on Turing");
-    require(linear.in_proj_b.weight.dtype == dsv4::SafeDType::BF16,
+    require(linear.in_proj_b.weight.dtype == pocket::SafeDType::BF16,
             "in_proj_b must remain BF16 in storage");
-    require(linear.in_proj_b.weight.device_dtype == dsv4::SafeDType::F16,
+    require(linear.in_proj_b.weight.device_dtype == pocket::SafeDType::F16,
             "in_proj_b must upload as FP16 on Turing");
-    require(linear.in_proj_qkv.kind == dsv4::QwenLinearKind::Fp8Block128,
+    require(linear.in_proj_qkv.kind == pocket::QwenLinearKind::Fp8Block128,
             "legacy QKV must use block-128 FP8");
-    require(linear.in_proj_qkv.weight.dtype == dsv4::SafeDType::F8_E4M3 &&
-                linear.in_proj_qkv.weight.device_dtype == dsv4::SafeDType::F8_E4M3,
+    require(linear.in_proj_qkv.weight.dtype == pocket::SafeDType::F8_E4M3 &&
+                linear.in_proj_qkv.weight.device_dtype == pocket::SafeDType::F8_E4M3,
             "QKV FP8 must remain compressed on device");
-    require(linear.in_proj_qkv.scale.dtype == dsv4::SafeDType::BF16 &&
-                linear.in_proj_qkv.scale.device_dtype == dsv4::SafeDType::F16,
+    require(linear.in_proj_qkv.scale.dtype == pocket::SafeDType::BF16 &&
+                linear.in_proj_qkv.scale.device_dtype == pocket::SafeDType::F16,
             "FP8 scale must upload as FP16 on Turing");
     require(!linear.in_proj_a.has_scale && !linear.in_proj_b.has_scale,
             "BF16 in_proj_a/b must not have FP8 scales");
@@ -367,7 +367,7 @@ void check_rank(const dsv4::SafeTensorsIndex& index, const dsv4::QwenConfig& con
             "out_proj shard offsets");
 
     for (const auto* kv : {&full.k_proj, &full.v_proj}) {
-        require(kv->weight.rule == dsv4::QwenShardRule::ColumnParallel,
+        require(kv->weight.rule == pocket::QwenShardRule::ColumnParallel,
                 "full KV weight must be column parallel");
         require(kv->weight.local_shape == std::vector<uint64_t>({128, 128}),
                 "full KV local shape");
@@ -380,30 +380,30 @@ void check_rank(const dsv4::SafeTensorsIndex& index, const dsv4::QwenConfig& con
 
     require(map.embed_tokens().local_shape == std::vector<uint64_t>({128, 128}),
             "embedding local shape");
-    require(map.embed_tokens().device_dtype == dsv4::SafeDType::F16,
+    require(map.embed_tokens().device_dtype == pocket::SafeDType::F16,
             "embedding must upload as FP16");
-    require(map.lm_head().kind == dsv4::QwenLinearKind::DenseF16,
+    require(map.lm_head().kind == pocket::QwenLinearKind::DenseF16,
             "head linear kind");
     require(map.lm_head().logical_local_shape ==
                 std::vector<uint64_t>({128, 128}) &&
                 map.lm_head().weight.local_shape ==
                     std::vector<uint64_t>({128, 128}),
             "head local shape");
-    require(map.lm_head().weight.device_dtype == dsv4::SafeDType::F16,
+    require(map.lm_head().weight.device_dtype == pocket::SafeDType::F16,
             "head must upload as FP16");
 
-    const dsv4::QwenMtpWeights& mtp = map.mtp();
+    const pocket::QwenMtpWeights& mtp = map.mtp();
     require(mtp.found, "native MTP tensors must be mapped");
-    require(mtp.fc.weight.dtype == dsv4::SafeDType::BF16 &&
-                mtp.fc.weight.device_dtype == dsv4::SafeDType::F16 &&
+    require(mtp.fc.weight.dtype == pocket::SafeDType::BF16 &&
+                mtp.fc.weight.device_dtype == pocket::SafeDType::F16 &&
                 !mtp.fc.has_scale,
             "MTP fusion projection must stay dense FP16 on Turing");
-    require(mtp.fc.weight.rule == dsv4::QwenShardRule::Replicated &&
+    require(mtp.fc.weight.rule == pocket::QwenShardRule::Replicated &&
                 mtp.fc.weight.local_shape == std::vector<uint64_t>({128, 256}),
             "MTP fusion projection must be replicated");
-    require(mtp.pre_fc_norm_embedding.device_dtype == dsv4::SafeDType::F16 &&
-                mtp.pre_fc_norm_hidden.device_dtype == dsv4::SafeDType::F16 &&
-                mtp.norm.device_dtype == dsv4::SafeDType::F16,
+    require(mtp.pre_fc_norm_embedding.device_dtype == pocket::SafeDType::F16 &&
+                mtp.pre_fc_norm_hidden.device_dtype == pocket::SafeDType::F16 &&
+                mtp.norm.device_dtype == pocket::SafeDType::F16,
             "MTP norms must materialize as FP16");
     const auto& mtp_full = mtp.layer.full_attention;
     require(mtp_full.q_proj.weight.local_shape ==
@@ -418,32 +418,32 @@ void check_rank(const dsv4::SafeTensorsIndex& index, const dsv4::QwenConfig& con
                 std::vector<uint64_t>({128, 128}),
             "MTP output projection local shape");
 
-    const dsv4::QwenHostTensor qkv_host =
-        dsv4::qwen_materialize_host_tensor(index, linear.in_proj_qkv.weight);
-    require(qkv_host.storage_dtype == dsv4::SafeDType::F8_E4M3 &&
-                qkv_host.device_dtype == dsv4::SafeDType::F8_E4M3,
+    const pocket::QwenHostTensor qkv_host =
+        pocket::qwen_materialize_host_tensor(index, linear.in_proj_qkv.weight);
+    require(qkv_host.storage_dtype == pocket::SafeDType::F8_E4M3 &&
+                qkv_host.device_dtype == pocket::SafeDType::F8_E4M3,
             "QKV host materializer must preserve FP8");
     require(qkv_host.bytes.size() == 384u * 128u, "QKV host bytes");
-    const dsv4::QwenHostTensor scale_host =
-        dsv4::qwen_materialize_host_tensor(index, linear.in_proj_qkv.scale);
-    require(scale_host.storage_dtype == dsv4::SafeDType::BF16 &&
-                scale_host.device_dtype == dsv4::SafeDType::F16,
+    const pocket::QwenHostTensor scale_host =
+        pocket::qwen_materialize_host_tensor(index, linear.in_proj_qkv.scale);
+    require(scale_host.storage_dtype == pocket::SafeDType::BF16 &&
+                scale_host.device_dtype == pocket::SafeDType::F16,
             "scale host materializer must convert to FP16");
     require(scale_host.bytes.size() == 3u * sizeof(uint16_t), "scale host bytes");
-    const dsv4::QwenHostTensor a_host =
-        dsv4::qwen_materialize_host_tensor(index, linear.in_proj_a.weight);
-    require(a_host.device_dtype == dsv4::SafeDType::F16 &&
+    const pocket::QwenHostTensor a_host =
+        pocket::qwen_materialize_host_tensor(index, linear.in_proj_a.weight);
+    require(a_host.device_dtype == pocket::SafeDType::F16 &&
                 a_host.bytes.size() == 128u * sizeof(uint16_t),
             "in_proj_a host materializer must convert local BF16 shard");
 
-    require(dsv4::qwen_bf16_to_fp16_bits(0x3f80u) == 0x3c00u,
+    require(pocket::qwen_bf16_to_fp16_bits(0x3f80u) == 0x3c00u,
             "BF16 1.0 converts to FP16 1.0");
-    require(dsv4::qwen_bf16_to_fp16_bits(0xbf80u) == 0xbc00u,
+    require(pocket::qwen_bf16_to_fp16_bits(0xbf80u) == 0xbc00u,
             "BF16 -1.0 converts to FP16 -1.0");
-    if (dsv4::cuda_runtime_available()) {
-        dsv4::QwenDeviceTensor device_scale =
-            dsv4::qwen_upload_tensor(index, linear.in_proj_qkv.scale);
-        require(device_scale.device_dtype == dsv4::SafeDType::F16,
+    if (pocket::cuda_runtime_available()) {
+        pocket::QwenDeviceTensor device_scale =
+            pocket::qwen_upload_tensor(index, linear.in_proj_qkv.scale);
+        require(device_scale.device_dtype == pocket::SafeDType::F16,
                 "uploaded scale dtype");
         std::vector<uint8_t> device_bytes(scale_host.bytes.size(), 0);
         require(cudaDeviceSynchronize() == cudaSuccess, "scale upload sync");
@@ -461,19 +461,19 @@ void check_mixed_tp2() {
     const std::string dir = mixed_fixture_dir();
     require(write_specs_fixture(dir, mixed_tensor_specs(), true),
             "could not create mixed TP2 fixture");
-    const dsv4::QwenConfig config = dsv4::QwenConfig::from_hf_config(dir);
-    dsv4::SafeTensorsIndex index(dir);
-    dsv4::QwenWeightMap rank0(index, config, 2, 0);
-    dsv4::QwenWeightMap rank1(index, config, 2, 1);
-    for (const dsv4::QwenWeightMap* map : {&rank0, &rank1}) {
-        require(map->lm_head().kind == dsv4::QwenLinearKind::Fp8Channel,
+    const pocket::QwenConfig config = pocket::QwenConfig::from_hf_config(dir);
+    pocket::SafeTensorsIndex index(dir);
+    pocket::QwenWeightMap rank0(index, config, 2, 0);
+    pocket::QwenWeightMap rank1(index, config, 2, 1);
+    for (const pocket::QwenWeightMap* map : {&rank0, &rank1}) {
+        require(map->lm_head().kind == pocket::QwenLinearKind::Fp8Channel,
                 "mixed head kind");
         require(map->lm_head().logical_local_shape ==
                     std::vector<uint64_t>({256, 128}) &&
                 map->lm_head().scale.local_shape ==
                     std::vector<uint64_t>({256, 1}),
                 "mixed head local shape");
-        require(map->mtp().fc.kind == dsv4::QwenLinearKind::DenseF16,
+        require(map->mtp().fc.kind == pocket::QwenLinearKind::DenseF16,
                 "mixed MTP remains dense");
         const auto kinds = map->checkpoint_linear_kind_counts();
         require(kinds.dense_f16 == 3 && kinds.fp8_block128 == 14 &&
@@ -484,9 +484,9 @@ void check_mixed_tp2() {
                     std::to_string(kinds.fp8_channel) + " nvfp4=" +
                     std::to_string(kinds.nvfp4_group16));
         const auto& mlp = map->layers()[0].mlp;
-        require(mlp.gate_proj.kind == dsv4::QwenLinearKind::NvFp4Group16 &&
-                    mlp.up_proj.kind == dsv4::QwenLinearKind::NvFp4Group16 &&
-                    mlp.down_proj.kind == dsv4::QwenLinearKind::NvFp4Group16,
+        require(mlp.gate_proj.kind == pocket::QwenLinearKind::NvFp4Group16 &&
+                    mlp.up_proj.kind == pocket::QwenLinearKind::NvFp4Group16 &&
+                    mlp.down_proj.kind == pocket::QwenLinearKind::NvFp4Group16,
                 "mixed MLP NVFP4 kinds");
         require(mlp.gate_proj.logical_local_shape ==
                     std::vector<uint64_t>({256, 128}) &&
@@ -507,9 +507,9 @@ void check_mixed_tp2() {
                 rank1.layers()[0].mlp.down_proj.weight.shard_start == 128 &&
                 rank1.layers()[0].mlp.down_proj.scale.shard_start == 16,
             "NVFP4 logical K shard offsets");
-    const auto host0 = dsv4::qwen_materialize_nvfp4_host_linear(
+    const auto host0 = pocket::qwen_materialize_nvfp4_host_linear(
         index, rank0.layers()[0].mlp.gate_proj);
-    const auto host1 = dsv4::qwen_materialize_nvfp4_host_linear(
+    const auto host1 = pocket::qwen_materialize_nvfp4_host_linear(
         index, rank1.layers()[0].mlp.gate_proj);
     require(host0.logical_shape == std::vector<uint64_t>({256, 128}) &&
                 host0.blocks.size() == 512 &&
@@ -518,12 +518,12 @@ void check_mixed_tp2() {
             "NVFP4 host interleave metadata");
     require(host0.blocks.front().qs[1] != host1.blocks.front().qs[1],
             "NVFP4 nonzero rank sentinel");
-    const auto packed0 = dsv4::qwen_materialize_host_tensor(
+    const auto packed0 = pocket::qwen_materialize_host_tensor(
         index, rank0.layers()[0].mlp.gate_proj.weight);
-    const auto scales0 = dsv4::qwen_materialize_host_tensor(
+    const auto scales0 = pocket::qwen_materialize_host_tensor(
         index, rank0.layers()[0].mlp.gate_proj.scale);
     const uint64_t interleaved_bytes = host0.blocks.size() *
-        sizeof(dsv4::QwenNvfp4Block64);
+        sizeof(pocket::QwenNvfp4Block64);
     require(packed0.bytes.size() == 256u * 128u / 2u &&
                 scales0.bytes.size() == 256u * 128u / 16u &&
                 interleaved_bytes == packed0.bytes.size() + scales0.bytes.size(),
@@ -549,8 +549,8 @@ int main() {
             std::cout << "[SKIP] could not create Qwen weight fixture\n";
             return 0;
         }
-        const dsv4::QwenConfig config = dsv4::QwenConfig::from_hf_config(dir);
-        dsv4::SafeTensorsIndex index(dir);
+        const pocket::QwenConfig config = pocket::QwenConfig::from_hf_config(dir);
+        pocket::SafeTensorsIndex index(dir);
         for (int rank = 0; rank < 4; ++rank) check_rank(index, config, rank);
         check_mixed_tp2();
         std::cout << "[PASS] test_qwen_weights tp=4 legacy tp=2 mixed layers="

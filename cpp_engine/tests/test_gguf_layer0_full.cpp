@@ -3,7 +3,7 @@
 // +x (residual) -> ffn_norm -> (Q8_0 shared expert + Q2 routed MoE with real
 // hash-gate weights) -> +x (residual) -> x_out.
 
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
     const int token = argc >= 3 ? std::atoi(argv[2]) : 1234;
     const int position = argc >= 4 ? std::atoi(argv[3]) : 0;
     try {
-        auto r = dsv4::run_gguf_layer0_full_smoke(argv[1], token, position);
+        auto r = pocket::run_gguf_layer0_full_smoke(argv[1], token, position);
         std::printf("token=%d position=%d dim=%d moe_inter=%d heads=%d head_dim=%d n_active=%d\n",
                     token, position, r.dim, r.moe_inter_dim, r.heads, r.head_dim, r.n_active);
         std::printf("expert_ids        = [");

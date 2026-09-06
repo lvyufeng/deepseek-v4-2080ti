@@ -49,7 +49,7 @@ double milliseconds(cudaEvent_t start, cudaEvent_t stop, int iterations) {
 
 int main(int argc, char** argv) {
     try {
-        if (!dsv4::cuda_runtime_available()) {
+        if (!pocket::cuda_runtime_available()) {
             std::printf("[SKIP] bench_qwen_nvfp4 requires CUDA\n");
             return 0;
         }
@@ -75,7 +75,7 @@ int main(int argc, char** argv) {
         require(cols % 64 == 0, "NVFP4 columns must be block64 aligned");
         const int blocks_per_row = cols / 64;
         std::vector<uint16_t> input(static_cast<size_t>(batch) * cols);
-        std::vector<dsv4::QwenNvfp4Block64> blocks(
+        std::vector<pocket::QwenNvfp4Block64> blocks(
             static_cast<size_t>(rows) * blocks_per_row);
         std::mt19937 rng(12345);
         std::uniform_real_distribution<float> activation(-2.0f, 2.0f);
@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
         DeviceBuffer dx, dw, dy, dq8, dq8_scale;
         uint16_t* d_x = dx.allocate<uint16_t>(input.size());
         uint8_t* d_blocks = dw.allocate<uint8_t>(
-            blocks.size() * sizeof(dsv4::QwenNvfp4Block64));
+            blocks.size() * sizeof(pocket::QwenNvfp4Block64));
         uint16_t* d_y = dy.allocate<uint16_t>(static_cast<size_t>(batch) * rows);
         int8_t* d_q8 = dq8.allocate<int8_t>(static_cast<size_t>(batch) * cols);
         float* d_q8_scale = dq8_scale.allocate<float>(
@@ -107,26 +107,26 @@ int main(int argc, char** argv) {
                            cudaMemcpyHostToDevice) == cudaSuccess,
                 "input upload");
         require(cudaMemcpy(d_blocks, blocks.data(),
-                           blocks.size() * sizeof(dsv4::QwenNvfp4Block64),
+                           blocks.size() * sizeof(pocket::QwenNvfp4Block64),
                            cudaMemcpyHostToDevice) == cudaSuccess,
                 "weight upload");
 
         auto reference = [&] {
-            return dsv4::qwen_nvfp4_group16_matmul_rows_f16_cuda(
+            return pocket::qwen_nvfp4_group16_matmul_rows_f16_cuda(
                 d_x, d_blocks, d_y, batch, rows, cols, cols, rows,
                 blocks_per_row, 1.0f);
         };
         auto quantize = [&] {
-            return dsv4::qwen_nvfp4_quantize_q8_group32_f16_cuda(
+            return pocket::qwen_nvfp4_quantize_q8_group32_f16_cuda(
                 d_x, d_q8, d_q8_scale, batch, cols, cols);
         };
         auto dp4a = [&] {
-            return dsv4::qwen_nvfp4_group16_matmul_q8_f16_cuda(
+            return pocket::qwen_nvfp4_group16_matmul_q8_f16_cuda(
                 d_q8, d_q8_scale, d_blocks, d_y, batch, rows, cols, cols,
                 rows, blocks_per_row, 1.0f);
         };
         auto wmma = [&] {
-            return dsv4::qwen_nvfp4_group16_matmul_q8_wmma_f16_cuda(
+            return pocket::qwen_nvfp4_group16_matmul_q8_wmma_f16_cuda(
                 d_q8, d_q8_scale, d_blocks, d_y, batch, rows, cols, cols,
                 rows, blocks_per_row, 1.0f);
         };
@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
         const double dp4a_ms = measure(dp4a);
         const double wmma_ms = measure(wmma);
         auto wide_n64 = [&] {
-            return dsv4::qwen_nvfp4_group16_matmul_q8_wide_n64_f16_cuda(
+            return pocket::qwen_nvfp4_group16_matmul_q8_wide_n64_f16_cuda(
                 d_q8, d_q8_scale, d_blocks, d_y, batch, rows, cols, cols,
                 rows, blocks_per_row, 1.0f);
         };

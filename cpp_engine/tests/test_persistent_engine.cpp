@@ -18,18 +18,18 @@ int main(int argc, char** argv) {
 
         cudaSetDevice(0);
 
-        dsv4::ForwardSmokeOptions opts;
+        pocket::ForwardSmokeOptions opts;
         opts.tp_world = 1;
         opts.tp_rank = 0;
         opts.device = 0;
 
         std::vector<int> prompt = {0, 17665, 31114, 12, 526, 318, 264, 4017, 30};
 
-        dsv4::PersistentEngine engine(ckpt, opts, layer_count, /*max_context=*/2048);
+        pocket::PersistentEngine engine(ckpt, opts, layer_count, /*max_context=*/2048);
 
         auto run_once = [&](const std::vector<int>& seed, std::vector<int>& out) {
             engine.reset_session();
-            dsv4::SamplingParams sp;
+            pocket::SamplingParams sp;
             sp.greedy = true;
             int tok = engine.prefill(seed, sp);
             out.clear();

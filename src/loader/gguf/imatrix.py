@@ -56,7 +56,7 @@ class RoutedIMatrixCollector:
     def __init__(self) -> None:
         self.enabled = os.getenv("DEEPSEEK_IMATRIX_CAPTURE", "0").lower() in {"1", "true", "yes"}
         self.output_path = _rank_output_path(os.getenv("DEEPSEEK_IMATRIX_CAPTURE_PATH", ""))
-        self.dataset = os.getenv("DEEPSEEK_IMATRIX_DATASET", "dsv4_runtime_capture")
+        self.dataset = os.getenv("DEEPSEEK_IMATRIX_DATASET", "pocketllm_runtime_capture")
         self.chunk_size = max(1, int(os.getenv("DEEPSEEK_IMATRIX_CHUNK_SIZE", "512")))
         self.n_experts = max(1, int(os.getenv("DEEPSEEK_IMATRIX_EXPERTS", str(DEFAULT_EXPERT_COUNT))))
         self.roles = _parse_str_set(os.getenv("DEEPSEEK_IMATRIX_ROLES", ""))
@@ -180,7 +180,7 @@ def merge_imatrix_files(
     inputs: Sequence[str],
     output_path: str,
     *,
-    dataset: str = "dsv4_runtime_capture_merged",
+    dataset: str = "pocketllm_runtime_capture_merged",
     chunk_size: int | None = None,
 ) -> None:
     if not inputs:
@@ -247,7 +247,7 @@ def _pack_string(value: str) -> bytes:
 
 def _write_metadata(f: BinaryIO, dataset: str, chunk_size: int, chunk_count: int) -> None:
     _write_kv_string(f, "general.type", "imatrix")
-    _write_kv_string_array(f, "imatrix.datasets", [dataset or "dsv4_runtime_capture"])
+    _write_kv_string_array(f, "imatrix.datasets", [dataset or "pocketllm_runtime_capture"])
     _write_kv_u32(f, "imatrix.chunk_count", int(chunk_count))
     _write_kv_u32(f, "imatrix.chunk_size", int(chunk_size))
 

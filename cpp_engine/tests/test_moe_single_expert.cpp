@@ -73,17 +73,17 @@ std::vector<float> silu_mul_cpu(const std::vector<float>& gate, const std::vecto
 }
 
 struct TensorPair {
-    dsv4::SafeTensorsShard shard;
-    const dsv4::SafeTensorInfo* weight;
-    const dsv4::SafeTensorInfo* scale;
-    dsv4::SafeFp4TensorPair pair;
+    pocket::SafeTensorsShard shard;
+    const pocket::SafeTensorInfo* weight;
+    const pocket::SafeTensorInfo* scale;
+    pocket::SafeFp4TensorPair pair;
 };
 
-TensorPair open_pair(const dsv4::SafeTensorsIndex& index, const std::string& name) {
+TensorPair open_pair(const pocket::SafeTensorsIndex& index, const std::string& name) {
     const std::string* shard_name = index.shard_for_tensor(name);
     if (shard_name == nullptr) throw std::runtime_error("missing tensor: " + name);
-    TensorPair out{dsv4::SafeTensorsShard(index.shard_path(*shard_name)), nullptr, nullptr, {}};
-    out.pair = dsv4::resolve_fp4_tensor_pair(index, out.shard, name);
+    TensorPair out{pocket::SafeTensorsShard(index.shard_path(*shard_name)), nullptr, nullptr, {}};
+    out.pair = pocket::resolve_fp4_tensor_pair(index, out.shard, name);
     out.weight = out.shard.find_tensor(out.pair.weight_name);
     out.scale = out.shard.find_tensor(out.pair.scale_name);
     return out;
@@ -97,17 +97,17 @@ int main(int argc, char** argv) {
             std::cerr << "usage: test_moe_single_expert <ckpt_dir>\n";
             return 2;
         }
-        if (!dsv4::cuda_runtime_available()) {
+        if (!pocket::cuda_runtime_available()) {
             std::cout << "[SKIP] CUDA runtime is not available\n";
             return 0;
         }
         const std::string ckpt = argv[1];
-        dsv4::SafeTensorsIndex index(ckpt);
+        pocket::SafeTensorsIndex index(ckpt);
 
         const std::string norm_name = "layers.0.ffn_norm.weight";
         const std::string* norm_shard_name = index.shard_for_tensor(norm_name);
         if (norm_shard_name == nullptr) throw std::runtime_error("missing norm tensor");
-        dsv4::SafeTensorsShard norm_shard(index.shard_path(*norm_shard_name));
+        pocket::SafeTensorsShard norm_shard(index.shard_path(*norm_shard_name));
         const auto* norm_info = norm_shard.find_tensor(norm_name);
         auto* gamma = reinterpret_cast<const uint16_t*>(norm_shard.tensor_data(*norm_info));
 
@@ -160,11 +160,11 @@ int main(int argc, char** argv) {
         check_cuda(cudaMemcpy(d_w3, w3.shard.tensor_data(*w3.weight), w3.weight->nbytes, cudaMemcpyHostToDevice), "copy w3");
         check_cuda(cudaMemcpy(d_s3, w3.shard.tensor_data(*w3.scale), w3.scale->nbytes, cudaMemcpyHostToDevice), "copy s3");
 
-        if (!dsv4::rmsnorm_bf16_gamma_cuda(d_x, d_gamma, d_norm, dim, 1e-6f)) throw std::runtime_error("rmsnorm launch failed");
-        if (!dsv4::fp4_e2m1_e8m0_matvec_cuda(d_norm, d_w1, d_s1, d_gate, inter, dim)) throw std::runtime_error("w1 launch failed");
-        if (!dsv4::fp4_e2m1_e8m0_matvec_cuda(d_norm, d_w3, d_s3, d_up, inter, dim)) throw std::runtime_error("w3 launch failed");
-        if (!dsv4::silu_mul_cuda(d_gate, d_up, d_hidden, inter)) throw std::runtime_error("silu_mul launch failed");
-        if (!dsv4::fp4_e2m1_e8m0_matvec_cuda(d_hidden, d_w2, d_s2, d_y, dim, inter)) throw std::runtime_error("w2 launch failed");
+        if (!pocket::rmsnorm_bf16_gamma_cuda(d_x, d_gamma, d_norm, dim, 1e-6f)) throw std::runtime_error("rmsnorm launch failed");
+        if (!pocket::fp4_e2m1_e8m0_matvec_cuda(d_norm, d_w1, d_s1, d_gate, inter, dim)) throw std::runtime_error("w1 launch failed");
+        if (!pocket::fp4_e2m1_e8m0_matvec_cuda(d_norm, d_w3, d_s3, d_up, inter, dim)) throw std::runtime_error("w3 launch failed");
+        if (!pocket::silu_mul_cuda(d_gate, d_up, d_hidden, inter)) throw std::runtime_error("silu_mul launch failed");
+        if (!pocket::fp4_e2m1_e8m0_matvec_cuda(d_hidden, d_w2, d_s2, d_y, dim, inter)) throw std::runtime_error("w2 launch failed");
         check_cuda(cudaDeviceSynchronize(), "sync kernels");
 
         std::vector<float> got(dim);

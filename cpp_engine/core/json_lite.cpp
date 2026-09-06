@@ -6,7 +6,7 @@
 #include <limits>
 #include <sstream>
 
-namespace dsv4 {
+namespace pocket {
 
 const JsonObject& JsonValue::object() const {
     if (!is_object()) throw std::runtime_error("JSON value is not an object");
@@ -207,4 +207,4 @@ std::vector<uint64_t> json_required_u64_array(const JsonObject& obj, const std::
     return out;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

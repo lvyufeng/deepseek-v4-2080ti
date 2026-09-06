@@ -5,7 +5,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 __device__ __forceinline__ float fp16_to_float(uint16_t bits) {
@@ -967,4 +967,4 @@ bool qwen_silu_mul_rows_cuda(const float* d_gate, const float* d_up, float* d_y,
     return cudaGetLastError() == cudaSuccess;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

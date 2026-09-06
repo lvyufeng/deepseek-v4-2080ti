@@ -126,11 +126,11 @@ int main() {
         return 1;
     }
 
-    check(dsv4::is_qwen3_5_checkpoint(dir), "is_qwen3_5_checkpoint detects qwen3_5 root model_type");
-    check(dsv4::is_qwen3_5_checkpoint(dir),
+    check(pocket::is_qwen3_5_checkpoint(dir), "is_qwen3_5_checkpoint detects qwen3_5 root model_type");
+    check(pocket::is_qwen3_5_checkpoint(dir),
           "a multimodal root with language_model_only=false still dispatches to Qwen");
 
-    const dsv4::QwenConfig cfg = dsv4::QwenConfig::from_hf_config(dir);
+    const pocket::QwenConfig cfg = pocket::QwenConfig::from_hf_config(dir);
     check(cfg.is_qwen3_5(), "config reports qwen3_5 architecture");
     check_eq(cfg.hidden_size, 5120u, "hidden_size");
     check_eq(cfg.vocab_size, 248320u, "vocab_size");
@@ -182,8 +182,8 @@ int main() {
             write_file(tp2_dir + "/config.json", tp2_only)) {
             bool parsed = true;
             try {
-                const dsv4::QwenConfig tp2_cfg =
-                    dsv4::QwenConfig::from_hf_config(tp2_dir);
+                const pocket::QwenConfig tp2_cfg =
+                    pocket::QwenConfig::from_hf_config(tp2_dir);
                 parsed = tp2_cfg.full_attention.num_key_value_heads == 2;
             } catch (const std::exception&) {
                 parsed = false;
@@ -205,7 +205,7 @@ int main() {
         if (std::system(bad_mkdir.c_str()) == 0 && write_file(bad_dir + "/config.json", no_inter)) {
             bool threw = false;
             try {
-                (void)dsv4::QwenConfig::from_hf_config(bad_dir);
+                (void)pocket::QwenConfig::from_hf_config(bad_dir);
             } catch (const std::exception&) {
                 threw = true;
             }

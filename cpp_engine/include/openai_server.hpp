@@ -7,7 +7,7 @@
 #include <mutex>
 #include <string>
 
-namespace dsv4 {
+namespace pocket {
 
 struct OpenAIServerConfig {
     int port = 8000;
@@ -34,4 +34,4 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace dsv4
+}  // namespace pocket

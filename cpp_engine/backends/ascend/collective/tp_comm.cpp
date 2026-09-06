@@ -23,7 +23,7 @@
 
 #include "tp_comm.hpp"
 
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
 #include "device_runtime.hpp"
 
 #include <acl/acl.h>
@@ -45,17 +45,17 @@
 #include <vector>
 #endif
 
-namespace dsv4 {
+namespace pocket {
 
 bool tp_comm_available() {
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
     return true;
 #else
     return false;
 #endif
 }
 
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
 namespace {
 
 void check_acl(aclError err, const char* what) {
@@ -127,7 +127,7 @@ HcclRootInfo load_or_create_root_info(int rank, const char* path) {
     // the same disk skew by minutes. A short timeout makes a slow loader look
     // like a communicator failure.
     int attempts = 6000;  // 10 minutes at 100ms
-    if (const char* env = std::getenv("DSV4_CPP_NCCL_ID_WAIT_ATTEMPTS")) {
+    if (const char* env = std::getenv("POCKETLLM_CPP_NCCL_ID_WAIT_ATTEMPTS")) {
         const int value = std::atoi(env);
         if (value > 0) attempts = value;
     }
@@ -614,6 +614,6 @@ TpTopResult tp_global_top1(int world, int rank, int device, const char* id_path,
     result.logit = merged_logit;
     return result;
 }
-#endif  // DSV4_HAVE_TP_COMM
+#endif  // POCKET_HAVE_TP_COMM
 
-}  // namespace dsv4
+}  // namespace pocket

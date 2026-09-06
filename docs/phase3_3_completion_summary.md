@@ -191,8 +191,8 @@ layer_forward(mtp_layer, mtp_fused.f16_data(),
 ### ✅ 编译成功
 
 ```bash
-cd build && make -j8 dsv4_cpp_engine
-[100%] Built target dsv4_cpp_engine
+cd build && make -j8 pocketllm_engine
+[100%] Built target pocketllm_engine
 ```
 
 **结果**:
@@ -463,7 +463,7 @@ Phase 3.3 成功实现了 **Slot ID Threading and Batch API Integration**：
 
 **编译输出**:
 ```
-[100%] Built target dsv4_cpp_engine
+[100%] Built target pocketllm_engine
 ```
 
 **代码状态**: 已完成，待测试 ✅

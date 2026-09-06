@@ -27,7 +27,7 @@ void check_cuda(cudaError_t status, const std::string& message) {
 
 uint16_t half_bits(float value) {
     const uint32_t bits = *reinterpret_cast<const uint32_t*>(&value);
-    return dsv4::qwen_bf16_to_fp16_bits(static_cast<uint16_t>(bits >> 16));
+    return pocket::qwen_bf16_to_fp16_bits(static_cast<uint16_t>(bits >> 16));
 }
 
 float half_value(uint16_t value) {
@@ -77,7 +77,7 @@ void test_dynamic_conv() {
     uint16_t* d_base = upload(h_base);
     uint16_t* d_output = nullptr;
     check_cuda(cudaMalloc(&d_output, h_input.size() * sizeof(uint16_t)), "conv output");
-    require(dsv4::qwen_dflash2_grouped_dynamic_conv_f16_cuda(
+    require(pocket::qwen_dflash2_grouped_dynamic_conv_f16_cuda(
                 d_input, d_dynamic, d_base, d_output, rows, hidden, groups,
                 group_size, kernel), "dynamic convolution launch failed");
     const auto actual = download(d_output, h_input.size());
@@ -137,10 +137,10 @@ void test_strided_dynamic_conv() {
                "compact conv output");
     check_cuda(cudaMalloc(&d_strided_output, h_input.size() * sizeof(uint16_t)),
                "strided conv output");
-    require(dsv4::qwen_dflash2_grouped_dynamic_conv_f16_cuda(
+    require(pocket::qwen_dflash2_grouped_dynamic_conv_f16_cuda(
                 d_input, d_compact, d_base, d_compact_output, rows, hidden,
                 groups, group_size, kernel), "compact convolution launch failed");
-    require(dsv4::qwen_dflash2_grouped_dynamic_conv_strided_f16_cuda(
+    require(pocket::qwen_dflash2_grouped_dynamic_conv_strided_f16_cuda(
                 d_input, d_strided, d_base, d_strided_output, rows, hidden,
                 groups, group_size, kernel, dynamic_stride, 0),
             "strided convolution launch failed");
@@ -169,7 +169,7 @@ void test_local_topk() {
                "top-k tokens");
     check_cuda(cudaMalloc(&d_values, static_cast<size_t>(rows) * top_k * sizeof(float)),
                "top-k values");
-    require(dsv4::qwen_dflash2_local_topk_f32_cuda(
+    require(pocket::qwen_dflash2_local_topk_f32_cuda(
                 d_logits, d_tokens, d_values, rows, vocab, vocab_start, top_k),
             "local top-k launch failed");
     const auto actual_tokens = download(d_tokens, static_cast<size_t>(rows) * top_k);
@@ -228,7 +228,7 @@ void test_local_topk_split_matches_reference() {
     check_cuda(cudaMalloc(&d_ref_values, out_elements * sizeof(float)), "ref values");
     check_cuda(cudaMalloc(&d_split_tokens, out_elements * sizeof(int)), "split tokens");
     check_cuda(cudaMalloc(&d_split_values, out_elements * sizeof(float)), "split values");
-    require(dsv4::qwen_dflash2_local_topk_f32_cuda(
+    require(pocket::qwen_dflash2_local_topk_f32_cuda(
                 d_logits, d_ref_tokens, d_ref_values, rows, vocab, vocab_start,
                 top_k),
             "reference local top-k launch failed");
@@ -244,7 +244,7 @@ void test_local_topk_split_matches_reference() {
                    "partial tokens");
         check_cuda(cudaMalloc(&d_partial_values, partial_elements * sizeof(float)),
                    "partial values");
-        require(dsv4::qwen_dflash2_local_topk_split_f32_cuda(
+        require(pocket::qwen_dflash2_local_topk_split_f32_cuda(
                     d_logits, d_partial_tokens, d_partial_values, d_split_tokens,
                     d_split_values, rows, vocab, vocab_start, top_k, splits),
                 "split local top-k launch failed");
@@ -301,11 +301,11 @@ void test_selector_viterbi_beats_greedy() {
         check_cuda(cudaMalloc(&d_greedy, rows * sizeof(int)), "greedy path");
         check_cuda(cudaMalloc(&d_viterbi, rows * sizeof(int)), "viterbi path");
 
-        require(dsv4::qwen_dflash2_selector_path_projected_f16_cuda(
+        require(pocket::qwen_dflash2_selector_path_projected_f16_cuda(
                     d_projected, d_candidates, d_unary, d_predecessor,
                     d_successor, d_greedy, rows, vocab, rank, top_k, anchor),
                 "greedy selector launch failed");
-        require(dsv4::qwen_dflash2_selector_path_viterbi_f16_cuda(
+        require(pocket::qwen_dflash2_selector_path_viterbi_f16_cuda(
                     d_projected, d_candidates, d_unary, d_predecessor,
                     d_successor, d_viterbi, rows, vocab, rank, top_k, anchor),
                 "viterbi selector launch failed");
@@ -393,7 +393,7 @@ void test_device_global_top1_merge() {
     cudaStream_t stream = nullptr;
     check_cuda(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking),
                "global top-1 stream");
-    require(dsv4::qwen_dflash2_merge_topk_f32_cuda(
+    require(pocket::qwen_dflash2_merge_topk_f32_cuda(
                 d_gathered_tokens, d_gathered_logits, d_output_tokens,
                 d_output_logits, world, rows, top_k, stream),
             "device global top-1 merge launch failed");
@@ -472,7 +472,7 @@ void test_packed_top1_key() {
     check_cuda(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking),
                "packed top-1 stream");
     for (int rank = 0; rank < world; ++rank) {
-        require(dsv4::qwen_dflash2_pack_top1_key_f32_cuda(
+        require(pocket::qwen_dflash2_pack_top1_key_f32_cuda(
                     d_tokens[rank], d_logits[rank], d_keys[rank], rows, stream),
                 "packed top-1 pack launch failed");
         check_cuda(cudaMemcpyAsync(packed[rank].data(), d_keys[rank],
@@ -495,7 +495,7 @@ void test_packed_top1_key() {
                "packed top-1 output tokens");
     check_cuda(cudaMalloc(&d_output_logits, rows * sizeof(float)),
                "packed top-1 output logits");
-    require(dsv4::qwen_dflash2_unpack_top1_key_f32_cuda(
+    require(pocket::qwen_dflash2_unpack_top1_key_f32_cuda(
                 d_reduced, d_output_tokens, d_output_logits, rows, stream),
             "packed top-1 unpack launch failed");
     std::vector<int> output_tokens(rows);
@@ -567,7 +567,7 @@ void test_selector_path() {
     uint16_t* d_projection = upload(h_projection);
     int* d_output = nullptr;
     check_cuda(cudaMalloc(&d_output, rows * sizeof(int)), "selector output");
-    require(dsv4::qwen_dflash2_selector_path_f16_cuda(
+    require(pocket::qwen_dflash2_selector_path_f16_cuda(
                 d_hidden, d_candidates, d_unary, d_predecessor, d_successor,
                 d_projection, d_output, rows, vocab, hidden_size, rank, top_k,
                 anchor), "selector launch failed");
@@ -627,12 +627,12 @@ void test_grouped_attention() {
                "reference attention output");
     check_cuda(cudaMalloc(&d_grouped, output_count * sizeof(uint16_t)),
                "grouped attention output");
-    require(dsv4::qwen_dflash2_attention_f16_cuda(
+    require(pocket::qwen_dflash2_attention_f16_cuda(
                 d_q, d_context_k, d_context_v, d_block_k, d_block_v,
                 d_reference, rows, q_heads, kv_heads, head_dim, context_len,
                 max_context, sliding_window),
             "reference attention launch failed");
-    require(dsv4::qwen_dflash2_attention_grouped_f16_cuda(
+    require(pocket::qwen_dflash2_attention_grouped_f16_cuda(
                 d_q, d_context_k, d_context_v, d_block_k, d_block_v,
                 d_grouped, rows, q_heads, kv_heads, head_dim, context_len,
                 max_context, sliding_window),
@@ -689,16 +689,16 @@ void test_rope_and_attention() {
     uint16_t* d_block_v = upload(h_block_v);
     uint16_t* d_output = nullptr;
     check_cuda(cudaMalloc(&d_output, h_q.size() * sizeof(uint16_t)), "attention output");
-    require(dsv4::qwen_dflash2_rope_rows_f16_cuda(
+    require(pocket::qwen_dflash2_rope_rows_f16_cuda(
                 d_q, d_k, rows, q_heads, kv_heads, head_dim, 3, 10000000.0f),
             "DFlash2 RoPE launch failed");
-    require(dsv4::qwen_dflash2_rope_k_rows_f16_cuda(
+    require(pocket::qwen_dflash2_rope_k_rows_f16_cuda(
                 d_k_only, rows, kv_heads, head_dim, 3, 10000000.0f),
             "DFlash2 K-only RoPE launch failed");
     const auto k_only = download(d_k_only, h_k.size());
     const auto paired_k = download(d_k, h_k.size());
     require(k_only == paired_k, "K-only RoPE differs from paired K RoPE");
-    require(dsv4::qwen_dflash2_attention_f16_cuda(
+    require(pocket::qwen_dflash2_attention_f16_cuda(
                 d_q, d_context_k, d_context_v, d_block_k, d_block_v, d_output,
                 rows, q_heads, kv_heads, head_dim, 2, 8, 2048),
             "DFlash2 attention launch failed");

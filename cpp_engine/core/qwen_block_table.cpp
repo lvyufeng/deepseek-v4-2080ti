@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace dsv4 {
+namespace pocket {
 
 QwenBlockTable::QwenBlockTable(QwenBlockPool* pool, int max_slots,
                               int max_context)
@@ -127,4 +127,4 @@ void QwenBlockTable::validate_slot(int slot) const {
     }
 }
 
-}  // namespace dsv4
+}  // namespace pocket

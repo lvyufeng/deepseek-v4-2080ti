@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 struct SafeTensorRef {
     std::string name;
@@ -65,4 +65,4 @@ private:
     std::vector<SafeLayerWeights> layers_;
 };
 
-}  // namespace dsv4
+}  // namespace pocket

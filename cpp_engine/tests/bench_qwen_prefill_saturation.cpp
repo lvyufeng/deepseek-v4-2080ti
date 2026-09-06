@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    dsv4::QwenEngineOptions engine_opts;
+    pocket::QwenEngineOptions engine_opts;
     engine_opts.device = opts.device >= 0 ? opts.device : opts.tp_rank;
     engine_opts.max_batch_size = 1;
     // Prefix reuse would let a repeat return cached logits instead of computing,
@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
         engine_opts.nccl_id_path = opts.nccl_id_path;
     }
 
-    dsv4::QwenEngine engine(opts.checkpoint, engine_opts, 0, kMaxLength + 64);
+    pocket::QwenEngine engine(opts.checkpoint, engine_opts, 0, kMaxLength + 64);
     engine.allocate_batch_slots(1);
 
     const bool is_rank0 = opts.tp_rank == 0;

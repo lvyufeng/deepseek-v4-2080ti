@@ -11,7 +11,7 @@
 
 namespace {
 
-using namespace dsv4;
+using namespace pocket;
 
 void expect_present(const WeightSource& ws, const std::string& name,
                     DType expected_dtype, std::vector<uint64_t> expected_shape) {
@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
         return 2;
     }
     try {
-        auto ws = dsv4::open_weight_source(argv[1]);
+        auto ws = pocket::open_weight_source(argv[1]);
 
         // Embed/head/norm and dense layer 0 attention should always be present
         // regardless of GGUF or safetensors. Shapes below match
@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
 
         // GGUF-specific: routed experts are 3D tensors, per-expert slices through get_expert.
         // Skip routed-expert slice check for safetensors (per-expert names are flat).
-        if (ws->format() == dsv4::WeightSource::Format::GGUF_Q2) {
+        if (ws->format() == pocket::WeightSource::Format::GGUF_Q2) {
             const std::string routed_w1 = "layers.0.ffn.experts.routed.w1";
             const std::string routed_w2 = "layers.0.ffn.experts.routed.w2";
             const std::string routed_w3 = "layers.0.ffn.experts.routed.w3";

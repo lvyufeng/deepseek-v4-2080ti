@@ -167,7 +167,7 @@ void run_case(int tokens, int topk, int n_local, int dim, int inter,
     fill_bytes(b.w3q.ptr, static_cast<size_t>(n_local) * inter * (dim / 2), rng, false);
     fill_bytes(b.w3s.ptr, static_cast<size_t>(n_local) * inter * (dim / 32), rng, true);
 
-    dsv4::MoeMultiTokenFp4Workspace ws;
+    pocket::MoeMultiTokenFp4Workspace ws;
     ws.d_x_q = b.x_q.ptr;
     ws.d_x_scale = b.x_scale.ptr;
     ws.d_gate = b.gate.ptr;
@@ -179,7 +179,7 @@ void run_case(int tokens, int topk, int n_local, int dim, int inter,
     ws.pairs_cap = pairs;
     ws.dim = dim;
     ws.inter_dim = inter;
-    if (!dsv4::moe_multi_token_fp4_cuda_with_workspace(
+    if (!pocket::moe_multi_token_fp4_cuda_with_workspace(
             b.x.ptr, b.slot_expert.ptr, b.slot_starts.ptr, b.slot_tokens.ptr,
             b.pair_weights.ptr, b.w1q.ptr, b.w1s.ptr, b.w2q.ptr, b.w2s.ptr,
             b.w3q.ptr, b.w3s.ptr, b.y.ptr, tokens, slots, pairs, n_local,
@@ -189,7 +189,7 @@ void run_case(int tokens, int topk, int n_local, int dim, int inter,
     check_cuda(cudaDeviceSynchronize(), "sync multi-token");
 
     for (int token = 0; token < tokens; ++token) {
-        if (!dsv4::moe_single_token_fp4_cuda(
+        if (!pocket::moe_single_token_fp4_cuda(
                 b.x.ptr + static_cast<size_t>(token) * dim,
                 b.indices.ptr + static_cast<size_t>(token) * topk,
                 b.weights.ptr + static_cast<size_t>(token) * topk,
@@ -211,7 +211,7 @@ void run_case(int tokens, int topk, int n_local, int dim, int inter,
             " dim=" + std::to_string(dim));
 
     for (int iter = 0; iter < 3; ++iter) {
-        if (!dsv4::moe_multi_token_fp4_cuda_with_workspace(
+        if (!pocket::moe_multi_token_fp4_cuda_with_workspace(
                 b.x.ptr, b.slot_expert.ptr, b.slot_starts.ptr, b.slot_tokens.ptr,
                 b.pair_weights.ptr, b.w1q.ptr, b.w1s.ptr, b.w2q.ptr, b.w2s.ptr,
                 b.w3q.ptr, b.w3s.ptr, b.y.ptr, tokens, slots, pairs, n_local,
@@ -238,14 +238,14 @@ void test_empty_routes() {
     DeviceBuffer<int8_t> x_q(static_cast<size_t>(tokens) * dim);
     DeviceBuffer<float> x_scale(tokens);
     check_cuda(cudaMemset(starts.ptr, 0, sizeof(int32_t)), "zero starts");
-    dsv4::MoeMultiTokenFp4Workspace ws;
+    pocket::MoeMultiTokenFp4Workspace ws;
     ws.d_x_q = x_q.ptr;
     ws.d_x_scale = x_scale.ptr;
     ws.tokens_cap = tokens;
     ws.pairs_cap = 0;
     ws.dim = dim;
     ws.inter_dim = 128;
-    if (!dsv4::moe_multi_token_fp4_cuda_with_workspace(
+    if (!pocket::moe_multi_token_fp4_cuda_with_workspace(
             x.ptr, nullptr, starts.ptr, nullptr, nullptr, dummy.ptr, dummy.ptr,
             dummy.ptr, dummy.ptr, dummy.ptr, dummy.ptr, y.ptr, tokens, 0, 0, 8,
             dim, 128, 7.0f, ws)) {

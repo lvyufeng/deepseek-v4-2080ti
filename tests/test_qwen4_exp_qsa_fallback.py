@@ -48,8 +48,8 @@ def test_qsa_chunked_fallback_matches_dense_reference(monkeypatch) -> None:
     cos = torch.ones(1, 29, config.rotary_dim, dtype=torch.bfloat16)
     sin = torch.zeros_like(cos)
 
-    monkeypatch.setenv("DSV4_QWEN4_QSA_CUDA", "0")
-    monkeypatch.setenv("DSV4_QWEN4_QSA_FALLBACK_ROWS", "5")
+    monkeypatch.setenv("POCKETLLM_QWEN4_QSA_CUDA", "0")
+    monkeypatch.setenv("POCKETLLM_QWEN4_QSA_FALLBACK_ROWS", "5")
     chunked = QSAAttention(config, copy.deepcopy(weights))(
         hidden,
         cos,
@@ -57,7 +57,7 @@ def test_qsa_chunked_fallback_matches_dense_reference(monkeypatch) -> None:
         None,
         past_len=0,
     )
-    monkeypatch.setenv("DSV4_QWEN4_QSA_FALLBACK_ROWS", "29")
+    monkeypatch.setenv("POCKETLLM_QWEN4_QSA_FALLBACK_ROWS", "29")
     dense = QSAAttention(config, copy.deepcopy(weights))(
         hidden,
         cos,

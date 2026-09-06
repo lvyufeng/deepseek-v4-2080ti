@@ -16,7 +16,7 @@
 #include <cstdint>
 #include <string>
 
-namespace dsv4 {
+namespace pocket {
 
 // Which vendor implementation is linked. Useful for logs and for tests that
 // need to skip a vendor-specific expectation.
@@ -121,4 +121,4 @@ std::string device_last_error();
 void device_range_push(const char* label);
 void device_range_pop();
 
-}  // namespace dsv4
+}  // namespace pocket

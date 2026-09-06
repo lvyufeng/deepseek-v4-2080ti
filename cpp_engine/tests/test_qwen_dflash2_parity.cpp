@@ -43,8 +43,8 @@ std::vector<int> read_tokens(const std::string& path) {
     return tokens;
 }
 
-void append_unique(dsv4_test::DFlash2TensorFile& file,
-                   const dsv4::QwenDFlash2DebugTensor& tensor) {
+void append_unique(pocket_test::DFlash2TensorFile& file,
+                   const pocket::QwenDFlash2DebugTensor& tensor) {
     for (const auto& existing : file.tensors) {
         if (existing.name == tensor.name) {
             throw std::runtime_error("duplicate debug stage: " + tensor.name);
@@ -54,8 +54,8 @@ void append_unique(dsv4_test::DFlash2TensorFile& file,
 }
 
 std::vector<uint16_t> target_taps_from(
-    const dsv4::QwenDFlash2DebugTensor& tensor) {
-    if (tensor.dtype != dsv4::QwenDFlash2DebugDType::F16 ||
+    const pocket::QwenDFlash2DebugTensor& tensor) {
+    if (tensor.dtype != pocket::QwenDFlash2DebugDType::F16 ||
         tensor.shape.size() != 2 || tensor.bytes.size() % sizeof(uint16_t) != 0) {
         throw std::runtime_error("target_taps has invalid dtype or shape");
     }
@@ -90,84 +90,84 @@ int main(int argc, char** argv) {
             throw std::runtime_error("cannot select CUDA device");
         }
 
-        const dsv4::QwenDFlash2Config draft_config =
-            dsv4::QwenDFlash2Config::from_directory(draft_checkpoint);
-        const dsv4::QwenConfig target_config =
-            dsv4::QwenConfig::from_hf_config(target_checkpoint);
+        const pocket::QwenDFlash2Config draft_config =
+            pocket::QwenDFlash2Config::from_directory(draft_checkpoint);
+        const pocket::QwenConfig target_config =
+            pocket::QwenConfig::from_hf_config(target_checkpoint);
         draft_config.validate_for_target(target_config.hidden_size,
                                          target_config.vocab_size,
                                          target_config.num_hidden_layers);
 
-        dsv4::QwenEngineOptions options;
+        pocket::QwenEngineOptions options;
         options.tp_world = tp_world;
         options.tp_rank = tp_rank;
         options.device = device;
         options.prefill_chunk_tokens = static_cast<int>(tokens.size());
         options.prefix_cache = false;
         options.nccl_id_path = nccl_path;
-        dsv4_test::DFlash2TensorFile capture;
+        pocket_test::DFlash2TensorFile capture;
         capture.position_offset = 0;
         capture.anchor_token = -1;
         {
-            auto target = std::make_unique<dsv4::QwenEngine>(
+            auto target = std::make_unique<pocket::QwenEngine>(
                 target_checkpoint, options, 0,
                 static_cast<int>(tokens.size()) + draft_config.block_size + 1);
             target->warmup_tp();
-            const dsv4::QwenForwardResult target_result =
+            const pocket::QwenForwardResult target_result =
                 target->debug_prefill_dflash2(
                     tokens, draft_config.target_layer_ids,
                     [&](const auto& tensor) {
                         if (tensor.name == "target_taps") append_unique(capture, tensor);
                     });
             capture.anchor_token = target_result.top_token;
-            dsv4_test::write_tensor_file(capture_path, capture);
+            pocket_test::write_tensor_file(capture_path, capture);
         }
 
         const auto& captured_taps =
-            dsv4_test::require_tensor(capture, "target_taps");
+            pocket_test::require_tensor(capture, "target_taps");
         const std::vector<uint16_t> taps = target_taps_from(captured_taps);
         const int context_rows = static_cast<int>(captured_taps.shape[0]);
 
         // The 64-layer target is gone before loading the replicated 3.85 GB
         // drafter, keeping TP=1 parity usable on a 22 GiB card as well.
-        const dsv4::SafeTensorsIndex target_index(target_checkpoint);
-        const dsv4::QwenWeightMap target_weights(
+        const pocket::SafeTensorsIndex target_index(target_checkpoint);
+        const pocket::QwenWeightMap target_weights(
             target_index, target_config, tp_world, tp_rank);
-        dsv4::QwenDeviceTensor embedding = dsv4::qwen_upload_tensor(
+        pocket::QwenDeviceTensor embedding = pocket::qwen_upload_tensor(
             target_index, target_weights.embed_tokens());
-        const dsv4::QwenLinearRef& head_ref = target_weights.lm_head();
-        dsv4::QwenDeviceTensor lm_head = dsv4::qwen_upload_tensor(
+        const pocket::QwenLinearRef& head_ref = target_weights.lm_head();
+        pocket::QwenDeviceTensor lm_head = pocket::qwen_upload_tensor(
             target_index, head_ref.weight);
-        dsv4::QwenDeviceTensor lm_head_scale;
+        pocket::QwenDeviceTensor lm_head_scale;
         if (head_ref.has_scale) {
-            lm_head_scale = dsv4::qwen_upload_tensor(
+            lm_head_scale = pocket::qwen_upload_tensor(
                 target_index, head_ref.scale);
         }
-        const dsv4::QwenTargetHeadAdapter target_head{
+        const pocket::QwenTargetHeadAdapter target_head{
             head_ref.kind, &lm_head,
             head_ref.has_scale ? &lm_head_scale : nullptr,
             static_cast<int>(head_ref.logical_local_shape.at(0)),
             static_cast<int>(head_ref.logical_local_shape.at(1)),
             static_cast<uint64_t>(tp_rank) * target_config.vocab_size /
                 tp_world};
-        const dsv4::SafeTensorsIndex draft_index =
-            dsv4::SafeTensorsIndex::from_single_file(draft_checkpoint);
-        const dsv4::QwenDFlash2WeightMap draft_weights(
+        const pocket::SafeTensorsIndex draft_index =
+            pocket::SafeTensorsIndex::from_single_file(draft_checkpoint);
+        const pocket::QwenDFlash2WeightMap draft_weights(
             draft_index, draft_config, tp_world, tp_rank);
-        dsv4::QwenDFlash2Runtime draft(
+        pocket::QwenDFlash2Runtime draft(
             draft_checkpoint, draft_config, draft_weights, embedding,
             target_head, tp_world, tp_rank, device, nccl_path,
             context_rows + draft_config.block_size + 1);
 
-        dsv4_test::DFlash2TensorFile output;
+        pocket_test::DFlash2TensorFile output;
         output.position_offset = 0;
         output.anchor_token = capture.anchor_token;
         draft.set_debug_callback([&](const auto& tensor) {
             append_unique(output, tensor);
         });
-        const dsv4::QwenDFlash2Proposal proposal = draft.debug_propose_from_host(
+        const pocket::QwenDFlash2Proposal proposal = draft.debug_propose_from_host(
             taps, context_rows, 0, capture.anchor_token);
-        dsv4_test::write_tensor_file(output_path, output);
+        pocket_test::write_tensor_file(output_path, output);
 
         std::cout << "[PASS] qwen_dflash2_parity rank=" << tp_rank
                   << " context_rows=" << context_rows

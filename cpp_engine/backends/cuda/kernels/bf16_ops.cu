@@ -2,7 +2,7 @@
 
 #include <cuda_runtime.h>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 __device__ __forceinline__ float bf16_to_float(uint16_t bits) {
@@ -487,4 +487,4 @@ bool gate_topk_bf16_rows_cuda(
     return err == cudaSuccess;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

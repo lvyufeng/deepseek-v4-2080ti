@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 // Read-only view of one tensor as raw bytes plus typed metadata. Borrowed from
 // either the safetensors shard mmap or the GGUF file mmap; the caller must not
@@ -73,7 +73,7 @@ private:
 };
 
 // Wraps a GGUFFile and translates internal canonical names to GGUF tensor names
-// via the DSV4 mapping (mirrors src/gguf/ds4_mapping.py).
+// via the DeepSeek-V4 mapping (mirrors src/gguf/ds4_mapping.py).
 class GGUFWeightSource : public WeightSource {
 public:
     explicit GGUFWeightSource(const std::string& path);
@@ -112,4 +112,4 @@ bool is_gguf_path(const std::string& path);
 // on whether the path ends in ".gguf".
 std::unique_ptr<WeightSource> open_weight_source(const std::string& path);
 
-}  // namespace dsv4
+}  // namespace pocket

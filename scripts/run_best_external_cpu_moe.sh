@@ -3,10 +3,10 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="$REPO_ROOT"
-TMP_ROOT="${DSV4_TMP_DIR:-$REPO_ROOT/.tmp}"
+TMP_ROOT="${POCKETLLM_TMP_DIR:-$REPO_ROOT/.tmp}"
 mkdir -p "$TMP_ROOT"
 if [[ "${DEEPSEEK_SKIP_BENCHMARK_LOCK:-0}" != "1" ]]; then
-  LOCK_FILE="${DEEPSEEK_FULL_NETWORK_BENCHMARK_LOCK:-$TMP_ROOT/dsv4_full_network_benchmark.lock}"
+  LOCK_FILE="${DEEPSEEK_FULL_NETWORK_BENCHMARK_LOCK:-$TMP_ROOT/pocketllm_full_network_benchmark.lock}"
   exec 9>"$LOCK_FILE"
   if ! flock -n 9; then
     echo "another full-network benchmark is already running: $LOCK_FILE" >&2
@@ -27,9 +27,9 @@ fi
 INPUT_FILE="${INPUT_FILE:-$REPO_ROOT/tests/fixtures/smoke_input.txt}"
 MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-8}"
 MASTER_PORT="${MASTER_PORT:-29661}"
-SHM_NAME="${DEEPSEEK_CPU_MOE_SERVER_SHM:-dsv4_cpu_moe_server}"
-SERVER_LOG="${SERVER_LOG:-$TMP_ROOT/dsv4_cpu_moe_server_best.log}"
-CLIENT_LOG="${CLIENT_LOG:-$TMP_ROOT/dsv4_best_external_cpu_moe.log}"
+SHM_NAME="${DEEPSEEK_CPU_MOE_SERVER_SHM:-pocketllm_cpu_moe_server}"
+SERVER_LOG="${SERVER_LOG:-$TMP_ROOT/pocketllm_cpu_moe_server_best.log}"
+CLIENT_LOG="${CLIENT_LOG:-$TMP_ROOT/pocketllm_best_external_cpu_moe.log}"
 SERVER_OMP_THREADS="${SERVER_OMP_THREADS:-22}"
 WAIT_SECONDS="${WAIT_SECONDS:-260}"
 

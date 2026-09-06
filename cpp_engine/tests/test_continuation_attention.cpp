@@ -65,7 +65,7 @@ void run_case(int rows, int heads, int head_dim, int cache_slots,
     upload(d_indices, indices);
 
     const float scale = 1.0f / std::sqrt(static_cast<float>(head_dim));
-    if (!dsv4::indexed_cached_attention_rows_cuda(
+    if (!pocket::indexed_cached_attention_rows_cuda(
             d_q.ptr, d_kv.ptr, d_starts.ptr, d_indices.ptr, d_sink.ptr,
             d_batch.ptr, rows, heads, head_dim, max_count, scale)) {
         throw std::runtime_error("batched continuation attention launch failed");
@@ -73,7 +73,7 @@ void run_case(int rows, int heads, int head_dim, int cache_slots,
     for (int row = 0; row < rows; ++row) {
         const int begin = starts[row];
         const int count = starts[row + 1] - begin;
-        if (!dsv4::indexed_cached_single_token_attention_cuda(
+        if (!pocket::indexed_cached_single_token_attention_cuda(
                 d_q.ptr + static_cast<size_t>(row) * heads * head_dim,
                 d_kv.ptr, reinterpret_cast<const int*>(d_indices.ptr + begin),
                 d_sink.ptr, d_ref.ptr + static_cast<size_t>(row) * heads * head_dim,
@@ -96,7 +96,7 @@ void run_case(int rows, int heads, int head_dim, int cache_slots,
 
     std::vector<float> first = batch;
     for (int iter = 0; iter < 3; ++iter) {
-        if (!dsv4::indexed_cached_attention_rows_cuda(
+        if (!pocket::indexed_cached_attention_rows_cuda(
                 d_q.ptr, d_kv.ptr, d_starts.ptr, d_indices.ptr, d_sink.ptr,
                 d_batch.ptr, rows, heads, head_dim, max_count, scale)) {
             throw std::runtime_error("repeated batched attention launch failed");
@@ -154,12 +154,12 @@ void run_batch_kv_case() {
     upload(d_merged_indices, merged_indices);
 
     const float scale = 1.0f / std::sqrt(static_cast<float>(head_dim));
-    if (!dsv4::indexed_cached_attention_rows_batch_kv_cuda(
+    if (!pocket::indexed_cached_attention_rows_batch_kv_cuda(
             d_q.ptr, d_live.ptr, d_batch_kv.ptr, d_starts.ptr, d_indices.ptr,
             d_sink.ptr, d_batch.ptr, rows, heads, head_dim, max_count, scale)) {
         throw std::runtime_error("batch-local continuation attention launch failed");
     }
-    if (!dsv4::indexed_cached_attention_rows_cuda(
+    if (!pocket::indexed_cached_attention_rows_cuda(
             d_q.ptr, d_merged.ptr, d_starts.ptr, d_merged_indices.ptr,
             d_sink.ptr, d_ref.ptr, rows, heads, head_dim, max_count, scale)) {
         throw std::runtime_error("merged-cache reference attention launch failed");
@@ -178,7 +178,7 @@ void run_batch_kv_case() {
 
     const std::vector<float> first = batch;
     for (int iter = 0; iter < 3; ++iter) {
-        if (!dsv4::indexed_cached_attention_rows_batch_kv_cuda(
+        if (!pocket::indexed_cached_attention_rows_batch_kv_cuda(
                 d_q.ptr, d_live.ptr, d_batch_kv.ptr, d_starts.ptr, d_indices.ptr,
                 d_sink.ptr, d_batch.ptr, rows, heads, head_dim, max_count, scale)) {
             throw std::runtime_error("repeated batch-local attention launch failed");
@@ -194,7 +194,7 @@ void run_batch_kv_case() {
 
 int main() {
     try {
-        if (!dsv4::cuda_runtime_available()) {
+        if (!pocket::cuda_runtime_available()) {
             std::cout << "[SKIP] CUDA runtime is not available\n";
             return 0;
         }

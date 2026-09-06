@@ -10,7 +10,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 std::string read_file(const std::string& path) {
@@ -357,4 +357,4 @@ std::vector<int> Tokenizer::encode_basic(const std::string& text, bool add_bos) 
     return ids;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

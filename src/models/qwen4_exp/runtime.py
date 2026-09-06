@@ -132,7 +132,7 @@ def _cpu_affinity_for_device(
 
 
 def _configure_cpu_affinity(ctx: TPContext) -> list[int] | None:
-    if not _env_enabled("DSV4_QWEN4_CPU_AFFINITY", "1") or ctx.device.type != "cuda":
+    if not _env_enabled("POCKETLLM_QWEN4_CPU_AFFINITY", "1") or ctx.device.type != "cuda":
         return None
     local_rank = ctx.device.index or 0
     local_world_size = int(os.environ.get("LOCAL_WORLD_SIZE", str(ctx.world_size)))
@@ -382,7 +382,7 @@ def run_tp4(
     # All layers share one MoE backend instance; reach it through layer 0.
     moe_backend = getattr(model.layers[0], "moe", None)
     moe_backend = getattr(moe_backend, "inner", moe_backend)  # unwrap ShardedMoE
-    moe_phase_profile = enable_profile and os.environ.get("DSV4_QWEN4_MOE_PHASE_PROFILE") == "1"
+    moe_phase_profile = enable_profile and os.environ.get("POCKETLLM_QWEN4_MOE_PHASE_PROFILE") == "1"
     if moe_phase_profile and hasattr(moe_backend, "phase_stats"):
         moe_backend.phase_stats = {}
 
@@ -423,7 +423,7 @@ def run_tp4(
 
         if profiler and profiler.enabled:
             print("\n" + profiler.aggregate_report())
-            if _env_enabled("DSV4_QWEN4_PROFILE_TREE"):
+            if _env_enabled("POCKETLLM_QWEN4_PROFILE_TREE"):
                 print("\n" + profiler.report())
 
     if ctx.initialized:

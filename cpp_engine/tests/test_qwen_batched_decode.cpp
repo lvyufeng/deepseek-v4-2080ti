@@ -23,7 +23,7 @@
 
 namespace {
 
-using namespace dsv4;
+using namespace pocket;
 
 int failures = 0;
 bool device_ready = true;

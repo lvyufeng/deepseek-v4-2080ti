@@ -160,7 +160,7 @@ void test_store_and_decode(int seq_len, int kv_heads, int q_heads, int start_pos
     check_cuda(cudaMemset(d_cache, 0, cache_size), "zero cache");
 
     // Store K/V into TurboQuant cache.
-    bool ok_store = dsv4::qwen_append_kv_cache_turboquant_k8v4_cuda(
+    bool ok_store = pocket::qwen_append_kv_cache_turboquant_k8v4_cuda(
         d_k, d_v, d_cache, seq_len, kv_heads, kHeadDim, start_pos, max_context);
     if (!ok_store) {
         std::fprintf(stderr, "Store kernel launch failed\n");
@@ -236,7 +236,7 @@ void test_store_and_decode(int seq_len, int kv_heads, int q_heads, int start_pos
 
     // Decode attention with TurboQuant cache.
     const int context_len = start_pos + seq_len;
-    bool ok_decode = dsv4::qwen_gqa_decode_attention_turboquant_k8v4_cuda(
+    bool ok_decode = pocket::qwen_gqa_decode_attention_turboquant_k8v4_cuda(
         d_q, d_cache, d_out, d_score_scratch, q_heads, kv_heads, kHeadDim,
         context_len, max_context, 0, 0);
     if (!ok_decode) {
@@ -333,7 +333,7 @@ void test_prefill_causal(int seq_len, int kv_heads, int q_heads, int position_of
     check_cuda(cudaMemset(d_cache, 0, cache_size), "zero cache");
 
     // Store K/V.
-    bool ok_store = dsv4::qwen_append_kv_cache_turboquant_k8v4_cuda(
+    bool ok_store = pocket::qwen_append_kv_cache_turboquant_k8v4_cuda(
         d_k, d_v, d_cache, seq_len, kv_heads, kHeadDim, position_offset, max_context);
     if (!ok_store) {
         std::fprintf(stderr, "Store kernel launch failed\n");
@@ -342,7 +342,7 @@ void test_prefill_causal(int seq_len, int kv_heads, int q_heads, int position_of
     check_cuda(cudaDeviceSynchronize(), "sync store");
 
     // Prefill attention.
-    bool ok_prefill = dsv4::qwen_gqa_prefill_attention_turboquant_k8v4_cuda(
+    bool ok_prefill = pocket::qwen_gqa_prefill_attention_turboquant_k8v4_cuda(
         d_q, d_cache, d_out, seq_len, q_heads, kv_heads, kHeadDim,
         position_offset, max_context, 0, 0);
     if (!ok_prefill) {
@@ -448,7 +448,7 @@ void test_window_and_sink(int context_len, int q_heads, int kv_heads,
                           cudaMemcpyHostToDevice), "copy q");
     check_cuda(cudaMemset(d_cache, 0, cache_size), "zero cache");
 
-    bool ok_store = dsv4::qwen_append_kv_cache_turboquant_k8v4_cuda(
+    bool ok_store = pocket::qwen_append_kv_cache_turboquant_k8v4_cuda(
         d_k, d_v, d_cache, context_len, kv_heads, kHeadDim, 0, max_context);
     if (!ok_store) {
         std::fprintf(stderr, "Store kernel launch failed\n");
@@ -456,7 +456,7 @@ void test_window_and_sink(int context_len, int q_heads, int kv_heads,
     }
     check_cuda(cudaDeviceSynchronize(), "sync store");
 
-    bool ok_decode = dsv4::qwen_gqa_decode_attention_turboquant_k8v4_cuda(
+    bool ok_decode = pocket::qwen_gqa_decode_attention_turboquant_k8v4_cuda(
         d_q, d_cache, d_out, d_score_scratch, q_heads, kv_heads, kHeadDim,
         context_len, max_context, attention_window, attention_sink_tokens);
     if (!ok_decode) {

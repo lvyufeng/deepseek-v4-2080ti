@@ -3,7 +3,7 @@
 // projection against real GGUF data, paving the way for the rest of the
 // attention forward.
 
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 
 #include <cstdio>
 #include <iostream>
@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
     }
     const int token = argc >= 3 ? std::atoi(argv[2]) : 1234;
     try {
-        auto r = dsv4::run_gguf_attn_norm_wq_a_smoke(argv[1], token);
+        auto r = pocket::run_gguf_attn_norm_wq_a_smoke(argv[1], token);
         std::printf("token=%d dim=%d q_a_dim=%d\n", token, r.dim, r.q_a_dim);
         std::printf("embed_rms  = %.4f\n", r.embed_rms);
         std::printf("normed_rms = %.4f  (RMSNorm should bring this to ~|gamma|_rms)\n",

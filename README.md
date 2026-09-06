@@ -79,11 +79,15 @@ cmake -S cpp_engine -B build/cpp_engine -DCMAKE_BUILD_TYPE=Release
 cmake --build build/cpp_engine -j
 ```
 
-The current executable keeps the compatibility name `dsv4_cpp_engine`:
+The executable is `pocketllm_engine`:
 
 ```text
-build/cpp_engine/dsv4_cpp_engine
+build/cpp_engine/pocketllm_engine
 ```
+
+It was formerly `dsv4_cpp_engine`. That rename, along with the `pocket::` namespace and the
+`POCKETLLM_*` environment variables, is a breaking change — see
+[the migration note](docs/migration/dsv4-to-pocket-rename.md).
 
 The backend is selected at configure time via `POCKET_BACKEND`, which defaults
 to `cuda`, so the command above is unchanged from before:
@@ -171,7 +175,7 @@ The Qwen path accepts a text prompt or token IDs and uses TP4 ranks with an NCCL
 rm -f /tmp/pocketllm_qwen_nccl.id
 for rank in 0 1 2 3; do
   CUDA_VISIBLE_DEVICES=$rank \
-  build/cpp_engine/dsv4_cpp_engine \
+  build/cpp_engine/pocketllm_engine \
     --ckpt /path/to/Qwen3.8-27B-FP8 \
     --tp-world 4 --tp-rank $rank --device 0 \
     --nccl-id-path /tmp/pocketllm_qwen_nccl.id \

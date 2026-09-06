@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 // Score one FlashMemory CSA layer against all compressed-K chunks for a single
 // decode token. Reproduces retriever.py forward_and_score (fp32 weights).
@@ -134,4 +134,4 @@ bool flashmemory_write_global_indices_cuda(
     int* d_out_indices,
     void* stream = nullptr);
 
-}  // namespace dsv4
+}  // namespace pocket

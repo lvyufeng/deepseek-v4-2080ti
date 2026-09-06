@@ -26,7 +26,7 @@ void check_cuda(cudaError_t status, const std::string& message) {
 uint16_t half_bits(float value) {
     const uint32_t bits = *reinterpret_cast<const uint32_t*>(&value);
     const uint16_t bf16 = static_cast<uint16_t>(bits >> 16);
-    return dsv4::qwen_bf16_to_fp16_bits(bf16);
+    return pocket::qwen_bf16_to_fp16_bits(bf16);
 }
 
 float half_value(uint16_t value) {
@@ -80,7 +80,7 @@ void test_gemm() {
     check_cuda(cudaMalloc(&d_output,
                           static_cast<size_t>(batch) * rows * sizeof(uint16_t)),
                "GEMM output");
-    require(dsv4::qwen_dspark_fp16_gemm_rows_f16_cuda(
+    require(pocket::qwen_dspark_fp16_gemm_rows_f16_cuda(
                 d_x, d_weight, d_output, batch, rows, cols),
             "DSpark GEMM launch failed");
     const auto output = download(d_output, static_cast<size_t>(batch) * rows);
@@ -120,7 +120,7 @@ void test_rmsnorm() {
     uint16_t* d_gamma = upload(gamma);
     uint16_t* d_y = nullptr;
     check_cuda(cudaMalloc(&d_y, x.size() * sizeof(uint16_t)), "rmsnorm output");
-    require(dsv4::qwen_dspark_rmsnorm_f16_cuda(
+    require(pocket::qwen_dspark_rmsnorm_f16_cuda(
                 d_x, d_gamma, d_y, rows, cols, 1.0e-6f),
             "RMSNorm launch failed");
     const auto y = download(d_y, x.size());
@@ -153,7 +153,7 @@ void test_rope() {
     const std::vector<float> frequencies = {1.0f, 0.25f};
     uint16_t* d_x = upload(x);
     float* d_frequencies = upload(frequencies);
-    require(dsv4::qwen_dspark_yarn_rope_f16_cuda(
+    require(pocket::qwen_dspark_yarn_rope_f16_cuda(
                 d_x, d_frequencies, rows, heads, dim, 3, 1.25f),
             "YaRN RoPE launch failed");
     const auto output = download(d_x, x.size());
@@ -209,7 +209,7 @@ void test_attention() {
     uint16_t* d_output = nullptr;
     check_cuda(cudaMalloc(&d_output, q.size() * sizeof(uint16_t)),
                "attention output");
-    require(dsv4::qwen_dspark_dual_source_gqa_f16_cuda(
+    require(pocket::qwen_dspark_dual_source_gqa_f16_cuda(
                 d_q, d_context_k, d_context_v, d_block_k, d_block_v,
                 d_output, block_rows, q_heads, kv_heads, dim, context, 8),
             "dual-source attention launch failed");
@@ -268,7 +268,7 @@ void test_heads() {
     float* d_logits = upload(logits);
     uint16_t* d_embedding = upload(embedding);
     uint16_t* d_weight = upload(weight);
-    require(dsv4::qwen_dspark_add_markov_bias_f32_cuda(
+    require(pocket::qwen_dspark_add_markov_bias_f32_cuda(
                 d_logits, d_embedding, d_weight, local_vocab, rank),
             "Markov launch failed");
     const auto corrected = download(d_logits, logits.size());
@@ -294,7 +294,7 @@ void test_heads() {
     float* d_confidence = nullptr;
     check_cuda(cudaMalloc(&d_confidence, rows * sizeof(float)),
                "confidence output");
-    require(dsv4::qwen_dspark_confidence_f16_cuda(
+    require(pocket::qwen_dspark_confidence_f16_cuda(
                 d_hidden, d_markov, d_confidence_weight, d_bias,
                 d_confidence, rows, hidden_size, rank),
             "confidence launch failed");

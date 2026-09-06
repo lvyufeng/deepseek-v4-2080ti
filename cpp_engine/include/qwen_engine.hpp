@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 enum class QwenKvCacheDType {
     Fp16,
@@ -43,7 +43,7 @@ struct QwenEngineOptions {
     //    32768     1059.1      1244.3      1.17x
     //    65536      886.8      1077.7      1.21x
     //
-    // The DSV4 engine already defaults to 4096 for the same reason.
+    // The DeepSeek-V4 engine already defaults to 4096 for the same reason.
     //
     // 8192 became reachable only once the snapshot grid stopped splitting the
     // chunk (see `snapshot_interval_tokens`). Re-measured on the real 64-layer
@@ -468,4 +468,4 @@ private:
     Impl* impl_ = nullptr;
 };
 
-}  // namespace dsv4
+}  // namespace pocket

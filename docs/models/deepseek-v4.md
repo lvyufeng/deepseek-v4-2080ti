@@ -119,7 +119,7 @@ PYTHONPATH=$PWD python -m src.cli.inspect_gguf \
 - Host-resident routed experts make decode sensitive to PCIe, NUMA, page-cache, and CPU behavior.
 - One-GPU GGUF Q2 mode is functional for short smoke tests but is not practical for long prompts.
 - FlashMemory runtime scoring and 1M-context functionality have their own enablement and validation constraints.
-- The C++ executable still carries the compatibility name `dsv4_cpp_engine`.
+- The C++ executable still carries the compatibility name `pocketllm_engine`.
 
 ## Evidence and related notes
 

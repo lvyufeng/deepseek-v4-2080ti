@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace dsv4 {
+namespace pocket {
 
 QwenBlockPool::QwenBlockPool(int num_blocks, int block_size)
     : num_blocks_(num_blocks), block_size_(block_size) {
@@ -96,4 +96,4 @@ void QwenBlockPool::validate(int block_id) const {
     }
 }
 
-}  // namespace dsv4
+}  // namespace pocket

@@ -222,7 +222,7 @@ gate skipped a few rounds it would otherwise have drafted.
 draft token, what the target model samples after consuming it.
 
 - `cpp_engine/include/persistent_engine.hpp` — interface
-- `cpp_engine/engine/dsv4_engine.cpp` — implementation
+- `cpp_engine/engine/deepseek_v4_engine.cpp` — implementation
 - `cpp_engine/tests/test_perfect_draft.cpp` — feeds a plain decode back in as a
   "perfect" draft, so any mismatch is the verify path's own fault rather than
   the drafter's. 59/59 checked, 0 mismatches at draft_len 5.
@@ -234,7 +234,7 @@ batched verify disagrees with plain decode by ~4e-3 at the first projection,
 which amplifies to O(1) at the head. Batching it is a separate optimization
 that has to be measured against that drift, not assumed free.
 
-`DSV4_CPP_MOE_DETERMINISTIC_REDUCE=1` (default) removes the MoE atomicAdd
+`POCKETLLM_CPP_MOE_DETERMINISTIC_REDUCE=1` (default) removes the MoE atomicAdd
 nondeterminism for topk>=3 via per-route partials and a fixed-order reduction;
 `cpp_engine/tests/test_moe_fp4_determinism.cpp` guards it.
 
@@ -343,7 +343,7 @@ the rate looked like 0:
   keeps the last `window_size` positions rather than one to feed it.
 - **The NCCL id wait was 30s**, which is shorter than the time four ranks take
   to load a 167 GB checkpoint, so ranks 1-2 died before rank 0 published the id.
-  Now 10 minutes, overridable via `DSV4_CPP_NCCL_ID_WAIT_ATTEMPTS`.
+  Now 10 minutes, overridable via `POCKETLLM_CPP_NCCL_ID_WAIT_ATTEMPTS`.
 - **`start_pos` was off by one at the call site.** It is the position of the
   *seed hidden* -- the last position the main model consumed -- not the
   committed token's own position; the committed token goes into draft slot 0 and
@@ -565,7 +565,7 @@ correctness implementation, not a speedup claim.
 A greedy argmax flips as soon as the two runtimes' logits differ by more than the
 top-2 gap, so comparing token ids alone cannot separate numerical drift from a
 wrong state. `scripts/run_dspark_parity_bench.sh` therefore records the prefill
-top-k on both sides (`DSV4_CPP_TOPK_DIAG` for the C++ ranks,
+top-k on both sides (`POCKETLLM_CPP_TOPK_DIAG` for the C++ ranks,
 `tests/debug_prefill_topk.py` for PyTorch) and the summarizer reports a
 `prefill_argmax` verdict per fixture alongside the token comparison.
 

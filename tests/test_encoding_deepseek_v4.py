@@ -1,13 +1,13 @@
 """
 Test suite for DeepSeek-V4 Encoding.
 
-Run: PYTHONPATH=$PWD python tests/test_encoding_dsv4.py
+Run: PYTHONPATH=$PWD python tests/test_encoding_deepseek_v4.py
 """
 
 import json
 import os
 
-from src.encoding.dsv4 import encode_messages, parse_message_from_completion_text
+from src.encoding.deepseek_v4 import encode_messages, parse_message_from_completion_text
 
 TESTS_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "encoding")
 

@@ -126,8 +126,8 @@ int main(int argc, char** argv) {
         return 2;
     }
     try {
-        auto ws = dsv4::open_weight_source(argv[1]);
-        if (ws->format() != dsv4::WeightSource::Format::GGUF_Q2) {
+        auto ws = pocket::open_weight_source(argv[1]);
+        if (ws->format() != pocket::WeightSource::Format::GGUF_Q2) {
             throw std::runtime_error("test requires a GGUF Q2 checkpoint");
         }
 
@@ -136,9 +136,9 @@ int main(int argc, char** argv) {
         const std::string w2_3d = "layers.0.ffn.experts.routed.w2";
         const std::string w3_3d = "layers.0.ffn.experts.routed.w3";
 
-        dsv4::WeightView w1_top = ws->require(w1_3d);
-        dsv4::WeightView w2_top = ws->require(w2_3d);
-        dsv4::WeightView w3_top = ws->require(w3_3d);
+        pocket::WeightView w1_top = ws->require(w1_3d);
+        pocket::WeightView w2_top = ws->require(w2_3d);
+        pocket::WeightView w3_top = ws->require(w3_3d);
         if (w1_top.shape.size() != 3 || w2_top.shape.size() != 3 || w3_top.shape.size() != 3) {
             throw std::runtime_error("routed expert weights are not 3D");
         }
@@ -156,15 +156,15 @@ int main(int argc, char** argv) {
         const int w2_blocks_per_row = inter_dim / 256;  // Q2_K, 256 elems / block
         std::printf("dim=%d inter_dim=%d n_experts=%d expert=%d\n", dim, inter_dim, n_experts, expert_id);
 
-        dsv4::WeightView w1_view = ws->get_expert(w1_3d, "w1.expert0", expert_id);
-        dsv4::WeightView w2_view = ws->get_expert(w2_3d, "w2.expert0", expert_id);
-        dsv4::WeightView w3_view = ws->get_expert(w3_3d, "w3.expert0", expert_id);
+        pocket::WeightView w1_view = ws->get_expert(w1_3d, "w1.expert0", expert_id);
+        pocket::WeightView w2_view = ws->get_expert(w2_3d, "w2.expert0", expert_id);
+        pocket::WeightView w3_view = ws->get_expert(w3_3d, "w3.expert0", expert_id);
         if (!w1_view.found || !w2_view.found || !w3_view.found) {
             throw std::runtime_error("get_expert failed");
         }
 
         // --- 1. Fetch the GPU signed_grid into host memory for the CPU reference. ---
-        const int8_t* d_signed_grid = dsv4::q2_signed_grid_device();
+        const int8_t* d_signed_grid = pocket::q2_signed_grid_device();
         if (d_signed_grid == nullptr) {
             throw std::runtime_error("signed_grid_device returned null");
         }
@@ -276,19 +276,19 @@ int main(int argc, char** argv) {
         // so we pass route_slots=[0] and n_experts=1.
         const int kernel_n_experts = 1;
 
-        if (!dsv4::q2_quantize_x_q8_1_cuda(d_x, d_x_q, d_x_scale, routes, dim)) {
+        if (!pocket::q2_quantize_x_q8_1_cuda(d_x, d_x_q, d_x_scale, routes, dim)) {
             throw std::runtime_error("q2_quantize_x_q8_1_cuda failed");
         }
-        if (!dsv4::q2_moe_single_w13_iq2_xxs_cuda(d_x_q, d_x_scale, d_route_slots, d_w1, d_w3,
+        if (!pocket::q2_moe_single_w13_iq2_xxs_cuda(d_x_q, d_x_scale, d_route_slots, d_w1, d_w3,
                                                   d_gate, d_up, routes, kernel_n_experts, dim, inter_dim)) {
             throw std::runtime_error("q2_moe_single_w13_iq2_xxs_cuda failed");
         }
-        if (!dsv4::q2_route_swiglu_quantize_hidden_q8_1_cuda(
+        if (!pocket::q2_route_swiglu_quantize_hidden_q8_1_cuda(
                 d_gate, d_up, d_route_weights, d_hidden_q, d_hidden_scale,
                 routes, inter_dim, 0.0f)) {
             throw std::runtime_error("q2_route_swiglu_quantize_hidden_q8_1_cuda failed");
         }
-        if (!dsv4::q2_moe_single_w2_q2k_cuda(d_hidden_q, d_hidden_scale, d_route_slots, d_w2,
+        if (!pocket::q2_moe_single_w2_q2k_cuda(d_hidden_q, d_hidden_scale, d_route_slots, d_w2,
                                               d_y, routes, kernel_n_experts, dim, inter_dim)) {
             throw std::runtime_error("q2_moe_single_w2_q2k_cuda failed");
         }

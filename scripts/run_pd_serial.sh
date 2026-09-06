@@ -3,9 +3,9 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="$REPO_ROOT"
-TMP_ROOT="${DSV4_TMP_DIR:-$REPO_ROOT/.tmp}"
+TMP_ROOT="${POCKETLLM_TMP_DIR:-$REPO_ROOT/.tmp}"
 mkdir -p "$TMP_ROOT"
-LOCK_FILE="${LOCK_FILE:-$TMP_ROOT/dsv4_full_network_benchmark.lock}"
+LOCK_FILE="${LOCK_FILE:-$TMP_ROOT/pocketllm_full_network_benchmark.lock}"
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
   echo "another full-network benchmark is already running: $LOCK_FILE" >&2
@@ -23,7 +23,7 @@ if [[ ! -e "$CKPT_PATH" ]]; then
   exit 1
 fi
 SHORT_INPUT_FILE="${SHORT_INPUT_FILE:-$REPO_ROOT/tests/fixtures/smoke_input.txt}"
-LONG_INPUT_FILE="${LONG_INPUT_FILE:-$TMP_ROOT/dsv4_long_input_single.txt}"
+LONG_INPUT_FILE="${LONG_INPUT_FILE:-$TMP_ROOT/pocketllm_long_input_single.txt}"
 SHORT_MAX_NEW_TOKENS="${SHORT_MAX_NEW_TOKENS:-8}"
 LONG_MAX_NEW_TOKENS="${LONG_MAX_NEW_TOKENS:-1}"
 SHORT_MASTER_PORT="${SHORT_MASTER_PORT:-29682}"
@@ -35,8 +35,8 @@ PD_COMPARE_MODES="${PD_COMPARE_MODES:-0}"
 PD_CASE="${PD_CASE:-both}"
 DEEPSEEK_CPU_MOE_EXTERNAL_SERVER="${DEEPSEEK_CPU_MOE_EXTERNAL_SERVER:-0}"
 DEEPSEEK_CPU_MOE_SHARED_WEIGHTS="${DEEPSEEK_CPU_MOE_SHARED_WEIGHTS:-0}"
-DEEPSEEK_CPU_MOE_SHARED_WEIGHT_DIR="${DEEPSEEK_CPU_MOE_SHARED_WEIGHT_DIR:-$TMP_ROOT/dsv4_shared_cpu_moe_${$}}"
-DEEPSEEK_CPU_MOE_SERVER_SHM="${DEEPSEEK_CPU_MOE_SERVER_SHM:-dsv4_cpu_moe_server_${$}}"
+DEEPSEEK_CPU_MOE_SHARED_WEIGHT_DIR="${DEEPSEEK_CPU_MOE_SHARED_WEIGHT_DIR:-$TMP_ROOT/pocketllm_shared_cpu_moe_${$}}"
+DEEPSEEK_CPU_MOE_SERVER_SHM="${DEEPSEEK_CPU_MOE_SERVER_SHM:-pocketllm_cpu_moe_server_${$}}"
 DEEPSEEK_CPU_MOE_SERVER_PID=""
 DEEPSEEK_CPU_MOE_SHARED_WEIGHT_PRECREATE="${DEEPSEEK_CPU_MOE_SHARED_WEIGHT_PRECREATE:-$DEEPSEEK_CPU_MOE_SHARED_WEIGHTS}"
 
@@ -55,7 +55,7 @@ start_external_server() {
   fi
   rm -rf "$DEEPSEEK_CPU_MOE_SHARED_WEIGHT_DIR"
   mkdir -p "$DEEPSEEK_CPU_MOE_SHARED_WEIGHT_DIR"
-  local server_log="$TMP_ROOT/dsv4_cpu_moe_server_${$}.log"
+  local server_log="$TMP_ROOT/pocketllm_cpu_moe_server_${$}.log"
   env \
     DEEPSEEK_CPU_MOE_CPP_LOOP=1 \
     DEEPSEEK_CPU_MOE_CPP_LOOP_V2="${DEEPSEEK_CPU_MOE_CPP_LOOP_V2:-1}" \
@@ -110,9 +110,9 @@ while token_count < 2048:
     parts.append(base.rstrip("\n"))
     token_count = len(tok.encode("\n".join(parts)))
 text = "\n".join(parts) + "\n请用三句话总结以上内容。"
-with open("$TMP_ROOT/dsv4_long_input_single.txt", "w") as f:
+with open("$TMP_ROOT/pocketllm_long_input_single.txt", "w") as f:
     f.write(text)
-print(f"wrote $TMP_ROOT/dsv4_long_input_single.txt tokens={len(tok.encode(text))}", flush=True)
+print(f"wrote $TMP_ROOT/pocketllm_long_input_single.txt tokens={len(tok.encode(text))}", flush=True)
 PY
 fi
 
@@ -199,12 +199,12 @@ run_suite() {
 
   if [[ "$PD_CASE" == "both" || "$PD_CASE" == "short" ]]; then
     echo "=== short sequence correctness/performance (pd-mode=$mode) ==="
-    run_single "$mode" "$SHORT_INPUT_FILE" "$SHORT_MAX_NEW_TOKENS" "$short_master_port" "$TMP_ROOT/dsv4_pd_short_client_${suffix}.log"
+    run_single "$mode" "$SHORT_INPUT_FILE" "$SHORT_MAX_NEW_TOKENS" "$short_master_port" "$TMP_ROOT/pocketllm_pd_short_client_${suffix}.log"
   fi
 
   if [[ "$PD_CASE" == "both" || "$PD_CASE" == "long" ]]; then
     echo "=== long sequence correctness/performance (pd-mode=$mode) ==="
-    run_single "$mode" "$LONG_INPUT_FILE" "$LONG_MAX_NEW_TOKENS" "$long_master_port" "$TMP_ROOT/dsv4_pd_long_client_${suffix}.log"
+    run_single "$mode" "$LONG_INPUT_FILE" "$LONG_MAX_NEW_TOKENS" "$long_master_port" "$TMP_ROOT/pocketllm_pd_long_client_${suffix}.log"
   fi
 }
 

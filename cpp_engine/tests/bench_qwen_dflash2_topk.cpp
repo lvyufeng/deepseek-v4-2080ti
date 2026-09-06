@@ -17,11 +17,11 @@ int main() {
     cudaMemcpy(d_logits, logits.data(), logits.size() * 4, cudaMemcpyHostToDevice);
     cudaEvent_t a, b; cudaEventCreate(&a); cudaEventCreate(&b);
     for (int i = 0; i < 20; ++i)
-        dsv4::qwen_dflash2_local_topk_f32_cuda(d_logits, d_tok, d_val, rows, vocab, 0, top_k);
+        pocket::qwen_dflash2_local_topk_f32_cuda(d_logits, d_tok, d_val, rows, vocab, 0, top_k);
     cudaDeviceSynchronize();
     cudaEventRecord(a);
     for (int i = 0; i < iters; ++i)
-        dsv4::qwen_dflash2_local_topk_f32_cuda(d_logits, d_tok, d_val, rows, vocab, 0, top_k);
+        pocket::qwen_dflash2_local_topk_f32_cuda(d_logits, d_tok, d_val, rows, vocab, 0, top_k);
     cudaEventRecord(b); cudaDeviceSynchronize();
     float ms = 0; cudaEventElapsedTime(&ms, a, b);
     std::printf("single-block  %.4f ms\n", ms / iters);
@@ -30,11 +30,11 @@ int main() {
         cudaMalloc(&d_pt, (size_t)rows * splits * top_k * 4);
         cudaMalloc(&d_pv, (size_t)rows * splits * top_k * 4);
         for (int i = 0; i < 20; ++i)
-            dsv4::qwen_dflash2_local_topk_split_f32_cuda(d_logits, d_pt, d_pv, d_tok, d_val, rows, vocab, 0, top_k, splits);
+            pocket::qwen_dflash2_local_topk_split_f32_cuda(d_logits, d_pt, d_pv, d_tok, d_val, rows, vocab, 0, top_k, splits);
         cudaDeviceSynchronize();
         cudaEventRecord(a);
         for (int i = 0; i < iters; ++i)
-            dsv4::qwen_dflash2_local_topk_split_f32_cuda(d_logits, d_pt, d_pv, d_tok, d_val, rows, vocab, 0, top_k, splits);
+            pocket::qwen_dflash2_local_topk_split_f32_cuda(d_logits, d_pt, d_pv, d_tok, d_val, rows, vocab, 0, top_k, splits);
         cudaEventRecord(b); cudaDeviceSynchronize();
         cudaEventElapsedTime(&ms, a, b);
         std::printf("splits=%3d    %.4f ms\n", splits, ms / iters);

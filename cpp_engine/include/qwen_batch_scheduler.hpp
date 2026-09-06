@@ -16,7 +16,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 // Result returned to the caller after generation completes
 struct SchedulerGenerationResult {
@@ -192,4 +192,4 @@ private:
     std::atomic<int> total_cancelled_{0};
 };
 
-}  // namespace dsv4
+}  // namespace pocket

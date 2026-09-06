@@ -17,7 +17,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ckpt", required=True)
     parser.add_argument("--dflash2", required=True)
-    parser.add_argument("--binary", default="cpp_engine/build/dsv4_cpp_engine")
+    parser.add_argument("--binary", default="cpp_engine/build/pocketllm_engine")
     parser.add_argument("--lengths", default="512,4096,8192")
     parser.add_argument("--max-new-tokens", type=int, default=128)
     parser.add_argument("--prefill-chunk-tokens", type=int, default=512)
@@ -106,9 +106,9 @@ def run_case(args: argparse.Namespace, ckpt: Path, token_path: Path, length: int
             env = os.environ.copy()
             env["CUDA_VISIBLE_DEVICES"] = args.devices.split(",")[rank]
             if mode == "dflash2" and args.fused_swiglu:
-                env["DSV4_DFLASH2_FUSED_SWIGLU"] = "1"
+                env["POCKETLLM_DFLASH2_FUSED_SWIGLU"] = "1"
             if mode == "dflash2" and args.grouped_attention:
-                env["DSV4_DFLASH2_GROUPED_ATTN"] = "1"
+                env["POCKETLLM_DFLASH2_GROUPED_ATTN"] = "1"
             log = (case_dir / f"rank{rank}.log").open("wb")
             logs.append(log)
             processes.append((rank, subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, env=env)))

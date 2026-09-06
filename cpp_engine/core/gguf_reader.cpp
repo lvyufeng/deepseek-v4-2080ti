@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 constexpr uint32_t kGGUFMagic = 0x46554747;  // GGUF little endian
@@ -422,4 +422,4 @@ std::string metadata_value_to_string(const MetadataValue& value, size_t max_item
     return oss.str();
 }
 
-}  // namespace dsv4
+}  // namespace pocket

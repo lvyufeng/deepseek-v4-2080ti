@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <cstdlib>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 int local_env_int_or_default(const char* name, int fallback) {
@@ -217,7 +217,7 @@ bool q8_0_matmul_rows_strided_cuda(
     if (cols >= 256 && (cols % 32) == 0) {
         constexpr int threads = 256;
         constexpr int warps_per_block = threads / 32;
-        if (batch >= 4 && local_env_int_or_default("DSV4_Q8_ROWS_BATCH4", 1) != 0) {
+        if (batch >= 4 && local_env_int_or_default("POCKETLLM_Q8_ROWS_BATCH4", 1) != 0) {
             constexpr int batch_tile = 4;
             q8_0_matmul_rows_warp_batch4_kernel<<<dim3((rows + warps_per_block - 1) / warps_per_block, (batch + batch_tile - 1) / batch_tile), threads, 0, cuda_stream>>>(
                 d_x, d_w, d_y, batch, rows, cols, x_stride, y_stride, blocks_per_row);
@@ -244,4 +244,4 @@ bool q8_0_matmul_rows_cuda(
     return q8_0_matmul_rows_strided_cuda(d_x, d_w, d_y, batch, rows, cols, cols, rows, stream);
 }
 
-}  // namespace dsv4
+}  // namespace pocket

@@ -20,8 +20,8 @@ int main(int argc, char** argv) {
     }
     try {
         const std::string checkpoint = argv[1];
-        const dsv4::QwenDFlash2Config config =
-            dsv4::QwenDFlash2Config::from_directory(checkpoint);
+        const pocket::QwenDFlash2Config config =
+            pocket::QwenDFlash2Config::from_directory(checkpoint);
         config.validate_for_target(5120, 248320, 64);
         require(config.architecture == "DFlash2DraftModel",
                 "unexpected DFlash2 architecture");
@@ -33,12 +33,12 @@ int main(int argc, char** argv) {
         require(config.layer_types.size() == 5,
                 "unexpected DFlash2 layer type count");
 
-        const dsv4::SafeTensorsIndex index =
-            dsv4::SafeTensorsIndex::from_single_file(checkpoint);
+        const pocket::SafeTensorsIndex index =
+            pocket::SafeTensorsIndex::from_single_file(checkpoint);
         require(index.tensor_count() == 81,
                 "unexpected DFlash2 tensor count");
-        const dsv4::QwenDFlash2WeightMap rank0(index, config, 4, 0);
-        const dsv4::QwenDFlash2WeightMap rank3(index, config, 4, 3);
+        const pocket::QwenDFlash2WeightMap rank0(index, config, 4, 0);
+        const pocket::QwenDFlash2WeightMap rank3(index, config, 4, 3);
         require(rank0.tensor_count() == 81,
                 "rank0 weight map missed tensors");
         require(rank3.tensor_count() == 81,
@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
                     std::vector<uint64_t>({1280, 5120}),
                 "attention convolution must stay replicated");
 
-        const dsv4::QwenDFlash2WeightMap single(index, config, 1, 0);
+        const pocket::QwenDFlash2WeightMap single(index, config, 1, 0);
         require(!single.sharded(), "single-rank DFlash2 must stay replicated");
         require(single.local_device_bytes() > 3ull * 1024 * 1024 * 1024 &&
                     single.local_device_bytes() < 4ull * 1024 * 1024 * 1024,

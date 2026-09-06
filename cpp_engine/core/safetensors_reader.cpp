@@ -12,7 +12,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 std::string read_file(const std::string& path) {
@@ -264,4 +264,4 @@ SafeFp4TensorPair resolve_fp4_tensor_pair(const SafeTensorsIndex& index, const S
     return pair;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

@@ -8,7 +8,7 @@
 // commits will add real forward verification (embed → attn → dense layer
 // output parity, then full layer forward).
 
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 
 #include <cstdio>
 #include <iostream>
@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
         return 2;
     }
     try {
-        auto r = dsv4::run_gguf_min_layer_smoke(argv[1]);
+        auto r = pocket::run_gguf_min_layer_smoke(argv[1]);
         std::printf("[PASS] gguf_min_layer_smoke "
                     "layers=%d hash_layers=%d dim=%d moe_inter=%d "
                     "experts=%d topk=%d vocab=%d\n",

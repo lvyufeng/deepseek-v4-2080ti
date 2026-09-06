@@ -31,7 +31,7 @@
 #include <string>
 #include <utility>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 constexpr int kKvScaleBlock = 64;
@@ -82,8 +82,8 @@ int qwen_env_int(const char* name, int fallback) {
 // The wide 128x64 tile only pays off once the batch fills its row span; below
 // that the WMMA path stays cheaper. Enabled by default above the row threshold.
 bool qwen_nvfp4_wide_n64_enabled(int rows) {
-    return rows >= qwen_env_int("DSV4_QWEN_NVFP4_WIDE_N64_MIN_ROWS", 128) &&
-           qwen_env_enabled_default("DSV4_QWEN_NVFP4_WIDE_N64");
+    return rows >= qwen_env_int("POCKETLLM_QWEN_NVFP4_WIDE_N64_MIN_ROWS", 128) &&
+           qwen_env_enabled_default("POCKETLLM_QWEN_NVFP4_WIDE_N64");
 }
 
 struct DeviceLinear {
@@ -417,12 +417,12 @@ struct QwenEngine::Impl {
     // and rejects a drafter checkpoint at construction.
     // Caps the verified draft block width. 0 verifies the full seven-draft
     // proposal, which is the upstream behaviour and stays the default.
-    int dflash2_draft_width = qwen_env_int("DSV4_DFLASH2_DRAFT_WIDTH", 0);
+    int dflash2_draft_width = qwen_env_int("POCKETLLM_DFLASH2_DRAFT_WIDTH", 0);
     // A fixed cap cannot serve both high- and low-acceptance workloads, so the
     // width is also allowed to track measured acceptance. The controller keeps an
     // exponentially weighted accepted-draft count and verifies one row past it,
     // which is the cheapest width that can still grow when acceptance recovers.
-    bool dflash2_adaptive_width = qwen_env_enabled("DSV4_DFLASH2_ADAPTIVE_WIDTH");
+    bool dflash2_adaptive_width = qwen_env_enabled("POCKETLLM_DFLASH2_ADAPTIVE_WIDTH");
     double dflash2_accept_ewma = 0.0;
     uint64_t dflash2_width_samples = 0;
     std::unique_ptr<QwenDSparkConfig> dspark_config;
@@ -810,7 +810,7 @@ struct QwenEngine::Impl {
             map.checkpoint_linear_kind_counts();
         telemetry.host_global_metadata_bytes = map.host_global_metadata_bytes();
         if (telemetry.checkpoint_linear_kinds.nvfp4_group16 != 0) {
-            const char* requested = std::getenv("DSV4_QWEN_NVFP4");
+            const char* requested = std::getenv("POCKETLLM_QWEN_NVFP4");
             const bool reference = requested != nullptr &&
                 std::strcmp(requested, "reference") == 0;
             const bool dp4a = requested != nullptr &&
@@ -821,7 +821,7 @@ struct QwenEngine::Impl {
                 std::strcmp(requested, "auto") == 0;
             if (!reference && !dp4a && !wmma && !automatic) {
                 throw std::runtime_error(
-                    "DSV4_QWEN_NVFP4 must be auto, dp4a, wmma, or reference");
+                    "POCKETLLM_QWEN_NVFP4 must be auto, dp4a, wmma, or reference");
             }
             telemetry.nvfp4_decode_path = reference
                 ? "packed_reference" : wmma ? "q8_group32_wmma" :
@@ -832,9 +832,9 @@ struct QwenEngine::Impl {
                 telemetry.nvfp4_prefill_path = "q8_group32_dp4a";
             } else {
                 const char* fused =
-                    std::getenv("DSV4_QWEN_NVFP4_FUSED_SWIGLU");
+                    std::getenv("POCKETLLM_QWEN_NVFP4_FUSED_SWIGLU");
                 const char* shared =
-                    std::getenv("DSV4_QWEN_NVFP4_SHARED_Q8_SWIGLU");
+                    std::getenv("POCKETLLM_QWEN_NVFP4_SHARED_Q8_SWIGLU");
                 // Report the path the configured chunk size will actually
                 // take, since the wide tile only engages above a row count.
                 const bool wide = qwen_nvfp4_wide_n64_enabled(
@@ -1946,7 +1946,7 @@ struct QwenEngine::Impl {
         if (options.tp_world == 1 || slices <= 1 || rows < slices * 2) {
             return false;
         }
-#ifndef DSV4_HAVE_TP_COMM
+#ifndef POCKET_HAVE_TP_COMM
         return false;
 #else
         if (!use_nccl_comm_stream || options.nccl_id_path.empty()) return false;
@@ -2010,7 +2010,7 @@ struct QwenEngine::Impl {
     void all_reduce_half(uint16_t* values, int count, const char* site = "other") {
         PhaseScope scope(this, std::string("ar.") + site);
         if (options.tp_world == 1) return;
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (options.nccl_id_path.empty()) {
             throw std::runtime_error("Qwen TP requires --nccl-id-path");
         }
@@ -2207,7 +2207,7 @@ struct QwenEngine::Impl {
                       columns),
                 "channel FP8 FP16-activation projection");
         } else if (linear.kind == QwenLinearKind::NvFp4Group16) {
-            const char* requested = std::getenv("DSV4_QWEN_NVFP4");
+            const char* requested = std::getenv("POCKETLLM_QWEN_NVFP4");
             const bool reference = requested != nullptr &&
                 std::strcmp(requested, "reference") == 0;
             const bool explicit_dp4a = requested != nullptr &&
@@ -2218,7 +2218,7 @@ struct QwenEngine::Impl {
                 std::strcmp(requested, "auto") == 0;
             if (!reference && !explicit_dp4a && !explicit_wmma && !automatic) {
                 throw std::runtime_error(
-                    "DSV4_QWEN_NVFP4 must be auto, dp4a, wmma, or reference");
+                    "POCKETLLM_QWEN_NVFP4 must be auto, dp4a, wmma, or reference");
             }
             const int blocks_per_row = columns / 64;
             if (!reference) {
@@ -2849,7 +2849,7 @@ struct QwenEngine::Impl {
         } else if (rows == 1) {
             const int context_length = position_offset + 1;
             const bool optimized_attention =
-                qwen_env_enabled_default("DSV4_QWEN_GQA_OPTIMIZED") ||
+                qwen_env_enabled_default("POCKETLLM_QWEN_GQA_OPTIMIZED") ||
                 attention_window > 0;
             // The split/merge decode path used to lose below 16384 context
             // because it walked 2048 positions per split serially, leaving the
@@ -2958,7 +2958,7 @@ struct QwenEngine::Impl {
                 k_dense.f16_data(), v_dense.f16_data(), context_length,
                 kv_heads, head_dim, kKvScaleBlock, max_context),
                 "dequant FP8 cache to dense FP16");
-            if (qwen_env_enabled_default("DSV4_QWEN_GQA_OPTIMIZED") ||
+            if (qwen_env_enabled_default("POCKETLLM_QWEN_GQA_OPTIMIZED") ||
                 attention_window > 0) {
                 require_launch(qwen_gqa_prefill_attention_f16_tiled_cuda(
                     q_norm.f16_data(), k_dense.f16_data(), v_dense.f16_data(),
@@ -2994,7 +2994,7 @@ struct QwenEngine::Impl {
                 k_dense.f16_data(), v_dense.f16_data(), context_length,
                 kv_heads, head_dim, max_context),
                 "dequant INT8 cache to dense FP16");
-            if (qwen_env_enabled_default("DSV4_QWEN_GQA_OPTIMIZED") ||
+            if (qwen_env_enabled_default("POCKETLLM_QWEN_GQA_OPTIMIZED") ||
                 attention_window > 0) {
                 require_launch(qwen_gqa_prefill_attention_f16_tiled_cuda(
                     q_norm.f16_data(), k_dense.f16_data(), v_dense.f16_data(),
@@ -3031,7 +3031,7 @@ struct QwenEngine::Impl {
                 layer.full.turboquant_cache.byte_data() + turboquant_slot_offset, k_dense.f16_data(),
                 v_dense.f16_data(), context_length, kv_heads, head_dim,
                 max_context), "dequant TurboQuant cache to dense FP16");
-            if (qwen_env_enabled_default("DSV4_QWEN_GQA_OPTIMIZED") ||
+            if (qwen_env_enabled_default("POCKETLLM_QWEN_GQA_OPTIMIZED") ||
                 attention_window > 0) {
                 require_launch(qwen_gqa_prefill_attention_f16_tiled_cuda(
                     q_norm.f16_data(), k_dense.f16_data(), v_dense.f16_data(),
@@ -3120,7 +3120,7 @@ struct QwenEngine::Impl {
         // The tiled kernel shares each K/V element across a head group and a
         // pair of query rows, so it is the default for multi-row prefill. The
         // wider TP4 candidate is selected separately through LONG_TILE.
-        } else if (qwen_env_enabled_default("DSV4_QWEN_GQA_OPTIMIZED") ||
+        } else if (qwen_env_enabled_default("POCKETLLM_QWEN_GQA_OPTIMIZED") ||
                    attention_window > 0) {
             require_launch(qwen_gqa_prefill_attention_f16_tiled_cuda(
                 q_norm.f16_data(),
@@ -3185,19 +3185,19 @@ struct QwenEngine::Impl {
         const bool fused_decode_swiglu = rows == 1 && compatible_fp8_swiglu;
         const bool fused_small_batch_swiglu = rows > 1 && rows <= 8 &&
             compatible_fp8_swiglu && hidden_size % 4 == 0;
-        const char* nvfp4_mode = std::getenv("DSV4_QWEN_NVFP4");
+        const char* nvfp4_mode = std::getenv("POCKETLLM_QWEN_NVFP4");
         const bool nvfp4_wmma = nvfp4_mode == nullptr || *nvfp4_mode == '\0' ||
             std::strcmp(nvfp4_mode, "auto") == 0 ||
             std::strcmp(nvfp4_mode, "wmma") == 0;
         const char* fused_nvfp4 =
-            std::getenv("DSV4_QWEN_NVFP4_FUSED_SWIGLU");
+            std::getenv("POCKETLLM_QWEN_NVFP4_FUSED_SWIGLU");
         const bool fused_nvfp4_swiglu = rows >= 8 && nvfp4_wmma &&
             fused_nvfp4 != nullptr && std::strcmp(fused_nvfp4, "1") == 0 &&
             layer.gate.kind == QwenLinearKind::NvFp4Group16 &&
             layer.up.kind == QwenLinearKind::NvFp4Group16 &&
             layer.gate.logical_shape == layer.up.logical_shape;
         const char* shared_nvfp4 =
-            std::getenv("DSV4_QWEN_NVFP4_SHARED_Q8_SWIGLU");
+            std::getenv("POCKETLLM_QWEN_NVFP4_SHARED_Q8_SWIGLU");
         const bool shared_nvfp4_enabled = shared_nvfp4 == nullptr ||
             std::strcmp(shared_nvfp4, "0") != 0;
         const bool shared_nvfp4_swiglu = rows >= 8 && nvfp4_wmma &&
@@ -3365,7 +3365,7 @@ struct QwenEngine::Impl {
         result.local_logits.resize(static_cast<size_t>(rows));
         result.position_after = position_after;
 
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (options.tp_world > 1) {
             if (options.nccl_id_path.empty()) {
                 throw std::runtime_error("Qwen TP requires --nccl-id-path");
@@ -3410,7 +3410,7 @@ struct QwenEngine::Impl {
         } else
 #endif
         {
-#ifndef DSV4_HAVE_TP_COMM
+#ifndef POCKET_HAVE_TP_COMM
             if (options.tp_world > 1) {
                 throw std::runtime_error(
                     "Qwen TP requires an NCCL-enabled build");
@@ -3547,7 +3547,7 @@ struct QwenEngine::Impl {
         result.top_logits.resize(static_cast<size_t>(rows));
         result.local_logits.resize(static_cast<size_t>(rows));
         result.position_after = position_after;
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (options.tp_world > 1) {
             if (options.nccl_id_path.empty()) {
                 throw std::runtime_error("Qwen TP requires --nccl-id-path");
@@ -3608,7 +3608,7 @@ struct QwenEngine::Impl {
         } else
 #endif
         {
-#ifndef DSV4_HAVE_TP_COMM
+#ifndef POCKET_HAVE_TP_COMM
             if (options.tp_world > 1) {
                 throw std::runtime_error(
                     "Qwen TP requires an NCCL-enabled build");
@@ -5571,4 +5571,4 @@ void QwenEngine::worker_command_free_slot(int32_t slot_id) {
     impl_->cmd->send_to_workers(header, 4);
 }
 
-}  // namespace dsv4
+}  // namespace pocket

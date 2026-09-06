@@ -72,7 +72,7 @@ from src.server.engine import DeepSeekServingEngine
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 from pocketllm import protocol  # noqa: E402
-from src.encoding.dsv4 import dsml_token, encode_messages, eos_token, parse_message_from_completion_text  # noqa: E402
+from src.encoding.deepseek_v4 import dsml_token, encode_messages, eos_token, parse_message_from_completion_text  # noqa: E402
 
 
 DEFAULT_MODEL_ID = "deepseek-v4-flash-w8a8"

@@ -12,7 +12,7 @@
 #include <thread>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 namespace {
 
@@ -172,4 +172,4 @@ void CmdChannel::recv_from_root(int32_t* buf, std::size_t count) {
     }
 }
 
-}  // namespace dsv4
+}  // namespace pocket

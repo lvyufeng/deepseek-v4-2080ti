@@ -137,7 +137,7 @@ bool check_delta_rule() {
         cudaMemcpy(dev.g, g.data(), g.size() * sizeof(float), cudaMemcpyHostToDevice);
         cudaMemcpy(dev.beta, beta.data(), beta.size() * sizeof(float), cudaMemcpyHostToDevice);
 
-        if (!dsv4::qwen_gated_delta_step_cuda(dev.state, dev.q, dev.k, dev.v, dev.g,
+        if (!pocket::qwen_gated_delta_step_cuda(dev.state, dev.q, dev.k, dev.v, dev.g,
                                               dev.beta, dev.out, heads, key_heads,
                                               key_dim, value_dim, q_scale)) {
             fail("gated_delta_step launch failed");
@@ -229,7 +229,7 @@ bool check_delta_sequence() {
     auto run_steps = [&](std::vector<float>& out, std::vector<float>& final_state) {
         cudaMemcpy(d_state, init_state.data(), state_size * sizeof(float), cudaMemcpyHostToDevice);
         for (int t = 0; t < rows; ++t) {
-            if (!dsv4::qwen_gated_delta_step_cuda(
+            if (!pocket::qwen_gated_delta_step_cuda(
                     d_state, d_q + static_cast<size_t>(t) * qk_row,
                     d_k + static_cast<size_t>(t) * qk_row,
                     d_v + static_cast<size_t>(t) * out_row,
@@ -253,7 +253,7 @@ bool check_delta_sequence() {
     if (ok) {
         cudaMemcpy(d_state, init_state.data(), state_size * sizeof(float), cudaMemcpyHostToDevice);
         cudaMemset(d_out, 0, seq_out.size() * sizeof(float));
-        ok = dsv4::qwen_gated_delta_sequence_cuda(d_state, d_q, d_k, d_v, d_g, d_beta, d_out,
+        ok = pocket::qwen_gated_delta_sequence_cuda(d_state, d_q, d_k, d_v, d_g, d_beta, d_out,
                                                   rows, heads, key_heads, key_dim, value_dim,
                                                   q_scale);
         if (!ok) fail("gated_delta_sequence launch failed");
@@ -302,7 +302,7 @@ bool check_delta_sequence() {
 }  // namespace
 
 int main() {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::printf("[SKIP] test_qwen_delta_rule requires a CUDA device\n");
         return 0;
     }

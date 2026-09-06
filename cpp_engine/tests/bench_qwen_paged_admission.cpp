@@ -97,12 +97,12 @@ double percentile(std::vector<double> values, double q) {
 // Submits the whole workload as fast as it is accepted, then waits for it to
 // drain. Rejections are counted rather than retried: under a fixed budget an
 // oversized request is a permanent no, and retrying would hide that.
-Result run_arm(dsv4::QwenEngine& engine, const Options& opts,
+Result run_arm(pocket::QwenEngine& engine, const Options& opts,
                const std::vector<std::vector<int>>& prompts) {
-    dsv4::QwenBatchScheduler scheduler(&engine, opts.slots);
+    pocket::QwenBatchScheduler scheduler(&engine, opts.slots);
     scheduler.set_prefill_token_budget(opts.prefill_budget);
 
-    dsv4::QwenBatchSamplingParams sampling;
+    pocket::QwenBatchSamplingParams sampling;
     sampling.temperature = 0.0f;  // greedy, so both arms do the same work
     sampling.max_new_tokens = opts.decode;
     sampling.ignore_eos = true;   // every request runs its full decode length
@@ -121,7 +121,7 @@ Result run_arm(dsv4::QwenEngine& engine, const Options& opts,
     int submitted = 0;
     for (const auto& prompt : prompts) {
         const uint64_t id = scheduler.submit_request(
-            prompt, sampling, [&](const dsv4::SchedulerGenerationResult& r) {
+            prompt, sampling, [&](const pocket::SchedulerGenerationResult& r) {
                 std::lock_guard<std::mutex> lock(mu);
                 ttfts.push_back(r.ttft_seconds);
                 generated += r.completion_tokens;
@@ -163,7 +163,7 @@ Result run_arm(dsv4::QwenEngine& engine, const Options& opts,
 // A short discarded run so the measured pass does not pay first-touch costs.
 // The prefix cache is cleared afterwards: these are the same prompts the
 // measured pass uses, and a warm prefix would let it skip prefill entirely.
-void warmup(dsv4::QwenEngine& engine, const Options& opts,
+void warmup(pocket::QwenEngine& engine, const Options& opts,
             const std::vector<std::vector<int>>& prompts) {
     Options warm = opts;
     warm.decode = std::min(opts.decode, 4);
@@ -238,10 +238,10 @@ int main(int argc, char** argv) {
 
     // Both arms get this many bytes. Derived from the engine's own per-slot cost
     // so the default is a round number of arena slots rather than a guess.
-    dsv4::QwenEngineOptions probe;
+    pocket::QwenEngineOptions probe;
     probe.max_batch_size = 1;
     probe.kv_paged = false;
-    dsv4::QwenEngine sizer(opts.checkpoint, probe, opts.layers, opts.max_context);
+    pocket::QwenEngine sizer(opts.checkpoint, probe, opts.layers, opts.max_context);
     const uint64_t bytes_per_slot = sizer.kv_cache_bytes();
     const int arena_slots =
         opts.budget_mb > 0
@@ -276,10 +276,10 @@ int main(int argc, char** argv) {
     // Arena arm: the byte budget becomes a slot count, and the slot count is the
     // whole admission rule.
     {
-        dsv4::QwenEngineOptions o;
+        pocket::QwenEngineOptions o;
         o.max_batch_size = arena_slots;
         o.kv_paged = false;
-        dsv4::QwenEngine engine(opts.checkpoint, o, opts.layers, opts.max_context);
+        pocket::QwenEngine engine(opts.checkpoint, o, opts.layers, opts.max_context);
         engine.allocate_batch_slots(arena_slots);
         Options arm = opts;
         // Cannot exceed what the arena allocated, whatever the ceiling asks for.
@@ -292,12 +292,12 @@ int main(int argc, char** argv) {
 
     // Paged arm: same bytes, handed out per block against the full slot ceiling.
     {
-        dsv4::QwenEngineOptions o;
+        pocket::QwenEngineOptions o;
         o.max_batch_size = opts.slots;
         o.kv_paged = true;
         o.kv_block_size = opts.block_size;
         o.kv_cache_bytes = budget;
-        dsv4::QwenEngine engine(opts.checkpoint, o, opts.layers, opts.max_context);
+        pocket::QwenEngine engine(opts.checkpoint, o, opts.layers, opts.max_context);
         engine.allocate_batch_slots(opts.slots);
         warmup(engine, opts, prompts);
         report("paged", opts, run_arm(engine, opts, prompts));

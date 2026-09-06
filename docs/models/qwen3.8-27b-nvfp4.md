@@ -6,7 +6,7 @@
 
 RTX 2080 Ti has no native FP4 tensor-core instruction. Nothing here executes Blackwell FP4 MMA. The NVFP4 weights are unpacked in registers to INT8 and consumed by DP4A and INT8 WMMA, which is why NVFP4 buys memory rather than speed on this hardware. Read the performance section before choosing this format.
 
-Like the FP8 page, this covers text prompt/token-ID smoke and timed greedy generation through `dsv4_cpp_engine`. The vision tower is not executed and the OpenAI-compatible server is not wired up.
+Like the FP8 page, this covers text prompt/token-ID smoke and timed greedy generation through `pocketllm_engine`. The vision tower is not executed and the OpenAI-compatible server is not wired up.
 
 ## Checkpoint specification
 
@@ -62,15 +62,15 @@ Gates, all defaulting to the fast path:
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `DSV4_QWEN_NVFP4` | `auto` | `dp4a`, `wmma`, or `reference` force a single kernel family |
-| `DSV4_QWEN_NVFP4_WIDE_N64` | on | `0` falls back to the narrow WMMA prefill tile |
-| `DSV4_QWEN_NVFP4_WIDE_N64_MIN_ROWS` | `128` | row count at which the wide tile engages |
-| `DSV4_QWEN_NVFP4_SHARED_Q8_SWIGLU` | on | share one activation quantization between gate and up |
+| `POCKETLLM_QWEN_NVFP4` | `auto` | `dp4a`, `wmma`, or `reference` force a single kernel family |
+| `POCKETLLM_QWEN_NVFP4_WIDE_N64` | on | `0` falls back to the narrow WMMA prefill tile |
+| `POCKETLLM_QWEN_NVFP4_WIDE_N64_MIN_ROWS` | `128` | row count at which the wide tile engages |
+| `POCKETLLM_QWEN_NVFP4_SHARED_Q8_SWIGLU` | on | share one activation quantization between gate and up |
 | `QWEN_PHASE_PROFILE` | off | per-phase timing breakdown |
 
 ## Validated performance
 
-Hardware: 2×RTX 2080 Ti 22 GiB on the NVLink-connected physical GPUs 2 and 3 (`NV2`), CPU affinity `22-43,66-87`, single request, 16 generated tokens, real checkpoints and real tokenizer fixtures, three serial fresh-process repetitions per length, medians reported. All three configurations below ran on the **same** engine binary `4707381072...43cb1048` with `DSV4_QWEN_GQA_OPTIMIZED=1`, the same prompt fixture, prefill chunk 512, and FP16 KV cache.
+Hardware: 2×RTX 2080 Ti 22 GiB on the NVLink-connected physical GPUs 2 and 3 (`NV2`), CPU affinity `22-43,66-87`, single request, 16 generated tokens, real checkpoints and real tokenizer fixtures, three serial fresh-process repetitions per length, medians reported. All three configurations below ran on the **same** engine binary `4707381072...43cb1048` with `POCKETLLM_QWEN_GQA_OPTIMIZED=1`, the same prompt fixture, prefill chunk 512, and FP16 KV cache.
 
 | Prompt | NVFP4 TP2 prefill / decode | FP8 TP2 prefill / decode | NVFP4 memory / rank | FP8 memory / rank |
 | ---: | ---: | ---: | ---: | ---: |
@@ -90,7 +90,7 @@ Deployment reference on all four GPUs, same binary and fixture:
 
 ### Wide-N64 prefill tile
 
-The wide tile is the one change that moved NVFP4 prefill materially. Same binary, same fixture, only `DSV4_QWEN_NVFP4_WIDE_N64` differs:
+The wide tile is the one change that moved NVFP4 prefill materially. Same binary, same fixture, only `POCKETLLM_QWEN_NVFP4_WIDE_N64` differs:
 
 | Prompt | Wide off (narrow WMMA) | Wide on | Prefill gain |
 | ---: | ---: | ---: | ---: |
@@ -112,7 +112,7 @@ At batch 1 the ordering inverts — `dp4a=0.197ms`, `wmma=0.979ms`, `wide_n64=1.
 
 - A fused NVFP4 SwiGLU projection regressed and is not on the default path.
 - Sharing the INT8 activation quantization between gate and up is roughly break-even; it is kept because it lowers workspace pressure at no measured cost.
-- Forcing `DSV4_QWEN_NVFP4=dp4a` for prefill measured 28.57 tok/s at 8,192, about 8.4x below the wide tile. Pure DP4A is a decode kernel.
+- Forcing `POCKETLLM_QWEN_NVFP4=dp4a` for prefill measured 28.57 tok/s at 8,192, about 8.4x below the wide tile. Pure DP4A is a decode kernel.
 
 ## Correctness and precision
 
@@ -134,9 +134,9 @@ Two ranks pinned to the NVLink pair, one shared NCCL ID:
 rm -f /tmp/pocketllm_qwen_nvfp4_nccl.id
 for rank in 0 1; do
   physical=$((rank + 2))
-  CUDA_VISIBLE_DEVICES=$physical DSV4_QWEN_GQA_OPTIMIZED=1 \
+  CUDA_VISIBLE_DEVICES=$physical POCKETLLM_QWEN_GQA_OPTIMIZED=1 \
   taskset -c 22-43,66-87 \
-  build/cpp_engine/dsv4_cpp_engine \
+  build/cpp_engine/pocketllm_engine \
     --ckpt /path/to/Qwen3.8-27B-NVFP4 \
     --tp-world 2 --tp-rank $rank --device 0 \
     --nccl-id-path /tmp/pocketllm_qwen_nvfp4_nccl.id \
@@ -153,10 +153,10 @@ The fastest validated measurement command, which produced the NVFP4 rows above:
 taskset -c 22-43,66-87 /path/to/deepseek/bin/python \
   scripts/bench_qwen_long_context.py \
   --ckpt /path/to/Qwen3.8-27B-NVFP4 \
-  --binary build/cpp_engine/dsv4_cpp_engine \
+  --binary build/cpp_engine/pocketllm_engine \
   --lengths 512,8192 --repetitions 3 \
   --tp-world 2 --devices 2,3 \
-  --env DSV4_QWEN_GQA_OPTIMIZED=1 \
+  --env POCKETLLM_QWEN_GQA_OPTIMIZED=1 \
   --topology-label "NVFP4 TP2 GPUs2,3 NV2 wide-n64" \
   --work-dir .tmp/fair_nvfp4_tp2_wide_gqaopt
 ```

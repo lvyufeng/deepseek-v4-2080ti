@@ -82,7 +82,7 @@ int main(int argc, char** argv) {
         auto ref_scores = read_vec<float>(in, static_cast<size_t>(n_chunks));
 
         // Cross-check our host YaRN inv-freqs against the fixture's.
-        std::vector<float> our_freqs = dsv4::flashmemory_yarn_inv_freqs(
+        std::vector<float> our_freqs = pocket::flashmemory_yarn_inv_freqs(
             rope_dim, 160000.0, 16.0, 65536, 32.0, 1.0);
         double freq_max_err = 0.0;
         for (int i = 0; i < rope_dim / 2; ++i)
@@ -108,14 +108,14 @@ int main(int argc, char** argv) {
         check(cudaMalloc(&d_scores, static_cast<size_t>(n_chunks) * sizeof(float)), "malloc scores");
 
         // Raw logits.
-        if (!dsv4::flashmemory_score_layer_cuda(
+        if (!pocket::flashmemory_score_layer_cuda(
                 d_hidden, d_wq_a, d_wq_b, d_q_norm, d_weights_proj, d_inv_freqs, d_ck,
                 d_q, d_qlora, d_fused, d_logits,
                 n_chunks, n_heads, head_dim, q_lora_rank, hidden_dim, rope_dim,
                 rms_eps, position, /*apply_sigmoid=*/false))
             throw std::runtime_error("flashmemory_score_layer_cuda (logits) launch failed");
         // Sigmoid scores.
-        if (!dsv4::flashmemory_score_layer_cuda(
+        if (!pocket::flashmemory_score_layer_cuda(
                 d_hidden, d_wq_a, d_wq_b, d_q_norm, d_weights_proj, d_inv_freqs, d_ck,
                 d_q, d_qlora, d_fused, d_scores,
                 n_chunks, n_heads, head_dim, q_lora_rank, hidden_dim, rope_dim,

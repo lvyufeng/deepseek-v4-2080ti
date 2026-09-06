@@ -17,7 +17,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 const JsonValue& required(const JsonObject& object, const std::string& key) {
@@ -110,10 +110,10 @@ std::string shape_string(const std::vector<uint64_t>& shape) {
     return output.str();
 }
 
-// Tensor-parallel drafter sharding. Default on; set DSV4_DFLASH2_SHARD=0 to fall
+// Tensor-parallel drafter sharding. Default on; set POCKETLLM_DFLASH2_SHARD=0 to fall
 // back to the replicated layout for one-click rollback or parity comparison.
 bool dflash2_shard_enabled() {
-    const char* value = std::getenv("DSV4_DFLASH2_SHARD");
+    const char* value = std::getenv("POCKETLLM_DFLASH2_SHARD");
     if (value == nullptr || *value == '\0') return true;
     const std::string text(value);
     return text != "0" && text != "false" && text != "FALSE" && text != "off" &&
@@ -186,7 +186,7 @@ class DFlash2StageProfiler {
 public:
     DFlash2StageProfiler(int device, int rank)
         : device_(device), rank_(rank) {
-        const char* value = std::getenv("DSV4_DFLASH2_PROFILE");
+        const char* value = std::getenv("POCKETLLM_DFLASH2_PROFILE");
         enabled_ = value != nullptr && value[0] != '\0' &&
                    std::string(value) != "0";
     }
@@ -595,19 +595,19 @@ struct QwenDFlash2Runtime::Impl {
             throw std::runtime_error("invalid Qwen DFlash2 runtime target tensors");
         }
         check_device(device_set(device), "select Qwen DFlash2 device");
-        grouped_attention = env_enabled("DSV4_DFLASH2_GROUPED_ATTN");
-        fused_swiglu = env_enabled("DSV4_DFLASH2_FUSED_SWIGLU");
-        cublas_fp32 = env_enabled("DSV4_DFLASH2_CUBLAS_FP32");
+        grouped_attention = env_enabled("POCKETLLM_DFLASH2_GROUPED_ATTN");
+        fused_swiglu = env_enabled("POCKETLLM_DFLASH2_FUSED_SWIGLU");
+        cublas_fp32 = env_enabled("POCKETLLM_DFLASH2_CUBLAS_FP32");
         target_head.cublas_fp32 = cublas_fp32;
-        small_batch_gemm = env_enabled("DSV4_DFLASH2_SMALL_BATCH_GEMM");
+        small_batch_gemm = env_enabled("POCKETLLM_DFLASH2_SMALL_BATCH_GEMM");
         // The single-block top-k launches one block per draft row, leaving a
         // 68-SM device almost idle. The split path partitions each row's shard
         // and merges with the identical comparator.
-        split_local_topk = env_enabled("DSV4_DFLASH2_SPLIT_TOPK");
+        split_local_topk = env_enabled("POCKETLLM_DFLASH2_SPLIT_TOPK");
         // Exact MAP over the selector chain instead of greedy argmax. Draft
         // content is re-verified by the target, so this can only move acceptance.
-        viterbi_selector = env_enabled("DSV4_DFLASH2_VITERBI_SELECTOR");
-        if (const char* passes = std::getenv("DSV4_DFLASH2_REFINE_PASSES")) {
+        viterbi_selector = env_enabled("POCKETLLM_DFLASH2_VITERBI_SELECTOR");
+        if (const char* passes = std::getenv("POCKETLLM_DFLASH2_REFINE_PASSES")) {
             const int parsed = std::atoi(passes);
             if (parsed > 1) refine_passes = parsed;
         }
@@ -725,7 +725,7 @@ struct QwenDFlash2Runtime::Impl {
 
     void all_reduce_half(uint16_t* values, int count) {
         if (tp_world == 1) return;
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (nccl_id_path.empty()) throw std::runtime_error("Qwen DFlash2 TP requires NCCL ID path");
         tp_all_reduce_sum_f16_inplace(tp_world, tp_rank, device, nccl_id_path.c_str(), values, count);
 #else
@@ -736,7 +736,7 @@ struct QwenDFlash2Runtime::Impl {
 
     void all_reduce_float(float* values, int count) {
         if (tp_world == 1) return;
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (nccl_id_path.empty()) throw std::runtime_error("Qwen DFlash2 TP requires NCCL ID path");
         tp_all_reduce_sum_float_inplace(tp_world, tp_rank, device, nccl_id_path.c_str(), values, count);
 #else
@@ -1135,7 +1135,7 @@ struct QwenDFlash2Runtime::Impl {
         dump_float_sharded("topk.local.logits", local_unary.f32_data(),
                            local_unary.shape);
         profiler.begin("tp_global_topk");
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (tp_world > 1) {
             if (nccl_id_path.empty()) throw std::runtime_error("Qwen DFlash2 TP requires NCCL ID path");
             tp_global_topk_rows_device(
@@ -1233,7 +1233,7 @@ struct QwenDFlash2Runtime::Impl {
         // copies to every proposal while no production caller reads them. Keep
         // the legacy host view available only when explicitly requested for
         // diagnostics; the normal runtime transfers the selected path only.
-        if (env_enabled("DSV4_DFLASH2_DOWNLOAD_CANDIDATES")) {
+        if (env_enabled("POCKETLLM_DFLASH2_DOWNLOAD_CANDIDATES")) {
             proposal.candidates.resize(
                 static_cast<size_t>(draft_rows) * config.selector_top_k);
             proposal.candidate_logits.resize(proposal.candidates.size());
@@ -1317,4 +1317,4 @@ void QwenDFlash2Runtime::crop_context(int position) {
 }
 QwenDFlash2Proposal QwenDFlash2Runtime::propose(int anchor_token) { return impl_->propose(anchor_token); }
 
-}  // namespace dsv4
+}  // namespace pocket

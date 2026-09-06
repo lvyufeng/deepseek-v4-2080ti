@@ -50,7 +50,7 @@ std::vector<float> matvec_ref_double(const std::vector<float>& x, const uint16_t
     return y;
 }
 
-const dsv4::SafeTensorInfo* require_tensor(const dsv4::SafeTensorsShard& shard, const std::string& name, dsv4::SafeDType dtype) {
+const pocket::SafeTensorInfo* require_tensor(const pocket::SafeTensorsShard& shard, const std::string& name, pocket::SafeDType dtype) {
     const auto* info = shard.find_tensor(name);
     if (info == nullptr) throw std::runtime_error("missing tensor: " + name);
     if (info->dtype != dtype || info->shape.size() != 2) throw std::runtime_error("bad tensor: " + name);
@@ -65,19 +65,19 @@ int main(int argc, char** argv) {
             std::cerr << "usage: test_embedding_head <ckpt_dir>\n";
             return 2;
         }
-        if (!dsv4::cuda_runtime_available()) {
+        if (!pocket::cuda_runtime_available()) {
             std::cout << "[SKIP] CUDA runtime is not available\n";
             return 0;
         }
         const std::string ckpt = argv[1];
-        dsv4::SafeTensorsIndex index(ckpt);
+        pocket::SafeTensorsIndex index(ckpt);
         const std::string* embed_shard_name = index.shard_for_tensor("embed.weight");
         const std::string* head_shard_name = index.shard_for_tensor("head.weight");
         if (embed_shard_name == nullptr || head_shard_name == nullptr) throw std::runtime_error("missing embed/head tensor");
-        dsv4::SafeTensorsShard embed_shard(index.shard_path(*embed_shard_name));
-        dsv4::SafeTensorsShard head_shard(index.shard_path(*head_shard_name));
-        const auto* embed = require_tensor(embed_shard, "embed.weight", dsv4::SafeDType::BF16);
-        const auto* head = require_tensor(head_shard, "head.weight", dsv4::SafeDType::BF16);
+        pocket::SafeTensorsShard embed_shard(index.shard_path(*embed_shard_name));
+        pocket::SafeTensorsShard head_shard(index.shard_path(*head_shard_name));
+        const auto* embed = require_tensor(embed_shard, "embed.weight", pocket::SafeDType::BF16);
+        const auto* head = require_tensor(head_shard, "head.weight", pocket::SafeDType::BF16);
         const int token = 1234;
         const int dim = static_cast<int>(embed->shape[1]);
         const int vocab_rows = 128;
@@ -102,9 +102,9 @@ int main(int argc, char** argv) {
         check_cuda(cudaMalloc(&d_logits_cpu_order, static_cast<size_t>(vocab_rows) * sizeof(float)), "cudaMalloc logits cpu order");
         check_cuda(cudaMemcpy(d_embed, token_row, static_cast<size_t>(dim) * sizeof(uint16_t), cudaMemcpyHostToDevice), "copy embed row");
         check_cuda(cudaMemcpy(d_head, head_data, static_cast<size_t>(vocab_rows) * dim * sizeof(uint16_t), cudaMemcpyHostToDevice), "copy head");
-        if (!dsv4::bf16_row_to_float_cuda(d_embed, d_x, 0, dim)) throw std::runtime_error("embed lookup launch failed");
-        if (!dsv4::bf16_matvec_cuda(d_x, d_head, d_logits, vocab_rows, dim)) throw std::runtime_error("head matvec launch failed");
-        if (!dsv4::bf16_matvec_cpu_order_cuda(d_x, d_head, d_logits_cpu_order, vocab_rows, dim)) throw std::runtime_error("head cpu-order matvec launch failed");
+        if (!pocket::bf16_row_to_float_cuda(d_embed, d_x, 0, dim)) throw std::runtime_error("embed lookup launch failed");
+        if (!pocket::bf16_matvec_cuda(d_x, d_head, d_logits, vocab_rows, dim)) throw std::runtime_error("head matvec launch failed");
+        if (!pocket::bf16_matvec_cpu_order_cuda(d_x, d_head, d_logits_cpu_order, vocab_rows, dim)) throw std::runtime_error("head cpu-order matvec launch failed");
         check_cuda(cudaDeviceSynchronize(), "sync kernels");
         std::vector<float> x(dim);
         std::vector<float> logits(vocab_rows);

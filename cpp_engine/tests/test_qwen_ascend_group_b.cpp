@@ -104,10 +104,10 @@ class DeviceBuffer {
 public:
     explicit DeviceBuffer(size_t count) : count_(count) {
         if (count == 0) return;
-        if (!dsv4::device_malloc_into(ptr_, count * sizeof(T))) {
+        if (!pocket::device_malloc_into(ptr_, count * sizeof(T))) {
             throw std::runtime_error("device_malloc failed");
         }
-        if (!dsv4::device_memset(ptr_, 0, count * sizeof(T))) {
+        if (!pocket::device_memset(ptr_, 0, count * sizeof(T))) {
             throw std::runtime_error("device_memset failed");
         }
     }
@@ -116,7 +116,7 @@ public:
         upload(host);
     }
 
-    ~DeviceBuffer() { dsv4::device_free(ptr_); }
+    ~DeviceBuffer() { pocket::device_free(ptr_); }
     DeviceBuffer(const DeviceBuffer&) = delete;
     DeviceBuffer& operator=(const DeviceBuffer&) = delete;
 
@@ -127,7 +127,7 @@ public:
             throw std::runtime_error("DeviceBuffer upload size mismatch");
         }
         if (count_ != 0 &&
-            !dsv4::memcpy_h2d(ptr_, host.data(), count_ * sizeof(T))) {
+            !pocket::memcpy_h2d(ptr_, host.data(), count_ * sizeof(T))) {
             throw std::runtime_error("memcpy_h2d failed");
         }
     }
@@ -135,7 +135,7 @@ public:
     std::vector<T> download() const {
         std::vector<T> host(count_);
         if (count_ != 0 &&
-            !dsv4::memcpy_d2h(host.data(), ptr_, count_ * sizeof(T))) {
+            !pocket::memcpy_d2h(host.data(), ptr_, count_ * sizeof(T))) {
             throw std::runtime_error("memcpy_d2h failed");
         }
         return host;
@@ -162,7 +162,7 @@ std::vector<float> random_floats(size_t count, std::mt19937& rng, float scale) {
 }
 
 void sync_or_throw(const std::string& what) {
-    if (!dsv4::device_synchronize()) {
+    if (!pocket::device_synchronize()) {
         throw std::runtime_error("device_synchronize failed after " + what);
     }
 }
@@ -292,7 +292,7 @@ void test_normalize_qk(std::mt19937& rng) {
     DeviceBuffer<float> d_qn(count);
     DeviceBuffer<float> d_kn(count);
 
-    expect(dsv4::qwen_normalize_gated_delta_qk_f16(
+    expect(pocket::qwen_normalize_gated_delta_qk_f16(
                d_q.get(), d_k.get(), d_qn.get(), d_kn.get(), rows, key_heads,
                kKeyDim),
            "normalize qk launch");
@@ -400,7 +400,7 @@ void test_gated_delta_recurrence(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_g(g);
     DeviceBuffer<uint16_t> d_beta(beta);
     DeviceBuffer<uint16_t> d_out(value_count);
-    expect(dsv4::qwen_gated_delta_sequence_f16(
+    expect(pocket::qwen_gated_delta_sequence_f16(
                d_state.get(), d_q.get(), d_k.get(), d_v.get(), d_g.get(),
                d_beta.get(), d_out.get(), rows, heads, key_heads, kKeyDim,
                kValueDim, q_scale),
@@ -420,12 +420,12 @@ void test_gated_delta_recurrence(std::mt19937& rng) {
     DeviceBuffer<float> d_shared_state(initial_state);
     DeviceBuffer<uint16_t> d_norm_out(value_count);
     DeviceBuffer<uint16_t> d_shared_out(value_count);
-    expect(dsv4::qwen_gated_delta_sequence_normalized_f16(
+    expect(pocket::qwen_gated_delta_sequence_normalized_f16(
                d_norm_state.get(), d_qn.get(), d_kn.get(), d_v.get(), d_g.get(),
                d_beta.get(), d_norm_out.get(), rows, heads, key_heads, kKeyDim,
                kValueDim, q_scale),
            "normalized gated delta launch");
-    expect(dsv4::qwen_gated_delta_sequence_normalized_shared_f16(
+    expect(pocket::qwen_gated_delta_sequence_normalized_shared_f16(
                d_shared_state.get(), d_qn.get(), d_kn.get(), d_v.get(), d_g.get(),
                d_beta.get(), d_shared_out.get(), rows, heads, key_heads, kKeyDim,
                kValueDim, q_scale),
@@ -451,12 +451,12 @@ void test_gated_delta_recurrence(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_q1(q1), d_k1(k1), d_v1(v1), d_g1(g1), d_beta1(beta1);
     DeviceBuffer<float> d_step_state(initial_state), d_one_state(initial_state);
     DeviceBuffer<uint16_t> d_step_out(one_value_count), d_one_out(one_value_count);
-    expect(dsv4::qwen_gated_delta_step_f16(
+    expect(pocket::qwen_gated_delta_step_f16(
                d_step_state.get(), d_q1.get(), d_k1.get(), d_v1.get(), d_g1.get(),
                d_beta1.get(), d_step_out.get(), heads, key_heads, kKeyDim,
                kValueDim, q_scale),
            "gated delta step launch");
-    expect(dsv4::qwen_gated_delta_sequence_f16(
+    expect(pocket::qwen_gated_delta_sequence_f16(
                d_one_state.get(), d_q1.get(), d_k1.get(), d_v1.get(), d_g1.get(),
                d_beta1.get(), d_one_out.get(), 1, heads, key_heads, kKeyDim,
                kValueDim, q_scale),
@@ -481,7 +481,7 @@ void test_linear_attn_gates(std::mt19937& rng) {
     a[19] = float_to_half(40.0f);
     DeviceBuffer<uint16_t> d_a(a), d_b(b), d_a_log(a_log), d_dt(dt_bias);
     DeviceBuffer<uint16_t> d_g(count), d_beta(count);
-    expect(dsv4::qwen_linear_attn_gates_f16(
+    expect(pocket::qwen_linear_attn_gates_f16(
                d_a.get(), d_b.get(), d_a_log.get(), d_dt.get(), d_g.get(),
                d_beta.get(), rows, heads),
            "linear attention gates launch");
@@ -562,7 +562,7 @@ void test_causal_conv(std::mt19937& rng) {
         random_halves(static_cast<size_t>(tail_len) * channels, rng, 0.4f);
     DeviceBuffer<uint16_t> d_x(x), d_weight(weight), d_tail(tail);
     DeviceBuffer<uint16_t> d_y(static_cast<size_t>(seq_len) * channels);
-    expect(dsv4::qwen_causal_depthwise_conv_silu_f16(
+    expect(pocket::qwen_causal_depthwise_conv_silu_f16(
                d_x.get(), d_weight.get(), d_tail.get(), d_y.get(), seq_len,
                channels, kernel, true),
            "causal conv launch");
@@ -577,7 +577,7 @@ void test_causal_conv(std::mt19937& rng) {
     // update_tail=false must leave history untouched.
     DeviceBuffer<uint16_t> d_tail_unchanged(tail);
     DeviceBuffer<uint16_t> d_y2(static_cast<size_t>(seq_len) * channels);
-    expect(dsv4::qwen_causal_depthwise_conv_silu_f16(
+    expect(pocket::qwen_causal_depthwise_conv_silu_f16(
                d_x.get(), d_weight.get(), d_tail_unchanged.get(), d_y2.get(),
                seq_len, channels, kernel, false),
            "causal conv no-tail-update launch");
@@ -594,11 +594,11 @@ void test_causal_conv(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_prefix(prefix_x), d_last(last_x), d_chain_tail(tail);
     DeviceBuffer<uint16_t> d_prefix_y(static_cast<size_t>(prefix) * channels);
     DeviceBuffer<uint16_t> d_last_y(channels);
-    expect(dsv4::qwen_causal_depthwise_conv_silu_f16(
+    expect(pocket::qwen_causal_depthwise_conv_silu_f16(
                d_prefix.get(), d_weight.get(), d_chain_tail.get(), d_prefix_y.get(),
                prefix, channels, kernel, true),
            "causal conv prefix launch");
-    expect(dsv4::qwen_causal_depthwise_conv_silu_f16(
+    expect(pocket::qwen_causal_depthwise_conv_silu_f16(
                d_last.get(), d_weight.get(), d_chain_tail.get(), d_last_y.get(), 1,
                channels, kernel, true),
            "causal conv decode launch");
@@ -609,7 +609,7 @@ void test_causal_conv(std::mt19937& rng) {
     expect(chained == d_y.download(), "causal conv prefill/decode continuity");
 
     DeviceBuffer<uint16_t> d_zero_y(static_cast<size_t>(seq_len) * channels);
-    expect(dsv4::qwen_causal_depthwise_conv_silu_f16(
+    expect(pocket::qwen_causal_depthwise_conv_silu_f16(
                d_x.get(), d_weight.get(), nullptr, d_zero_y.get(), seq_len,
                channels, kernel, false),
            "causal conv null-tail launch");
@@ -663,7 +663,7 @@ void test_partial_rope(std::mt19937& rng) {
     rope_reference(want_k, rows, kv_heads, head_dim, rotary_dim, start_position,
                    theta);
     DeviceBuffer<uint16_t> d_q(q), d_k(k);
-    expect(dsv4::qwen_partial_rope_rows_f16(
+    expect(pocket::qwen_partial_rope_rows_f16(
                d_q.get(), d_k.get(), start_position, rows, rotary_dim, theta,
                q_heads, kv_heads, head_dim),
            "partial rope launch");
@@ -721,7 +721,7 @@ void test_append_kv(std::mt19937& rng) {
     }
     DeviceBuffer<uint16_t> d_k_rows(k_rows), d_v_rows(v_rows);
     DeviceBuffer<uint16_t> d_k_cache(k_cache), d_v_cache(v_cache);
-    expect(dsv4::qwen_append_kv_cache_f16(
+    expect(pocket::qwen_append_kv_cache_f16(
                d_k_rows.get(), d_v_rows.get(), d_k_cache.get(), d_v_cache.get(),
                seq_len, kv_heads, head_dim, start_pos, max_context),
            "append kv launch");
@@ -798,7 +798,7 @@ void test_gqa_decode(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_q(q), d_k(k_cache), d_v(v_cache);
     DeviceBuffer<uint16_t> d_out(static_cast<size_t>(q_heads) * head_dim);
     DeviceBuffer<float> d_scores(static_cast<size_t>(q_heads) * context_len);
-    expect(dsv4::qwen_gqa_decode_attention_f16(
+    expect(pocket::qwen_gqa_decode_attention_f16(
                d_q.get(), d_k.get(), d_v.get(), d_out.get(), d_scores.get(),
                q_heads, kv_heads, head_dim, context_len, max_context),
            "GQA decode launch");
@@ -858,7 +858,7 @@ void test_gqa_decode_vectorized(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_q(q), d_k(k_cache), d_v(v_cache);
     DeviceBuffer<uint16_t> d_out(static_cast<size_t>(q_heads) * head_dim);
     DeviceBuffer<float> d_scores(static_cast<size_t>(q_heads) * context_len);
-    expect(dsv4::qwen_gqa_decode_attention_f16(
+    expect(pocket::qwen_gqa_decode_attention_f16(
                d_q.get(), d_k.get(), d_v.get(), d_out.get(), d_scores.get(),
                q_heads, kv_heads, head_dim, context_len, max_context),
            "vectorized GQA decode launch");
@@ -899,7 +899,7 @@ void test_gqa_decode_vectorized(std::mt19937& rng) {
     DeviceBuffer<uint16_t> split_out(static_cast<size_t>(q_heads) * head_dim);
     DeviceBuffer<float> split_scores(
         static_cast<size_t>(q_heads) * split_context_len);
-    expect(dsv4::qwen_gqa_decode_attention_f16(
+    expect(pocket::qwen_gqa_decode_attention_f16(
                d_q.get(), split_k.get(), split_v.get(), split_out.get(),
                split_scores.get(), q_heads, kv_heads, head_dim,
                split_context_len, split_max_context),
@@ -946,7 +946,7 @@ void test_gqa_decode_vectorized(std::mt19937& rng) {
     DeviceBuffer<uint16_t> shared_out(static_cast<size_t>(q_heads) * head_dim);
     DeviceBuffer<float> shared_scores(
         static_cast<size_t>(q_heads) * shared_context_len);
-    expect(dsv4::qwen_gqa_decode_attention_f16(
+    expect(pocket::qwen_gqa_decode_attention_f16(
                d_q.get(), shared_k.get(), shared_v.get(), shared_out.get(),
                shared_scores.get(), q_heads, kv_heads, head_dim,
                shared_context_len, shared_max_context),
@@ -997,7 +997,7 @@ void test_argmax(std::mt19937& rng) {
     DeviceBuffer<float> d_logits(logits);
     DeviceBuffer<int> d_tokens(rows);
     DeviceBuffer<float> d_values(rows);
-    expect(dsv4::qwen_argmax_fp32_rows(
+    expect(pocket::qwen_argmax_fp32_rows(
                d_logits.get(), d_tokens.get(), d_values.get(), rows, count,
                token_offset),
            "argmax launch");
@@ -1021,7 +1021,7 @@ void test_argmax(std::mt19937& rng) {
     DeviceBuffer<float> d_row(row);
     DeviceBuffer<int> d_token(1);
     DeviceBuffer<float> d_value(1);
-    expect(dsv4::qwen_argmax_fp32_rows(d_row.get(), d_token.get(),
+    expect(pocket::qwen_argmax_fp32_rows(d_row.get(), d_token.get(),
                                        d_value.get(), 1, wide, 0),
            "argmax single-row launch");
     sync_or_throw("argmax single row");
@@ -1050,7 +1050,7 @@ void test_gqa_prefill(std::mt19937& rng) {
     std::fill(v_cache.begin() + poison_start, v_cache.end(), float_to_half(-40.0f));
     DeviceBuffer<uint16_t> d_q(q), d_k(k_cache), d_v(v_cache);
     DeviceBuffer<uint16_t> d_out(static_cast<size_t>(rows) * q_heads * head_dim);
-    expect(dsv4::qwen_gqa_prefill_attention_f16(
+    expect(pocket::qwen_gqa_prefill_attention_f16(
                d_q.get(), d_k.get(), d_v.get(), d_out.get(), rows, q_heads,
                kv_heads, head_dim, position_offset, max_context),
            "GQA prefill launch");
@@ -1083,7 +1083,7 @@ void test_gqa_verify(std::mt19937& rng) {
     DeviceBuffer<uint16_t> d_out(static_cast<size_t>(rows) * q_heads * head_dim);
     DeviceBuffer<float> d_partial(static_cast<size_t>(rows) * q_heads * splits *
                                   (head_dim + 2));
-    expect(dsv4::qwen_gqa_verify_attention_f16(
+    expect(pocket::qwen_gqa_verify_attention_f16(
                d_q.get(), d_k.get(), d_v.get(), d_out.get(), d_partial.get(),
                rows, q_heads, kv_heads, head_dim, position_offset, max_context,
                splits),
@@ -1108,43 +1108,43 @@ void test_gqa_verify(std::mt19937& rng) {
 void test_argument_rejection() {
     DeviceBuffer<uint16_t> half(1024);
     DeviceBuffer<float> real(65536);
-    expect(!dsv4::qwen_normalize_gated_delta_qk_f16(
+    expect(!pocket::qwen_normalize_gated_delta_qk_f16(
                nullptr, half.get(), real.get(), real.get(), 1, 1, kKeyDim),
            "normalize rejects null input");
-    expect(!dsv4::qwen_gated_delta_sequence_f16(
+    expect(!pocket::qwen_gated_delta_sequence_f16(
                real.get(), half.get(), half.get(), half.get(), half.get(),
                half.get(), half.get(), 1, 3, 2, kKeyDim, kValueDim, 0.1f),
            "recurrence rejects a bad head ratio");
-    expect(!dsv4::qwen_gated_delta_step_f16(
+    expect(!pocket::qwen_gated_delta_step_f16(
                real.get(), half.get(), half.get(), half.get(), half.get(),
                half.get(), half.get(), 2, 1, 64, kValueDim, 0.1f),
            "recurrence rejects unsupported key width");
-    expect(!dsv4::qwen_gated_delta_step_f16(
+    expect(!pocket::qwen_gated_delta_step_f16(
                real.get(), half.get(), half.get(), half.get(), half.get(),
                half.get(), half.get(), 2, 1, kKeyDim, kValueDim, 0.0f),
            "recurrence rejects nonpositive q scale");
-    expect(!dsv4::qwen_linear_attn_gates_f16(
+    expect(!pocket::qwen_linear_attn_gates_f16(
                half.get(), half.get(), half.get(), half.get(), half.get(),
                half.get(), 0, 4),
            "gates reject zero rows");
-    expect(!dsv4::qwen_causal_depthwise_conv_silu_f16(
+    expect(!pocket::qwen_causal_depthwise_conv_silu_f16(
                half.get(), half.get(), half.get(), half.get(), 1, 8, 9, true),
            "convolution rejects a kernel above eight");
-    expect(!dsv4::qwen_partial_rope_rows_f16(
+    expect(!pocket::qwen_partial_rope_rows_f16(
                half.get(), half.get(), 0, 1, 63, 10000.0f, 2, 1, 64),
            "rope rejects an odd rotary dimension");
-    expect(!dsv4::qwen_append_kv_cache_f16(
+    expect(!pocket::qwen_append_kv_cache_f16(
                half.get(), half.get(), half.get(), half.get(), 2, 1, 16, 3, 4),
            "KV append rejects cache overflow");
-    expect(!dsv4::qwen_gqa_decode_attention_f16(
+    expect(!pocket::qwen_gqa_decode_attention_f16(
                half.get(), half.get(), half.get(), half.get(), real.get(), 3, 2,
                16, 2, 4),
            "GQA decode rejects a bad head ratio");
-    expect(!dsv4::qwen_gqa_prefill_attention_f16(
+    expect(!pocket::qwen_gqa_prefill_attention_f16(
                half.get(), half.get(), half.get(), half.get(), 3, 2, 1, 16, 2,
                4),
            "GQA prefill rejects context overflow");
-    expect(!dsv4::qwen_gqa_verify_attention_f16(
+    expect(!pocket::qwen_gqa_verify_attention_f16(
                half.get(), half.get(), half.get(), half.get(), real.get(), 2, 2,
                1, 16, 1, 4, 0),
            "GQA verify rejects zero splits");
@@ -1165,15 +1165,15 @@ int main(int argc, char** argv) {
             throw std::runtime_error("unknown or incomplete argument: " + arg);
         }
     }
-    if (!dsv4::device_runtime_available()) {
+    if (!pocket::device_runtime_available()) {
         std::cout << "[SKIP] no device runtime available\n";
         return 0;
     }
-    if (!dsv4::device_set(device)) {
+    if (!pocket::device_set(device)) {
         std::cout << "[SKIP] device_set failed for device " << device << "\n";
         return 0;
     }
-    std::cout << "backend=" << dsv4::device_backend_name() << " device=" << device
+    std::cout << "backend=" << pocket::device_backend_name() << " device=" << device
               << "\n";
 
     std::mt19937 rng(20260830u);

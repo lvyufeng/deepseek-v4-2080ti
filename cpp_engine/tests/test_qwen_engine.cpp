@@ -254,8 +254,8 @@ void require(bool condition, const std::string& message) {
 }
 
 void require_same_generation(
-    const std::vector<dsv4::QwenForwardResult>& actual,
-    const std::vector<dsv4::QwenForwardResult>& expected,
+    const std::vector<pocket::QwenForwardResult>& actual,
+    const std::vector<pocket::QwenForwardResult>& expected,
     const std::string& label) {
     require(actual.size() == expected.size(), label + " output count");
     for (size_t index = 0; index < actual.size(); ++index) {
@@ -266,8 +266,8 @@ void require_same_generation(
     }
 }
 
-void require_same_mtp_decisions(const dsv4::QwenMtpStats& actual,
-                                const dsv4::QwenMtpStats& expected,
+void require_same_mtp_decisions(const pocket::QwenMtpStats& actual,
+                                const pocket::QwenMtpStats& expected,
                                 const std::string& label) {
     require(actual.verify_count == expected.verify_count &&
                 actual.proposed_drafts == expected.proposed_drafts &&
@@ -277,23 +277,23 @@ void require_same_mtp_decisions(const dsv4::QwenMtpStats& actual,
             label + " MTP decision parity");
 }
 
-std::vector<dsv4::QwenForwardResult> require_cached_mtp_matches_cold(
-    const std::string& dir, dsv4::QwenEngine& cached,
-    const dsv4::QwenEngineOptions& cached_options,
+std::vector<pocket::QwenForwardResult> require_cached_mtp_matches_cold(
+    const std::string& dir, pocket::QwenEngine& cached,
+    const pocket::QwenEngineOptions& cached_options,
     const std::vector<int>& prompt, int max_new_tokens,
     const std::string& resume_source, int reused_tokens, int computed_tokens,
     const std::string& label) {
     const auto actual = cached.generate(prompt, max_new_tokens);
-    const dsv4::QwenMtpStats actual_stats = cached.mtp_stats();
-    const dsv4::QwenPrefixCacheStats prefix = cached.prefix_cache_stats();
+    const pocket::QwenMtpStats actual_stats = cached.mtp_stats();
+    const pocket::QwenPrefixCacheStats prefix = cached.prefix_cache_stats();
     require(prefix.resume_source == resume_source &&
                 prefix.reused_tokens == reused_tokens &&
                 prefix.computed_tokens == computed_tokens,
             label + " prefix accounting");
 
-    dsv4::QwenEngineOptions cold_options = cached_options;
+    pocket::QwenEngineOptions cold_options = cached_options;
     cold_options.prefix_cache = false;
-    dsv4::QwenEngine cold(dir, cold_options, 2, 32);
+    pocket::QwenEngine cold(dir, cold_options, 2, 32);
     const auto expected = cold.generate(prompt, max_new_tokens);
     require_same_generation(actual, expected, label);
     require_same_mtp_decisions(actual_stats, cold.mtp_stats(), label);
@@ -302,8 +302,8 @@ std::vector<dsv4::QwenForwardResult> require_cached_mtp_matches_cold(
 }
 
 void exercise_prefix_cache(const std::string& dir,
-                           dsv4::QwenKvCacheDType cache_dtype) {
-    dsv4::QwenEngineOptions options;
+                           pocket::QwenKvCacheDType cache_dtype) {
+    pocket::QwenEngineOptions options;
     options.tp_world = 1;
     options.tp_rank = 0;
     options.device = 0;
@@ -311,21 +311,21 @@ void exercise_prefix_cache(const std::string& dir,
     options.kv_cache_dtype = cache_dtype;
     options.state_snapshot_interval_tokens = 2;
     options.max_state_snapshots = 8;
-    dsv4::QwenEngine engine(dir, options, 2, 8);
+    pocket::QwenEngine engine(dir, options, 2, 8);
 
-    const dsv4::QwenForwardResult baseline = engine.prefill({1, 2, 3});
-    const dsv4::QwenPrefixCacheStats first = engine.prefix_cache_stats();
+    const pocket::QwenForwardResult baseline = engine.prefill({1, 2, 3});
+    const pocket::QwenPrefixCacheStats first = engine.prefix_cache_stats();
     require(first.reused_tokens == 0 && first.computed_tokens == 3,
             "initial prefix cache accounting");
 
     (void)engine.prefill({1, 2, 3, 4, 5});
-    const dsv4::QwenPrefixCacheStats appended = engine.prefix_cache_stats();
+    const pocket::QwenPrefixCacheStats appended = engine.prefix_cache_stats();
     require(appended.resume_source == "live" && appended.reused_tokens == 3 &&
                 appended.computed_tokens == 2,
             "appended prompt must reuse live recurrent state");
 
-    const dsv4::QwenForwardResult shortened_result = engine.prefill({1, 2, 3});
-    const dsv4::QwenPrefixCacheStats shortened = engine.prefix_cache_stats();
+    const pocket::QwenForwardResult shortened_result = engine.prefill({1, 2, 3});
+    const pocket::QwenPrefixCacheStats shortened = engine.prefix_cache_stats();
     require(shortened.resume_source == "snapshot" &&
                 shortened.reused_tokens == 3 && shortened.computed_tokens == 0,
             "shorter prompt must reuse request-boundary snapshot");
@@ -334,31 +334,31 @@ void exercise_prefix_cache(const std::string& dir,
                 shortened_result.checksum == baseline.checksum,
             "snapshot result must match cold prefill");
 
-    const dsv4::QwenForwardResult branched_result = engine.prefill({1, 2, 9});
-    const dsv4::QwenPrefixCacheStats branched = engine.prefix_cache_stats();
+    const pocket::QwenForwardResult branched_result = engine.prefill({1, 2, 9});
+    const pocket::QwenPrefixCacheStats branched = engine.prefix_cache_stats();
     require(branched.resume_source == "snapshot" && branched.reused_tokens == 2 &&
                 branched.computed_tokens == 1,
             "branched prompt must resume from interior snapshot");
 
-    dsv4::QwenEngine cold_engine(dir, options, 2, 8);
-    const dsv4::QwenForwardResult cold_branch = cold_engine.prefill({1, 2, 9});
+    pocket::QwenEngine cold_engine(dir, options, 2, 8);
+    const pocket::QwenForwardResult cold_branch = cold_engine.prefill({1, 2, 9});
     require(branched_result.top_token == cold_branch.top_token &&
                 branched_result.top_logit == cold_branch.top_logit &&
                 branched_result.checksum == cold_branch.checksum,
             "snapshot branch must match cold prefill");
 
-    dsv4::QwenEngineOptions no_cache_options = options;
+    pocket::QwenEngineOptions no_cache_options = options;
     no_cache_options.prefix_cache = false;
-    dsv4::QwenEngine no_cache_engine(dir, no_cache_options, 2, 8);
+    pocket::QwenEngine no_cache_engine(dir, no_cache_options, 2, 8);
     (void)no_cache_engine.prefill({1, 2, 3});
-    const dsv4::QwenPrefixCacheStats no_cache = no_cache_engine.prefix_cache_stats();
+    const pocket::QwenPrefixCacheStats no_cache = no_cache_engine.prefix_cache_stats();
     require(no_cache.reused_tokens == 0 && no_cache.computed_tokens == 3 &&
                 no_cache.snapshots == 0 && no_cache.snapshot_bytes == 0,
             "disabled prefix cache must not retain snapshots");
 
     engine.reset();
     (void)engine.prefill({1, 2, 3});
-    const dsv4::QwenPrefixCacheStats reset = engine.prefix_cache_stats();
+    const pocket::QwenPrefixCacheStats reset = engine.prefix_cache_stats();
     require(reset.reused_tokens == 0 && reset.computed_tokens == 3 &&
                 reset.resume_source == "empty",
             "reset must invalidate prefix cache");
@@ -372,31 +372,31 @@ void exercise_prefix_cache(const std::string& dir,
     // saving itself is measured by the real long-context benchmark; what is
     // checked here is that a chunk wider than the interval still prefills
     // correctly and still serves an exact prefix hit.
-    dsv4::QwenEngineOptions wide_options = options;
+    pocket::QwenEngineOptions wide_options = options;
     wide_options.prefill_chunk_tokens = 8;
     wide_options.state_snapshot_interval_tokens = 4;
-    dsv4::QwenEngine wide(dir, wide_options, 2, 8);
-    const dsv4::QwenForwardResult wide_baseline = wide.prefill({1, 2, 3, 4, 5, 6});
+    pocket::QwenEngine wide(dir, wide_options, 2, 8);
+    const pocket::QwenForwardResult wide_baseline = wide.prefill({1, 2, 3, 4, 5, 6});
     require(wide.prefix_cache_stats().computed_tokens == 6,
             "wide chunk prefill accounting");
-    const dsv4::QwenForwardResult wide_again = wide.prefill({1, 2, 3, 4, 5, 6});
+    const pocket::QwenForwardResult wide_again = wide.prefill({1, 2, 3, 4, 5, 6});
     require(wide.prefix_cache_stats().resume_source == "live" &&
                 wide.prefix_cache_stats().computed_tokens == 0 &&
                 wide_again.top_token == wide_baseline.top_token,
             "wide chunk must still serve an exact prefix hit");
 
-    dsv4::QwenEngineOptions wide_cold = wide_options;
+    pocket::QwenEngineOptions wide_cold = wide_options;
     wide_cold.prefix_cache = false;
-    dsv4::QwenEngine wide_cold_engine(dir, wide_cold, 2, 8);
-    const dsv4::QwenForwardResult wide_expected =
+    pocket::QwenEngine wide_cold_engine(dir, wide_cold, 2, 8);
+    const pocket::QwenForwardResult wide_expected =
         wide_cold_engine.prefill({1, 2, 3, 4, 5, 6});
     require(wide_baseline.top_token == wide_expected.top_token,
             "wide chunk prefill must match cold prefill");
 }
 
 void exercise_mtp(const std::string& dir,
-                  dsv4::QwenKvCacheDType cache_dtype) {
-    dsv4::QwenEngineOptions plain_options;
+                  pocket::QwenKvCacheDType cache_dtype) {
+    pocket::QwenEngineOptions plain_options;
     plain_options.tp_world = 1;
     plain_options.tp_rank = 0;
     plain_options.device = 0;
@@ -404,17 +404,17 @@ void exercise_mtp(const std::string& dir,
     plain_options.kv_cache_dtype = cache_dtype;
     plain_options.prefix_cache = false;
 
-    dsv4::QwenEngineOptions mtp_options = plain_options;
+    pocket::QwenEngineOptions mtp_options = plain_options;
     mtp_options.mtp = true;
     mtp_options.mtp_speculative_tokens = 4;
-    dsv4::QwenEngine plain(dir, plain_options, 2, 16);
-    dsv4::QwenEngine mtp(dir, mtp_options, 2, 16);
+    pocket::QwenEngine plain(dir, plain_options, 2, 16);
+    pocket::QwenEngine mtp(dir, mtp_options, 2, 16);
     const auto plain_outputs = plain.generate({1, 2, 3}, 8);
     const auto mtp_outputs = mtp.generate({1, 2, 3}, 8);
     require_same_generation(mtp_outputs, plain_outputs, "MTP");
-    dsv4::QwenEngineOptions adaptive_options = mtp_options;
+    pocket::QwenEngineOptions adaptive_options = mtp_options;
     adaptive_options.mtp_adaptive = true;
-    dsv4::QwenEngine adaptive(dir, adaptive_options, 2, 16);
+    pocket::QwenEngine adaptive(dir, adaptive_options, 2, 16);
     const auto adaptive_outputs = adaptive.generate({1, 2, 3}, 8);
     require_same_generation(adaptive_outputs, plain_outputs, "adaptive MTP");
 
@@ -426,7 +426,7 @@ void exercise_mtp(const std::string& dir,
 
     bool partial_depth_rejected = false;
     try {
-        dsv4::QwenEngine invalid(dir, mtp_options, 1, 16);
+        pocket::QwenEngine invalid(dir, mtp_options, 1, 16);
     } catch (const std::runtime_error&) {
         partial_depth_rejected = true;
     }
@@ -434,8 +434,8 @@ void exercise_mtp(const std::string& dir,
 }
 
 void exercise_mtp_prefix_cache(const std::string& dir,
-                               dsv4::QwenKvCacheDType cache_dtype) {
-    dsv4::QwenEngineOptions options;
+                               pocket::QwenKvCacheDType cache_dtype) {
+    pocket::QwenEngineOptions options;
     options.tp_world = 1;
     options.tp_rank = 0;
     options.device = 0;
@@ -446,10 +446,10 @@ void exercise_mtp_prefix_cache(const std::string& dir,
     options.state_snapshot_interval_tokens = 2;
     options.max_state_snapshots = 16;
 
-    dsv4::QwenEngine cached(dir, options, 2, 32);
+    pocket::QwenEngine cached(dir, options, 2, 32);
     const std::vector<int> base = {1, 2, 3};
     const auto base_outputs = cached.generate(base, 4);
-    const dsv4::QwenPrefixCacheStats initial = cached.prefix_cache_stats();
+    const pocket::QwenPrefixCacheStats initial = cached.prefix_cache_stats();
     require(initial.resume_source == "empty" && initial.reused_tokens == 0 &&
                 initial.computed_tokens == 3,
             "MTP initial chunk-boundary prompt prefix accounting");
@@ -458,7 +458,7 @@ void exercise_mtp_prefix_cache(const std::string& dir,
     // exact repeat of the original prompt therefore restores its request-boundary
     // snapshot rather than reusing the later live generation state.
     const auto repeated = cached.generate(base, 4);
-    const dsv4::QwenPrefixCacheStats repeated_prefix = cached.prefix_cache_stats();
+    const pocket::QwenPrefixCacheStats repeated_prefix = cached.prefix_cache_stats();
     require(repeated_prefix.resume_source == "snapshot" &&
                 repeated_prefix.reused_tokens == 3 &&
                 repeated_prefix.computed_tokens == 0,
@@ -497,14 +497,14 @@ void exercise_mtp_prefix_cache(const std::string& dir,
 }
 
 void exercise_cache_lifecycle(const std::string& dir,
-                              dsv4::QwenKvCacheDType cache_dtype) {
-    dsv4::QwenEngineOptions options;
+                              pocket::QwenKvCacheDType cache_dtype) {
+    pocket::QwenEngineOptions options;
     options.tp_world = 1;
     options.tp_rank = 0;
     options.device = 0;
     options.prefill_chunk_tokens = 2;
     options.kv_cache_dtype = cache_dtype;
-    dsv4::QwenEngine engine(dir, options, 2, 8);
+    pocket::QwenEngine engine(dir, options, 2, 8);
     require(engine.resident_weight_bytes() > 0, "resident Qwen weights missing");
     require(engine.resident_scale_bytes() > 0, "resident Qwen scales missing");
 
@@ -513,12 +513,12 @@ void exercise_cache_lifecycle(const std::string& dir,
     const uint64_t fp8_scale_bytes =
         2ULL * 8 * 4 * (128 / 64) * sizeof(uint16_t);
     const uint64_t tq_cache_bytes = 8ULL * 4 * 196;
-    if (cache_dtype == dsv4::QwenKvCacheDType::Fp16) {
+    if (cache_dtype == pocket::QwenKvCacheDType::Fp16) {
         require(engine.kv_cache_bytes() == fp16_cache_bytes,
                 "FP16 KV cache accounting");
         require(engine.kv_cache_scale_bytes() == 0,
                 "FP16 KV cache must not allocate scales");
-    } else if (cache_dtype == dsv4::QwenKvCacheDType::Fp8) {
+    } else if (cache_dtype == pocket::QwenKvCacheDType::Fp8) {
         require(engine.kv_cache_bytes() == fp8_cache_bytes,
                 "FP8 KV cache accounting");
         require(engine.kv_cache_scale_bytes() == fp8_scale_bytes,
@@ -530,22 +530,22 @@ void exercise_cache_lifecycle(const std::string& dir,
                 "TurboQuant K8V4 metadata is embedded in slots");
     }
 
-    const dsv4::QwenForwardResult prefill = engine.prefill({1, 2, 3});
+    const pocket::QwenForwardResult prefill = engine.prefill({1, 2, 3});
     require(prefill.layers == 2 && prefill.dim == 128, "prefill metadata");
     require(prefill.position == 3, "chunked prefill position");
     require(prefill.top_token == 0, "zero fixture prefill greedy token");
     require(engine.activation_workspace_peak_bytes() > 0, "activation accounting");
 
-    const dsv4::QwenForwardResult decoded = engine.decode_step(4);
+    const pocket::QwenForwardResult decoded = engine.decode_step(4);
     require(decoded.position == 4, "decode position");
     require(decoded.top_token == 0, "zero fixture decode greedy token");
 
     engine.reset();
     require(engine.position() == 0, "reset position");
-    const dsv4::QwenForwardResult second = engine.prefill({4, 5});
+    const pocket::QwenForwardResult second = engine.prefill({4, 5});
     require(second.position == 2 && second.top_token == 0,
             "reset and second chunked prefill");
-    std::cout << "  cache_dtype=" << dsv4::qwen_kv_cache_dtype_name(cache_dtype)
+    std::cout << "  cache_dtype=" << pocket::qwen_kv_cache_dtype_name(cache_dtype)
               << " kv_cache_bytes=" << engine.kv_cache_bytes()
               << " kv_cache_scale_bytes=" << engine.kv_cache_scale_bytes()
               << " activation_workspace_peak_bytes="
@@ -555,23 +555,23 @@ void exercise_cache_lifecycle(const std::string& dir,
 // Phase 3.4: Verify that independent prompts in different slots produce
 // different results, proving the recurrent state and KV cache are isolated.
 void exercise_batch_isolation(const std::string& dir,
-                               dsv4::QwenKvCacheDType cache_dtype) {
-    dsv4::QwenEngineOptions options;
+                               pocket::QwenKvCacheDType cache_dtype) {
+    pocket::QwenEngineOptions options;
     options.tp_world = 1;
     options.tp_rank = 0;
     options.device = 0;
     options.prefill_chunk_tokens = 8;
     options.kv_cache_dtype = cache_dtype;
     options.max_batch_size = 2;  // Phase 3.4: arena sized at construction
-    dsv4::QwenEngine engine(dir, options, 2, 8);
+    pocket::QwenEngine engine(dir, options, 2, 8);
 
     // Slot 0: prompt [1, 2, 3]
-    const dsv4::QwenForwardResult r0 = engine.prefill({1, 2, 3}, 0);
+    const pocket::QwenForwardResult r0 = engine.prefill({1, 2, 3}, 0);
     require(r0.position == 3, "slot 0 prefill position");
 
     // Slot 1: prompt [4, 5, 6] — different tokens, so the recurrent state
     // diverges immediately and the final checksum must differ.
-    const dsv4::QwenForwardResult r1 = engine.prefill({4, 5, 6}, 1);
+    const pocket::QwenForwardResult r1 = engine.prefill({4, 5, 6}, 1);
     require(r1.position == 3, "slot 1 prefill position");
     // Phase 3.4: With zero weights, the output logits are deterministic zero
     // regardless of input, so checksums may match. The isolation test is that
@@ -579,43 +579,43 @@ void exercise_batch_isolation(const std::string& dir,
     // state. A non-zero-weight fixture would show different checksums here.
 
     // Decode step on each slot to verify state persists correctly
-    const dsv4::QwenForwardResult d0 = engine.decode_step(r0.top_token, 0);
-    const dsv4::QwenForwardResult d1 = engine.decode_step(r1.top_token, 1);
+    const pocket::QwenForwardResult d0 = engine.decode_step(r0.top_token, 0);
+    const pocket::QwenForwardResult d1 = engine.decode_step(r1.top_token, 1);
     require(d0.position == 4, "slot 0 decode position");
     require(d1.position == 4, "slot 1 decode position");
     // With zero weights, decode checksums also match; the test is successful
     // completion without state corruption.
 
     std::cout << "  batch_isolation cache_dtype="
-              << dsv4::qwen_kv_cache_dtype_name(cache_dtype)
+              << pocket::qwen_kv_cache_dtype_name(cache_dtype)
               << " completed without state corruption\n";
 }
 
 }  // namespace
 
 int main() {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::cout << "[SKIP] test_qwen_engine requires a CUDA device\n";
         return 0;
     }
     try {
         const std::string dir = fixture_dir();
         require(write_fixture(dir), "could not create Qwen engine fixture");
-        exercise_cache_lifecycle(dir, dsv4::QwenKvCacheDType::Fp16);
-        exercise_cache_lifecycle(dir, dsv4::QwenKvCacheDType::Fp8);
-        exercise_cache_lifecycle(dir, dsv4::QwenKvCacheDType::TurboQuantK8V4);
-        exercise_prefix_cache(dir, dsv4::QwenKvCacheDType::Fp16);
-        exercise_prefix_cache(dir, dsv4::QwenKvCacheDType::Fp8);
-        exercise_prefix_cache(dir, dsv4::QwenKvCacheDType::TurboQuantK8V4);
-        exercise_mtp(dir, dsv4::QwenKvCacheDType::Fp16);
-        exercise_mtp(dir, dsv4::QwenKvCacheDType::Fp8);
-        exercise_mtp(dir, dsv4::QwenKvCacheDType::TurboQuantK8V4);
-        exercise_mtp_prefix_cache(dir, dsv4::QwenKvCacheDType::Fp16);
-        exercise_mtp_prefix_cache(dir, dsv4::QwenKvCacheDType::Fp8);
-        exercise_mtp_prefix_cache(dir, dsv4::QwenKvCacheDType::TurboQuantK8V4);
-        exercise_batch_isolation(dir, dsv4::QwenKvCacheDType::Fp16);
-        exercise_batch_isolation(dir, dsv4::QwenKvCacheDType::Fp8);
-        exercise_batch_isolation(dir, dsv4::QwenKvCacheDType::TurboQuantK8V4);
+        exercise_cache_lifecycle(dir, pocket::QwenKvCacheDType::Fp16);
+        exercise_cache_lifecycle(dir, pocket::QwenKvCacheDType::Fp8);
+        exercise_cache_lifecycle(dir, pocket::QwenKvCacheDType::TurboQuantK8V4);
+        exercise_prefix_cache(dir, pocket::QwenKvCacheDType::Fp16);
+        exercise_prefix_cache(dir, pocket::QwenKvCacheDType::Fp8);
+        exercise_prefix_cache(dir, pocket::QwenKvCacheDType::TurboQuantK8V4);
+        exercise_mtp(dir, pocket::QwenKvCacheDType::Fp16);
+        exercise_mtp(dir, pocket::QwenKvCacheDType::Fp8);
+        exercise_mtp(dir, pocket::QwenKvCacheDType::TurboQuantK8V4);
+        exercise_mtp_prefix_cache(dir, pocket::QwenKvCacheDType::Fp16);
+        exercise_mtp_prefix_cache(dir, pocket::QwenKvCacheDType::Fp8);
+        exercise_mtp_prefix_cache(dir, pocket::QwenKvCacheDType::TurboQuantK8V4);
+        exercise_batch_isolation(dir, pocket::QwenKvCacheDType::Fp16);
+        exercise_batch_isolation(dir, pocket::QwenKvCacheDType::Fp8);
+        exercise_batch_isolation(dir, pocket::QwenKvCacheDType::TurboQuantK8V4);
         std::cout << "[PASS] test_qwen_engine layers=2 mtp=1\n";
         return 0;
     } catch (const std::exception& ex) {

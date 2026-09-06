@@ -6,7 +6,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace dsv4 {
+namespace pocket {
 
 namespace {
 
@@ -233,4 +233,4 @@ std::string ModelConfig::to_string() const {
     return oss.str();
 }
 
-}  // namespace dsv4
+}  // namespace pocket

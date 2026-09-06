@@ -2,7 +2,7 @@
 
 #include "qwen_ops.hpp"
 
-namespace dsv4 {
+namespace pocket {
 
 bool QwenTargetHeadAdapter::valid() const {
     if (weight == nullptr || weight->data == nullptr || local_vocab <= 0 ||
@@ -54,4 +54,4 @@ bool QwenTargetHeadAdapter::project_f16_to_f32(
 #endif
 }
 
-}  // namespace dsv4
+}  // namespace pocket

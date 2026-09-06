@@ -1,6 +1,6 @@
 #include "tp_comm.hpp"
 
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
 // Both are required: qwen_sampler.hpp for the sampler uniforms and
 // qwen_cuda_ops.hpp for the DFlash2 top-k pack/merge kernels used by the
 // global-top1 collective below. The latter is only visible in NCCL builds,
@@ -25,17 +25,17 @@
 #include <vector>
 #endif
 
-namespace dsv4 {
+namespace pocket {
 
 bool tp_comm_available() {
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
     return true;
 #else
     return false;
 #endif
 }
 
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
 namespace {
 
 void check_cuda(cudaError_t err, const char* what) {
@@ -66,7 +66,7 @@ ncclUniqueId load_or_create_id(int rank, const char* path) {
     // skew is minutes when four processes read a 167 GB checkpoint off the same
     // disk -- a 30s bound made a slow loader look like a communicator failure.
     int attempts = 6000;  // 10 minutes at 100ms
-    if (const char* env = std::getenv("DSV4_CPP_NCCL_ID_WAIT_ATTEMPTS")) {
+    if (const char* env = std::getenv("POCKETLLM_CPP_NCCL_ID_WAIT_ATTEMPTS")) {
         const int v = std::atoi(env);
         if (v > 0) attempts = v;
     }
@@ -507,4 +507,4 @@ TpTopResult tp_global_top1(int world, int rank, int device, const char* id_path,
 }
 #endif
 
-}  // namespace dsv4
+}  // namespace pocket

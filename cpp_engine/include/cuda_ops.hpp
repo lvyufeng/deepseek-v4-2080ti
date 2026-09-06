@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace dsv4 {
+namespace pocket {
 
 bool cuda_runtime_available();
 
@@ -1153,4 +1153,4 @@ bool hc_post_float_cuda(
     int dim,
     void* stream = nullptr);
 
-}  // namespace dsv4
+}  // namespace pocket

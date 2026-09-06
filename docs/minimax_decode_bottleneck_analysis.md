@@ -78,7 +78,7 @@ cos = torch.cos(freqs).to(x.dtype)
 
 **Target**: Single fused CUDA kernel (estimated 0.1-0.2ms/layer)
 
-**Existing Code**: `src/csrc/` already has `fused_q_rmsnorm_rope_inplace_cuda` (for DSV4 cpp_engine), but it requires:
+**Existing Code**: `src/csrc/` already has `fused_q_rmsnorm_rope_inplace_cuda` (for DeepSeek-V4 cpp_engine), but it requires:
 - bfloat16 input (MiniMax uses fp16)
 - Pre-computed freqs_real/freqs_imag (MiniMax computes on-the-fly)
 

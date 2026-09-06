@@ -121,7 +121,7 @@ directory and is never removed by PocketLLM.
 
 The built-in supervisor currently works with the Torch backend by reusing its existing NCCL/Gloo
 worker loop. The Python C++ Qwen adapter does not yet expose a native worker entry point, so
-`backend="cpp"` must use the legacy `dsv4_cpp_engine` launcher or opt out with
+`backend="cpp"` must use the legacy `pocketllm_engine` launcher or opt out with
 `--no-tensor-parallel-supervisor`. Existing `torchrun` and manual rank launchers remain compatible
 through that opt-out. This process supervisor is not a scheduler and does not provide continuous
 batching or request-local native state.
@@ -141,7 +141,7 @@ The unified server provides:
 
 ## Configuration precedence
 
-Prefer typed `EngineArgs` and explicit CLI options. `EngineArgs.from_env()` exists as a compatibility bridge for legacy deployments. Existing `DSV4_*`, `QWEN_*`, and related environment variables remain available to the underlying runtimes. Backend-specific tuning belongs in `backend_options` and must not be assumed portable between CUDA and Ascend.
+Prefer typed `EngineArgs` and explicit CLI options. `EngineArgs.from_env()` exists as a compatibility bridge for legacy deployments. Runtime tuning variables are named `POCKETLLM_*` (renamed from `DSV4_*`, a breaking change — see [the migration note](migration/dsv4-to-pocket-rename.md)); `QWEN_*` and related names are unchanged. Backend-specific tuning belongs in `backend_options` and must not be assumed portable between CUDA and Ascend.
 
 ## Native C++ Python module
 
@@ -187,7 +187,7 @@ metadata in `GenerationRequest.metadata`. The shared prompt boundary first asks 
 checkpoint tokenizer to apply its own `chat_template` with an assistant generation prompt. This is
 the same model-owned-template contract used by vLLM/SGLang and preserves model-specific special
 tokens, reasoning controls, and tool formatting. For DeepSeek checkpoints whose tokenizer has no
-chat template, the validated legacy `src.encoding.dsv4.encode_messages` format is used instead.
+chat template, the validated legacy `src.encoding.deepseek_v4.encode_messages` format is used instead.
 `GenerationRequest.prompt` still carries a deterministic `role: content` rendering only as a last-resort
 fallback for generic tokenizers that provide neither format. `/v1/completions` passes `prompt` through
 unchanged and validates that a list prompt contains only strings.
@@ -231,4 +231,4 @@ observed at safe boundaries between generation steps. It never interrupts a runn
 never rolls back a partially executed native step. `DELETE /v1/requests/<request_id>` returns HTTP 404
 for an unknown or already-finished request.
 
-The existing `dsv4_cpp_engine` executable and its CLI remain supported. The shared Python server is a migration path, not a replacement that invalidates existing production commands.
+The existing `pocketllm_engine` executable and its CLI remain supported. The shared Python server is a migration path, not a replacement that invalidates existing production commands.

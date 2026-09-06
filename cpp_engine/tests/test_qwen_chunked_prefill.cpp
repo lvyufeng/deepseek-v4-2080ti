@@ -56,8 +56,8 @@ void expect(bool ok, const std::string& what) {
 // Compares the sampled token plus checksum and top logit. The token alone would
 // miss a drift that has not yet moved the argmax; the checksum covers the whole
 // logit row, so it catches a difference anywhere in the vocabulary.
-void expect_same_result(const dsv4::QwenForwardResult& chunked,
-                        const dsv4::QwenForwardResult& whole,
+void expect_same_result(const pocket::QwenForwardResult& chunked,
+                        const pocket::QwenForwardResult& whole,
                         const std::string& label) {
     if (chunked.top_token != whole.top_token) {
         std::printf("  [FAIL] %s: token %d vs %d\n", label.c_str(),
@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
     constexpr int kPromptLength = 2600;  // Not a multiple of any chunk tested.
     constexpr int kMaxContext = 4096;
 
-    dsv4::QwenEngineOptions engine_opts;
+    pocket::QwenEngineOptions engine_opts;
     engine_opts.device = opts.device >= 0 ? opts.device : opts.tp_rank;
     engine_opts.max_batch_size = 2;
     // Match the chunk width to the budget so the only difference between the
@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
         engine_opts.nccl_id_path = opts.nccl_id_path;
     }
 
-    dsv4::QwenEngine engine(opts.checkpoint, engine_opts, opts.layers, kMaxContext);
+    pocket::QwenEngine engine(opts.checkpoint, engine_opts, opts.layers, kMaxContext);
     engine.allocate_batch_slots(2);
     engine.warmup_tp();
 
@@ -169,11 +169,11 @@ int main(int argc, char** argv) {
                 engine_opts.prefill_chunk_tokens);
 
     if (opts.tp_world > 1) engine.worker_command_prefill(prompt, 1, 0);
-    const dsv4::QwenForwardResult whole = engine.prefill(prompt, 1);
+    const pocket::QwenForwardResult whole = engine.prefill(prompt, 1);
 
     int steps = 0;
     int consumed = 0;
-    dsv4::QwenPartialPrefillResult step;
+    pocket::QwenPartialPrefillResult step;
     do {
         if (opts.tp_world > 1) {
             engine.worker_command_prefill(prompt, 0, budget);

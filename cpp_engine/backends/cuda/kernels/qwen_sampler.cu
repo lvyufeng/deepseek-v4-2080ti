@@ -3,7 +3,7 @@
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
 
-namespace dsv4 {
+namespace pocket {
 
 namespace {
 
@@ -382,4 +382,4 @@ bool qwen_sample_from_candidates(
 
 int qwen_sampler_max_top_k() { return kMaxTopK; }
 
-}  // namespace dsv4
+}  // namespace pocket

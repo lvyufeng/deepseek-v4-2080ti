@@ -50,16 +50,16 @@ double time_case(int rows, int position_offset, int max_context, int iters,
         static_cast<size_t>(max_context) * kKvHeads * kHeadDim;
     // Compare candidates against the current tiled production path, regardless
     // of inherited shell state.
-    setenv("DSV4_QWEN_GQA_OPTIMIZED", "1", 1);
+    setenv("POCKETLLM_QWEN_GQA_OPTIMIZED", "1", 1);
     // The production default enables hpg6 when the variable is unset. Make the
     // baseline explicit so this benchmark cannot compare hpg6 against itself.
-    setenv("DSV4_QWEN_GQA_LONG_TILE", mode == Mode::Base ? "0" : "1", 1);
-    unsetenv("DSV4_QWEN_GQA_FLASH_TILE");
-    unsetenv("DSV4_QWEN_GQA_MMA_TILE");
-    if (mode == Mode::Flash) setenv("DSV4_QWEN_GQA_FLASH_TILE", "1", 1);
+    setenv("POCKETLLM_QWEN_GQA_LONG_TILE", mode == Mode::Base ? "0" : "1", 1);
+    unsetenv("POCKETLLM_QWEN_GQA_FLASH_TILE");
+    unsetenv("POCKETLLM_QWEN_GQA_MMA_TILE");
+    if (mode == Mode::Flash) setenv("POCKETLLM_QWEN_GQA_FLASH_TILE", "1", 1);
     // The MMA dispatch is checked before flash and long, so this one variable
     // selects it regardless of the others.
-    if (mode == Mode::Mma) setenv("DSV4_QWEN_GQA_MMA_TILE", "1", 1);
+    if (mode == Mode::Mma) setenv("POCKETLLM_QWEN_GQA_MMA_TILE", "1", 1);
     std::vector<uint16_t> host_q(q_elements);
     std::vector<uint16_t> host_kv(kv_elements, 0);
     for (uint16_t& value : host_q) {
@@ -89,7 +89,7 @@ double time_case(int rows, int position_offset, int max_context, int iters,
                cudaMemcpyHostToDevice);
 
     for (int warm = 0; warm < 2; ++warm) {
-        dsv4::qwen_gqa_prefill_attention_f16_tiled_cuda(
+        pocket::qwen_gqa_prefill_attention_f16_tiled_cuda(
             d_q, d_k, d_v, d_out, rows, kQHeads, kKvHeads, kHeadDim,
             position_offset, max_context, 0, 0);
     }
@@ -101,7 +101,7 @@ double time_case(int rows, int position_offset, int max_context, int iters,
     cudaEventCreate(&stop);
     cudaEventRecord(start);
     for (int i = 0; i < iters; ++i) {
-        dsv4::qwen_gqa_prefill_attention_f16_tiled_cuda(
+        pocket::qwen_gqa_prefill_attention_f16_tiled_cuda(
             d_q, d_k, d_v, d_out, rows, kQHeads, kKvHeads, kHeadDim,
             position_offset, max_context, 0, 0);
     }
@@ -121,7 +121,7 @@ double time_case(int rows, int position_offset, int max_context, int iters,
 }  // namespace
 
 int main() {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::printf("[SKIP] bench_qwen_gqa_prefill requires a CUDA device\n");
         return 0;
     }

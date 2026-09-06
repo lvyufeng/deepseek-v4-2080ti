@@ -2,10 +2,10 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TMP_ROOT="${DSV4_TMP_DIR:-$REPO_ROOT/.tmp}"
+TMP_ROOT="${POCKETLLM_TMP_DIR:-$REPO_ROOT/.tmp}"
 mkdir -p "$TMP_ROOT"
 
-LOCK_FILE="${LOCK_FILE:-$TMP_ROOT/dsv4_fp4_resident_best.lock}"
+LOCK_FILE="${LOCK_FILE:-$TMP_ROOT/pocketllm_fp4_resident_best.lock}"
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
   echo "another FP4 resident benchmark is already running: $LOCK_FILE" >&2
@@ -25,7 +25,7 @@ MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
 FP4_CASE="${FP4_CASE:-long_long}"
 FP4_REPEAT="${FP4_REPEAT:-3}"
 SHORT_INPUT_FILE="${SHORT_INPUT_FILE:-$REPO_ROOT/tests/fixtures/smoke_input.txt}"
-LONG_INPUT_FILE="${LONG_INPUT_FILE:-$TMP_ROOT/dsv4_long_input_single.txt}"
+LONG_INPUT_FILE="${LONG_INPUT_FILE:-$TMP_ROOT/pocketllm_long_input_single.txt}"
 SHORT_MAX_NEW_TOKENS="${SHORT_MAX_NEW_TOKENS:-8}"
 LONG_MAX_NEW_TOKENS="${LONG_MAX_NEW_TOKENS:-64}"
 LOG="${LOG:-$TMP_ROOT/fp4_resident_best_server.log}"

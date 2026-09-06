@@ -1,7 +1,7 @@
 // Phase 3 step: GGUF shared-expert FFN smoke for layer 0.
 // Embed -> ffn_norm -> shared w1 / w3 Q8_0 -> silu_mul -> shared w2 Q8_0.
 
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -15,7 +15,7 @@ int main(int argc, char** argv) {
     }
     const int token = argc >= 3 ? std::atoi(argv[2]) : 1234;
     try {
-        auto r = dsv4::run_gguf_shared_expert_smoke(argv[1], token);
+        auto r = pocket::run_gguf_shared_expert_smoke(argv[1], token);
         std::printf("token=%d dim=%d moe_inter_dim=%d\n",
                     token, r.dim, r.moe_inter_dim);
         std::printf("ffn_normed_rms = %.4f\n", r.ffn_normed_rms);

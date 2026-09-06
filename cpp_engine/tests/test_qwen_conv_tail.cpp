@@ -35,7 +35,7 @@ uint16_t float_to_fp16_bits(float value) {
 }  // namespace
 
 int main() {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::printf("[SKIP] test_qwen_conv_tail requires a CUDA device\n");
         return 0;
     }
@@ -66,7 +66,7 @@ int main() {
     // Pass 1: whole sequence at once, starting from a zero tail.
     cudaMemset(d_tail, 0, tail_elems * sizeof(float));
     cudaMemcpy(d_x, x.data(), x.size() * sizeof(float), cudaMemcpyHostToDevice);
-    if (!dsv4::qwen_causal_depthwise_conv_silu_cuda(d_x, d_w, d_tail, d_y, seq_len, channels,
+    if (!pocket::qwen_causal_depthwise_conv_silu_cuda(d_x, d_w, d_tail, d_y, seq_len, channels,
                                                     kernel, true)) {
         std::printf("[FAIL] prefill conv launch failed\n");
         return 1;
@@ -81,7 +81,7 @@ int main() {
     for (int t = 0; t < seq_len; ++t) {
         cudaMemcpy(d_x, x.data() + static_cast<size_t>(t) * channels,
                    static_cast<size_t>(channels) * sizeof(float), cudaMemcpyHostToDevice);
-        if (!dsv4::qwen_causal_depthwise_conv_silu_cuda(d_x, d_w, d_tail, d_y, 1, channels,
+        if (!pocket::qwen_causal_depthwise_conv_silu_cuda(d_x, d_w, d_tail, d_y, 1, channels,
                                                         kernel, true)) {
             std::printf("[FAIL] decode conv launch failed at t=%d\n", t);
             return 1;

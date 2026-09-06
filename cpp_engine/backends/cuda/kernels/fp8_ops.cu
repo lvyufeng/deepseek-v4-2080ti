@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 constexpr int kFp8BlockSize = 128;
@@ -379,4 +379,4 @@ bool fp8_e4m3_e8m0_matmul_strided_cuda(
     return fp8_e4m3_e8m0_matmul_cublas_cuda(d_x, d_weight, d_scale, d_y, batch, rows, cols, x_stride, y_stride, stream);
 }
 
-}  // namespace dsv4
+}  // namespace pocket

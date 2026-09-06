@@ -4,7 +4,7 @@
 #include <iostream>
 #include <algorithm>
 
-namespace dsv4 {
+namespace pocket {
 
 QwenBatchScheduler::QwenBatchScheduler(QwenEngine* engine, int max_batch_size)
     : engine_(engine), max_batch_size_(max_batch_size) {
@@ -567,4 +567,4 @@ void QwenBatchScheduler::notify_result(SchedulerRequest* req) {
     results_cv_.notify_all();
 }
 
-}  // namespace dsv4
+}  // namespace pocket

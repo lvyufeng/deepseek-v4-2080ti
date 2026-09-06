@@ -30,7 +30,7 @@ parity PASS.
 ```
 python scripts/bench_qwen_long_context.py \
   --ckpt /mnt/data2/Qwen3.8-27B-FP8 \
-  --binary build/dsv4_cpp_engine \
+  --binary build/pocketllm_engine \
   --lengths 65536 --max-new-tokens 512 \
   --prefill-chunk-tokens 4096 \
   --kv-cache-dtype <fp16|fp8|turboquant_k8v4|int8_per_token_head> \

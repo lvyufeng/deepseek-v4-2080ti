@@ -6,7 +6,7 @@ set -e
 
 CKPT=/mnt/data1/dsv4_inference/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2.gguf
 BIN=/mnt/data1/dsv4_inference/.claude/worktrees/flashmemory-kv-iq1m/cpp_engine/build/tests/test_gguf_generate
-NCCL_ID=/tmp/dsv4_fm_swap_demo_nccl.id
+NCCL_ID=/tmp/pocketllm_fm_swap_demo_nccl.id
 LOG_DIR=/tmp/fm_swap_demo
 
 echo "╔════════════════════════════════════════════════════════════════╗"
@@ -93,16 +93,16 @@ mkdir -p "$LOG_DIR"
 rm -f "$NCCL_ID"
 
 # FlashMemory + KV_SWAP 配置
-export DSV4_GGUF_FLASHMEMORY_PLUGIN=1
-export DSV4_GGUF_FLASHMEMORY_LOAD_DEVICE=1
-export DSV4_GGUF_FLASHMEMORY_RUNTIME_SCORING=1
-export DSV4_GGUF_FLASHMEMORY_ENSEMBLE=max
-export DSV4_GGUF_FLASHMEMORY_CKPT=/tmp/FlashMemory-Deepseek-V4/weights/flashmemory_ds_v4.safetensors
-export DSV4_GGUF_SPARSE_COMPRESSOR=1
-export DSV4_GGUF_SPARSE_INDEXER=1
-export DSV4_GGUF_KV_SWAP=1
-export DSV4_GGUF_KV_SWAP_GPU_CHUNKS=$GPU_CHUNKS
-export DSV4_GGUF_MEM_PROFILE=1
+export POCKETLLM_GGUF_FLASHMEMORY_PLUGIN=1
+export POCKETLLM_GGUF_FLASHMEMORY_LOAD_DEVICE=1
+export POCKETLLM_GGUF_FLASHMEMORY_RUNTIME_SCORING=1
+export POCKETLLM_GGUF_FLASHMEMORY_ENSEMBLE=max
+export POCKETLLM_GGUF_FLASHMEMORY_CKPT=/tmp/FlashMemory-Deepseek-V4/weights/flashmemory_ds_v4.safetensors
+export POCKETLLM_GGUF_SPARSE_COMPRESSOR=1
+export POCKETLLM_GGUF_SPARSE_INDEXER=1
+export POCKETLLM_GGUF_KV_SWAP=1
+export POCKETLLM_GGUF_KV_SWAP_GPU_CHUNKS=$GPU_CHUNKS
+export POCKETLLM_GGUF_MEM_PROFILE=1
 
 echo ""
 echo "启动推理..."

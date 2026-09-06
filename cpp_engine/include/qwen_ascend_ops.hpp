@@ -19,7 +19,7 @@
 // the host and the layout has to agree byte for byte across backends.
 #include "qwen_cuda_ops.hpp"
 
-namespace dsv4 {
+namespace pocket {
 
 bool qwen_add_inplace_f16_ascend(uint16_t* d_y_fp16, const uint16_t* d_x_fp16, int count, void* stream);
 
@@ -85,4 +85,4 @@ bool qwen_split_packed_qkv_f16_ascend(const uint16_t* d_packed_fp16, uint16_t* d
 bool qwen_split_q_gate_f16_ascend(const uint16_t* d_q_proj_fp16, uint16_t* d_q_fp16, uint16_t* d_gate_fp16, int rows, int q_heads, int head_dim, void* stream);
 
 bool qwen_split_rows_pair_f16_ascend(const uint16_t* d_packed_fp16, uint16_t* d_first_fp16, uint16_t* d_second_fp16, int rows, int width, void* stream);
-}  // namespace dsv4
+}  // namespace pocket

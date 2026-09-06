@@ -45,25 +45,25 @@ struct Trial {
 
 // Submits one long request, then a short one just behind it, and reports when
 // each got its first token.
-Trial run_trial(dsv4::QwenEngine& engine, int budget, int long_len,
+Trial run_trial(pocket::QwenEngine& engine, int budget, int long_len,
                 int short_len, int max_new) {
-    dsv4::QwenBatchScheduler scheduler(&engine, 4);
+    pocket::QwenBatchScheduler scheduler(&engine, 4);
     scheduler.set_prefill_token_budget(budget);
 
-    dsv4::QwenBatchSamplingParams sampling;
+    pocket::QwenBatchSamplingParams sampling;
     sampling.temperature = 0.0f;  // greedy
     sampling.max_new_tokens = max_new;
 
     std::mutex m;
-    dsv4::SchedulerGenerationResult long_result;
-    dsv4::SchedulerGenerationResult short_result;
+    pocket::SchedulerGenerationResult long_result;
+    pocket::SchedulerGenerationResult short_result;
     std::atomic<int> done{0};
 
     const std::vector<int> long_prompt = make_prompt(long_len, 0xAAAA);
     const std::vector<int> short_prompt = make_prompt(short_len, 0xBBBB);
 
     scheduler.submit_request(long_prompt, sampling,
-                             [&](const dsv4::SchedulerGenerationResult& r) {
+                             [&](const pocket::SchedulerGenerationResult& r) {
                                  std::lock_guard<std::mutex> lock(m);
                                  long_result = r;
                                  done.fetch_add(1);
@@ -72,7 +72,7 @@ Trial run_trial(dsv4::QwenEngine& engine, int budget, int long_len,
     // short request has to preempt rather than simply arrive first.
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
     scheduler.submit_request(short_prompt, sampling,
-                             [&](const dsv4::SchedulerGenerationResult& r) {
+                             [&](const pocket::SchedulerGenerationResult& r) {
                                  std::lock_guard<std::mutex> lock(m);
                                  short_result = r;
                                  done.fetch_add(1);
@@ -126,7 +126,7 @@ int main(int argc, char** argv) {
     constexpr int kShortLen = 64;
     constexpr int kMaxNew = 8;
 
-    dsv4::QwenEngineOptions opts;
+    pocket::QwenEngineOptions opts;
     opts.device = device >= 0 ? device : tp_rank;
     opts.max_batch_size = 4;
     if (tp_world > 1) {
@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
         opts.nccl_id_path = nccl_id;
     }
 
-    dsv4::QwenEngine engine(checkpoint, opts, layers,
+    pocket::QwenEngine engine(checkpoint, opts, layers,
                             long_len + kShortLen + kMaxNew + 64);
     engine.allocate_batch_slots(4);
     engine.warmup_tp();

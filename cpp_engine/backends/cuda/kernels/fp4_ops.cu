@@ -8,7 +8,7 @@
 #include <mma.h>
 #include <sm_61_intrinsics.h>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 constexpr int kQuantThreads = 256;
@@ -1582,7 +1582,7 @@ bool moe_prefill_fp4_grouped_cuda_with_workspace(
     if (compact_tiles) {
         if (workspace.routes_cap < routes || workspace.tile_cap < workspace.tile_count) return false;
         if (workspace.d_x_sorted == nullptr || workspace.d_x_q == nullptr || workspace.d_x_scale == nullptr || workspace.d_gate == nullptr || workspace.d_up == nullptr || workspace.d_hidden_q == nullptr || workspace.d_hidden_scale == nullptr) return false;
-        const char* profile_env = std::getenv("DSV4_CPP_PROFILE_MOE_PREFILL");
+        const char* profile_env = std::getenv("POCKETLLM_CPP_PROFILE_MOE_PREFILL");
         const bool profile = profile_env != nullptr && profile_env[0] != '\0' && profile_env[0] != '0';
         std::chrono::steady_clock::time_point stage;
         if (profile) {
@@ -1597,17 +1597,17 @@ bool moe_prefill_fp4_grouped_cuda_with_workspace(
             after_quant = std::chrono::steady_clock::now();
         }
         static const int kMoeWmmaWarps = []() {
-            const char* v = std::getenv("DSV4_CPP_MOE_WMMA_WARPS");
+            const char* v = std::getenv("POCKETLLM_CPP_MOE_WMMA_WARPS");
             int n = (v != nullptr && v[0] != '\0') ? std::atoi(v) : 4;
             return n > 0 ? n : 4;
         }();
         static const int kMoeNSplit = []() {
-            const char* v = std::getenv("DSV4_CPP_MOE_NSPLIT");
+            const char* v = std::getenv("POCKETLLM_CPP_MOE_NSPLIT");
             int n = (v != nullptr && v[0] != '\0') ? std::atoi(v) : 4;
             return n > 0 ? n : 4;
         }();
         static const bool kDeterministicReduce = []() {
-            const char* v = std::getenv("DSV4_CPP_MOE_DETERMINISTIC_REDUCE");
+            const char* v = std::getenv("POCKETLLM_CPP_MOE_DETERMINISTIC_REDUCE");
             if (v == nullptr || v[0] == '\0') return true;  // default enabled
             return v[0] != '0';
         }();
@@ -1710,7 +1710,7 @@ bool moe_prefill_fp4_grouped_cuda_with_workspace(
     pad_q_rows_kernel<<<pad_blocks, threads, 0, cuda_stream>>>(workspace.d_x_q, workspace.d_x_scale, d_seg_starts, workspace.d_x_pad, workspace.d_x_scale_pad, n_local_experts, max_count, dim);
 
     static const bool kDeterministicReduce = []() {
-        const char* v = std::getenv("DSV4_CPP_MOE_DETERMINISTIC_REDUCE");
+        const char* v = std::getenv("POCKETLLM_CPP_MOE_DETERMINISTIC_REDUCE");
         if (v == nullptr || v[0] == '\0') return true;  // default enabled
         return v[0] != '0';
     }();
@@ -1967,4 +1967,4 @@ bool moe_single_token_fp4_cuda(
     return ok;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 struct ModelConfig {
     uint64_t vocab_size = 0;
@@ -49,4 +49,4 @@ struct ModelConfig {
     std::string to_string() const;
 };
 
-}  // namespace dsv4
+}  // namespace pocket

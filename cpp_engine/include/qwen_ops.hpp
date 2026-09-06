@@ -26,10 +26,10 @@
 #include "qwen_ascend_ops.hpp"
 #endif
 
-namespace dsv4 {
+namespace pocket {
 
 #ifndef POCKET_BACKEND_ASCEND
-// The legacy row-wise argmax is shared with the DSV4 path and is declared in
+// The legacy row-wise argmax is shared with the DeepSeek-V4 path and is declared in
 // cuda_ops.hpp when that header is included. Keep a no-default declaration here
 // for Qwen-only translation units that do not include the legacy header.
 bool argmax_fp32_rows_cuda(const float* d_logits, int* d_tokens,
@@ -47,7 +47,7 @@ inline bool qwen_add_inplace_f16(uint16_t* d_y_fp16, const uint16_t* d_x_fp16, i
 
 // Greedy row-wise top-1 over FP32 logits. The CUDA symbol is spelled without the
 // qwen_ prefix because it predates the Qwen engine and is shared with the legacy
-// DSV4 path; the neutral name follows this header's convention.
+// DeepSeek-V4 path; the neutral name follows this header's convention.
 inline bool qwen_argmax_fp32_rows(const float* d_logits, int* d_tokens, float* d_logits_out, int rows, int count, int token_offset, void* stream = nullptr) {
 #ifdef POCKET_BACKEND_ASCEND
     return qwen_argmax_fp32_rows_ascend(d_logits, d_tokens, d_logits_out, rows, count, token_offset, stream);
@@ -292,4 +292,4 @@ inline bool qwen_split_rows_pair_f16(const uint16_t* d_packed_fp16, uint16_t* d_
     return qwen_split_rows_pair_f16_cuda(d_packed_fp16, d_first_fp16, d_second_fp16, rows, width, stream);
 #endif
 }
-}  // namespace dsv4
+}  // namespace pocket

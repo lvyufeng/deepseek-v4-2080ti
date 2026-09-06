@@ -35,8 +35,8 @@ Args parse_args(int argc, char** argv) {
     return args;
 }
 
-void print_tensor(const dsv4::GGUFTensorInfo& info) {
-    std::cout << info.name << " type=" << dsv4::ggml_type_name(info.ggml_type) << " shape=[";
+void print_tensor(const pocket::GGUFTensorInfo& info) {
+    std::cout << info.name << " type=" << pocket::ggml_type_name(info.ggml_type) << " shape=[";
     for (size_t i = 0; i < info.shape.size(); ++i) {
         if (i) std::cout << ',';
         std::cout << info.shape[i];
@@ -49,7 +49,7 @@ void print_tensor(const dsv4::GGUFTensorInfo& info) {
 int main(int argc, char** argv) {
     try {
         Args args = parse_args(argc, argv);
-        dsv4::GGUFFile file(args.path);
+        pocket::GGUFFile file(args.path);
         std::cout << "path=" << file.path() << '\n';
         std::cout << "version=" << file.version() << " tensors=" << file.tensor_count() << " metadata=" << file.metadata_count()
                   << " alignment=" << file.alignment() << " data_start=" << file.data_start() << " file_size=" << file.file_size() << '\n';
@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
             size_t shown = 0;
             for (const auto& [key, value] : file.metadata()) {
                 if (shown++ >= args.limit) break;
-                std::cout << "meta " << key << '=' << dsv4::metadata_value_to_string(value) << '\n';
+                std::cout << "meta " << key << '=' << pocket::metadata_value_to_string(value) << '\n';
             }
         }
         if (!args.tensor.empty()) {

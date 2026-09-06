@@ -24,7 +24,7 @@ echo ""
 # Run each rank in background, rank 0 will print output
 for rank in 0 1 2 3; do
     ASCEND_RT_VISIBLE_DEVICES=$rank \
-    cpp_engine/build-ascend/dsv4_cpp_engine \
+    cpp_engine/build-ascend/pocketllm_engine \
         --model "$MODEL" \
         --prompt "$PROMPT" \
         --max-new-tokens "$MAX_NEW" \

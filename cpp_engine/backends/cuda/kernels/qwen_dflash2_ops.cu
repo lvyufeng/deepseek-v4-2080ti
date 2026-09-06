@@ -7,7 +7,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 constexpr int kThreads = 256;
@@ -1284,4 +1284,4 @@ bool qwen_dflash2_selector_path_viterbi_f16_cuda(
 }
 
 
-}  // namespace dsv4
+}  // namespace pocket

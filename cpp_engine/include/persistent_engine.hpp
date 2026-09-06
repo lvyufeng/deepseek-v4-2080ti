@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dspark.hpp"
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 #include "tokenizer.hpp"
 
 #include <cstdint>
@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 struct SamplingParams {
     float temperature = 1.0f;
@@ -85,7 +85,7 @@ public:
     // own position (the draft's seed hidden came from position - 1).
     //
     // Sequential verification stops at the first mismatch, so it mutates only
-    // committed positions. With DSV4_CPP_BATCHED_VERIFY=1, the whole block is
+    // committed positions. With POCKETLLM_CPP_BATCHED_VERIFY=1, the whole block is
     // forwarded once and a row-tagged device undo journal removes the rejected
     // suffix while preserving the accepted prefix; no accepted row is replayed.
     //
@@ -155,7 +155,7 @@ public:
     void prime_dspark_kv(const std::vector<float>& hidden, int rows, int start_pos);
 
     // Full-vocab top-k of the most recent prefill/decode/verify selection, in
-    // descending logit order. Only populated when DSV4_CPP_TOPK_DIAG > 0, and
+    // descending logit order. Only populated when POCKETLLM_CPP_TOPK_DIAG > 0, and
     // only on rank 0 at TP > 1 (the only rank holding the whole vocabulary).
     // Read-only diagnostic: it reuses the selection's existing gather and does
     // not add a collective or change the sampled token.
@@ -207,4 +207,4 @@ private:
     std::unique_ptr<State> state_;
 };
 
-}  // namespace dsv4
+}  // namespace pocket

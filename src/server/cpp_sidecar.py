@@ -1,7 +1,7 @@
 """Long-lived Python helper for the cpp_engine OpenAI server.
 
 Reads JSON-line requests on stdin, writes JSON-line responses on stdout.
-Reuses src.encoding.dsv4 to render DeepSeek-V4 chat templates (with DSML
+Reuses src.encoding.deepseek_v4 to render DeepSeek-V4 chat templates (with DSML
 tool-call syntax, thinking_mode, reasoning_effort) and to parse generated
 text back into {content, reasoning, tool_calls}.
 
@@ -43,7 +43,7 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, 
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from src.encoding.dsv4 import encode_messages, eos_token, parse_message_from_completion_text  # noqa: E402
+from src.encoding.deepseek_v4 import encode_messages, eos_token, parse_message_from_completion_text  # noqa: E402
 
 
 def _emit(obj: dict[str, Any]) -> None:

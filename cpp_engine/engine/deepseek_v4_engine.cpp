@@ -1,4 +1,4 @@
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 
 #include "cuda_ops.hpp"
 #include "device_runtime.hpp"
@@ -30,7 +30,7 @@
 #include <fstream>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 void check_device(bool ok, const char* what) {
@@ -376,7 +376,7 @@ struct ReduceBreakdown {
     double unpack_ms = 0.0;
 };
 
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
 struct BF16AllReduceScratch {
     uint16_t* d_bf16 = nullptr;
     int capacity = 0;
@@ -436,17 +436,17 @@ struct GgufReduceContext {
     int rank = 0;
     int device = 0;
     const char* id_path = nullptr;
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
     BF16AllReduceScratch* scratch = nullptr;
 #endif
 };
 
 void gguf_all_reduce_sum_fp32_inplace(float* d_values, int count, const GgufReduceContext* ctx, const char* what) {
     if (ctx == nullptr || ctx->world <= 1) return;
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
     if (ctx->id_path == nullptr || ctx->id_path[0] == '\0') throw std::runtime_error(std::string(what) + " requires NCCL id path");
     static const bool use_fp32_reduce = [] {
-        const char* v = std::getenv("DSV4_GGUF_REDUCE_FP32");
+        const char* v = std::getenv("POCKETLLM_GGUF_REDUCE_FP32");
         if (v == nullptr) return true;  // default fp32 for Q2 (bf16 round-trip compounds noise)
         try { return std::stoi(v) != 0; } catch (...) { return true; }
     }();
@@ -459,7 +459,7 @@ void gguf_all_reduce_sum_fp32_inplace(float* d_values, int count, const GgufRedu
 #else
     (void)d_values;
     (void)count;
-    throw std::runtime_error(std::string(what) + " requires DSV4_HAVE_TP_COMM");
+    throw std::runtime_error(std::string(what) + " requires POCKET_HAVE_TP_COMM");
 #endif
 }
 
@@ -700,12 +700,12 @@ std::vector<float> rmsnorm_cpu(const std::vector<float>& x, const uint16_t* gamm
 }
 
 bool debug_forward_enabled() {
-    const char* env = std::getenv("DSV4_CPP_DEBUG_FORWARD");
+    const char* env = std::getenv("POCKETLLM_CPP_DEBUG_FORWARD");
     return env != nullptr && std::string(env) != "0";
 }
 
 bool profile_forward_enabled() {
-    const char* env = std::getenv("DSV4_CPP_PROFILE_FORWARD");
+    const char* env = std::getenv("POCKETLLM_CPP_PROFILE_FORWARD");
     return env != nullptr && std::string(env) != "0";
 }
 
@@ -1398,7 +1398,7 @@ int env_int_or_default(const char* name, int fallback) {
 }
 
 int gguf_indexed_attn_mode_from_env() {
-    const char* value = std::getenv("DSV4_GGUF_INDEXED_ATTN");
+    const char* value = std::getenv("POCKETLLM_GGUF_INDEXED_ATTN");
     if (value == nullptr || *value == '\0') return 0;
     const std::string s(value);
     if (s == "auto" || s == "AUTO") return 2;
@@ -1895,7 +1895,7 @@ struct SafeForwardContext {
         check_device(memcpy_h2d(c.wo_b_scale, wo_b_scale_local.data(), wo_b_scale_local.size()), "copy cached wo_b scale");
         check_device(memcpy_h2d(c.attn_sink, attn_sink_local.data(),
                                 attn_sink_local.size() * sizeof(float)), "copy cached attn sink");
-        if (env_int_or_default("DSV4_CPP_DECODE_WO_A_INT8", 0) != 0) {
+        if (env_int_or_default("POCKETLLM_CPP_DECODE_WO_A_INT8", 0) != 0) {
             WoAInt8Host wo_a_int8 = make_wo_a_int8_from_fp8(wo_a_local.data(), wo_a_scale_local.data(), dims.attn_mid, dims.dim, dims.dim / 128);
             check_device(device_malloc_into(c.wo_a_int8, wo_a_int8.weight.size() * sizeof(int8_t)), "device_malloc cached wo_a int8");
             check_device(device_malloc_into(c.wo_a_int8_scale, wo_a_int8.scale.size() * sizeof(float)), "device_malloc cached wo_a int8 scale");
@@ -2128,7 +2128,7 @@ struct SafeForwardContext {
     }
 
     int active_arena_cache_limit_dense() const {
-        const int dense_max_layers = env_int_or_default("DSV4_CPP_DENSE_ARENA_MAX_LAYERS", 0);
+        const int dense_max_layers = env_int_or_default("POCKETLLM_CPP_DENSE_ARENA_MAX_LAYERS", 0);
         if (dense_max_layers > 0) return dense_max_layers;
         return options.tp_world > 1 ? 3 : 1;
     }
@@ -2189,7 +2189,7 @@ struct SafeForwardContext {
         const int expert_start = rank * experts_per_rank;
         const int expert_end = world > 1 ? expert_start + experts_per_rank : static_cast<int>(config.n_routed_experts);
         for (int li = 0; li < layer_count; ++li) {
-            if (env_int_or_default("DSV4_CPP_PREPARE_PROGRESS", 1) != 0 && tp_rank == 0) {
+            if (env_int_or_default("POCKETLLM_CPP_PREPARE_PROGRESS", 1) != 0 && tp_rank == 0) {
                 std::cerr << "CPP_PREPARE_FP4_HOST layer=" << li << "/" << layer_count << " experts=" << expert_start << "-" << expert_end << "\n";
             }
             const std::string prefix = "layers." + std::to_string(li) + ".ffn.experts.";
@@ -2583,7 +2583,7 @@ struct SafeForwardContext {
     int last_head_rows = 0;
     int last_local_head_start = 0;
     // Full-vocab top-k of the most recent selection, recorded only when
-    // DSV4_CPP_TOPK_DIAG > 0. Diagnostic: it lets a first-token mismatch be
+    // POCKETLLM_CPP_TOPK_DIAG > 0. Diagnostic: it lets a first-token mismatch be
     // classified as a near-tie against the other runtime's margin instead of
     // guessing from the argmax alone. Populated on rank 0, which is the only
     // rank that gathers the whole vocabulary.
@@ -2627,7 +2627,7 @@ struct SafeForwardContext {
     std::vector<ActiveArenaDeviceBuffers> active_arena_device_freelist;
     std::unordered_map<std::string, std::list<std::string>::iterator> active_arena_lru_pos;
     int active_arena_max_layers = env_int_or_default("DEEPSEEK_GPU_PREFILL_MOE_MAX_CACHED_LAYERS", 0);
-    int use_gpu_compressor = env_int_or_default("DSV4_CPP_GPU_COMPRESSOR", 1);
+    int use_gpu_compressor = env_int_or_default("POCKETLLM_CPP_GPU_COMPRESSOR", 1);
     std::unordered_map<std::string, DeviceGateCache> gate_cache;
     std::unordered_map<int, float*> kv_cache;
     std::unordered_map<int, float*> indexer_kv_cache;
@@ -2654,7 +2654,7 @@ ContinuationBatchResult run_safetensors_continuation_batch_impl(
     int layer_count,
     int start_position);
 
-Dsv4Engine::Dsv4Engine(const std::string& model_path) : gguf_(model_path), config_(ModelConfig::from_gguf(gguf_)) {}
+DeepSeekV4Engine::DeepSeekV4Engine(const std::string& model_path) : gguf_(model_path), config_(ModelConfig::from_gguf(gguf_)) {}
 
 ForwardSmokeResult run_safetensors_min_layer_smoke(const std::string& ckpt_dir) {
     return run_safetensors_layer_loop_smoke(ckpt_dir, 1);
@@ -2692,9 +2692,9 @@ GenerateSmokeResult run_safetensors_generate_tokens_timed_with_options(const std
     ctx.kv_cache_tokens = static_cast<int>(seed_tokens.size() + static_cast<size_t>(max_new_tokens));
     const int dim = static_cast<int>(ctx.embed->shape[1]);
     ctx.prepare_resident_device_caches(layer_count, options.tp_world, options.tp_rank, dim);
-    const bool prepare_fp4_host = !options.skip_fp4_host_prepare && env_int_or_default("DSV4_CPP_PREPARE_FP4_HOST", 1) != 0;
+    const bool prepare_fp4_host = !options.skip_fp4_host_prepare && env_int_or_default("POCKETLLM_CPP_PREPARE_FP4_HOST", 1) != 0;
     if (prepare_fp4_host) ctx.prepare_fp4_host_weights(layer_count, options.tp_world, options.tp_rank);
-    const int warmup_prefill_passes = env_int_or_default("DSV4_CPP_PREFILL_WARMUP_PASSES", 0);
+    const int warmup_prefill_passes = env_int_or_default("POCKETLLM_CPP_PREFILL_WARMUP_PASSES", 0);
     for (int pass = 0; pass < warmup_prefill_passes; ++pass) {
         (void)run_safetensors_prompt_prefill_impl(ctx, seed_tokens, layer_count);
     }
@@ -2702,7 +2702,7 @@ GenerateSmokeResult run_safetensors_generate_tokens_timed_with_options(const std
     const auto prefill_t0 = timed_t0;
     ForwardSmokeResult result = run_safetensors_prompt_prefill_impl(ctx, seed_tokens, layer_count);
     int token = result.top_token;
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
     if (options.tp_world > 1 && !options.nccl_id_path.empty()) {
         TpTopResult global = tp_global_top1(options.tp_world, options.tp_rank, options.device, options.nccl_id_path.c_str(), result.top_token, result.top_logit);
         token = global.token;
@@ -2715,7 +2715,7 @@ GenerateSmokeResult run_safetensors_generate_tokens_timed_with_options(const std
     // per-layer cache), prefill's dense (full n_local_experts) arenas would
     // double the per-layer footprint and OOM at MAX_CACHED_LAYERS=43. Drop
     // them here so decode can keep all 43 sparse arenas resident.
-    if (env_int_or_default("DSV4_CPP_DECODE_SPARSE_ARENA", 0) > 0) {
+    if (env_int_or_default("POCKETLLM_CPP_DECODE_SPARSE_ARENA", 0) > 0) {
         ctx.release_active_arenas_with_suffix(":d");
     }
     std::vector<ForwardSmokeResult> out;
@@ -2727,7 +2727,7 @@ GenerateSmokeResult run_safetensors_generate_tokens_timed_with_options(const std
     const auto decode_t0 = Clock::now();
     for (int step = 1; step < max_new_tokens; ++step) {
         result = run_safetensors_token_forward_impl(ctx, token, layer_count, position + step - 1);
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (options.tp_world > 1 && !options.nccl_id_path.empty()) {
             TpTopResult global = tp_global_top1(options.tp_world, options.tp_rank, options.device, options.nccl_id_path.c_str(), result.top_token, result.top_logit);
             result.top_token = global.token;
@@ -2782,7 +2782,7 @@ ForwardSmokeResult run_safetensors_prompt_prefill_impl(SafeForwardContext& ctx, 
     // stream; pre-staging serializes H2D before compute and *slows* prefill on
     // 2080 Ti PCIe. Keep this gated and OFF by default. Useful only when GPU
     // can hold every layer's active arena and PCIe is plentiful.
-    if (env_int_or_default("DSV4_CPP_PREFILL_PRESTAGE_EXPERTS", 0) != 0) {
+    if (env_int_or_default("POCKETLLM_CPP_PREFILL_PRESTAGE_EXPERTS", 0) != 0) {
         for (int li = 0; li < layer_count; ++li) {
             const std::string prefix = "layers." + std::to_string(li) + ".";
             DeviceFp4ExpertCache sample;
@@ -2823,20 +2823,20 @@ ForwardSmokeResult run_safetensors_prompt_prefill_impl(SafeForwardContext& ctx, 
     const int local_head_rows = head_rows / tp_world;
     const int local_head_start = tp_rank * local_head_rows;
 
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
     BF16AllReduceScratch bf16_reduce_scratch;
 #endif
     DeviceMoePrefillWorkspace prefill_moe_workspace;
 
-    const bool prefill_moe_prefetch_enabled = env_int_or_default("DSV4_CPP_PREFILL_MOE_PREFETCH", 0) != 0;
-    const bool prefill_moe_copy_stream_enabled = prefill_moe_prefetch_enabled || env_int_or_default("DSV4_CPP_PREFILL_MOE_COPY_STREAM", 0) != 0;
+    const bool prefill_moe_prefetch_enabled = env_int_or_default("POCKETLLM_CPP_PREFILL_MOE_PREFETCH", 0) != 0;
+    const bool prefill_moe_copy_stream_enabled = prefill_moe_prefetch_enabled || env_int_or_default("POCKETLLM_CPP_PREFILL_MOE_COPY_STREAM", 0) != 0;
     void* prefill_moe_copy_stream = nullptr;
     void* prefill_moe_stage_event = nullptr;
     if (prefill_moe_copy_stream_enabled) {
         check_device((prefill_moe_copy_stream = stream_create()) != nullptr, "create prefill moe copy stream");
         check_device((prefill_moe_stage_event = event_create()) != nullptr, "create prefill moe stage event");
     }
-    const bool prefill_shared_overlap_enabled = env_int_or_default("DSV4_CPP_PREFILL_SHARED_OVERLAP", 1) != 0;
+    const bool prefill_shared_overlap_enabled = env_int_or_default("POCKETLLM_CPP_PREFILL_SHARED_OVERLAP", 1) != 0;
     void* prefill_shared_stream = nullptr;
     void* prefill_shared_ready_event = nullptr;
     void* prefill_shared_done_event = nullptr;
@@ -2961,7 +2961,7 @@ ForwardSmokeResult run_safetensors_prompt_prefill_impl(SafeForwardContext& ctx, 
     // d_h4_rows, the per-layer KV memory d_kv_norm_rows, and the window-indices
     // table) are sized to one chunk's worth of rows. The layer loop iterates
     // over chunks inside each layer so the KV memory accumulates correctly.
-    int prefill_chunk_size = env_int_or_default("DSV4_CPP_PREFILL_CHUNK_TOKENS", 4096);
+    int prefill_chunk_size = env_int_or_default("POCKETLLM_CPP_PREFILL_CHUNK_TOKENS", 4096);
     if (prefill_chunk_size <= 0 || prefill_chunk_size > token_count) prefill_chunk_size = token_count;
     const int chunk_alloc = prefill_chunk_size;
     const size_t token_dim = static_cast<size_t>(token_count) * dim;
@@ -3112,8 +3112,8 @@ ForwardSmokeResult run_safetensors_prompt_prefill_impl(SafeForwardContext& ctx, 
             sync_prefill_profile("profile sync prefill hc attn pre");
             total_prefill_hc_pre_ms += elapsed_ms(stage_t, Clock::now());
             stage_t = Clock::now();
-            if (env_int_or_default("DSV4_CPP_PREFILL_BATCHED_ATTN", 1) != 0) {
-                const bool profile_attn = profile_forward && env_int_or_default("DSV4_CPP_PROFILE_ATTN", 0) != 0;
+            if (env_int_or_default("POCKETLLM_CPP_PREFILL_BATCHED_ATTN", 1) != 0) {
+                const bool profile_attn = profile_forward && env_int_or_default("POCKETLLM_CPP_PROFILE_ATTN", 0) != 0;
                 auto attn_stage_sync = [&](const char* what) {
                     if (profile_attn) check_device(device_synchronize(), what);
                 };
@@ -3156,7 +3156,7 @@ ForwardSmokeResult run_safetensors_prompt_prefill_impl(SafeForwardContext& ctx, 
                 if (!fp8_e4m3_e8m0_matmul_cuda(d_attn_mid_rows, attn_cache.wo_b, attn_cache.wo_b_scale, d_attn_out_rows, cn, dim, attn_dims.attn_mid)) throw std::runtime_error("prefill wo_b rows launch failed");
                 attn_stage_sync("attn wo");
                 double attn_wo_ms = elapsed_ms(attn_t, Clock::now());
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
                 attn_t = Clock::now();
                 if (ctx.options.tp_world > 1) {
                     if (ctx.options.nccl_id_path.empty()) throw std::runtime_error("TP prefill attention all-reduce requires --nccl-id-path");
@@ -3224,7 +3224,7 @@ ForwardSmokeResult run_safetensors_prompt_prefill_impl(SafeForwardContext& ctx, 
                             d_attn_out)) {
                         throw std::runtime_error("prefill attention launch failed");
                     }
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
                     if (ctx.options.tp_world > 1) {
                         if (ctx.options.nccl_id_path.empty()) throw std::runtime_error("TP prefill attention all-reduce requires --nccl-id-path");
                         all_reduce_sum_fp32_via_bf16_inplace(ctx.options.tp_world, ctx.options.tp_rank, ctx.options.device, ctx.options.nccl_id_path.c_str(), d_attn_out, dim, bf16_reduce_scratch);
@@ -3263,7 +3263,7 @@ ForwardSmokeResult run_safetensors_prompt_prefill_impl(SafeForwardContext& ctx, 
             }
 
             DeviceGateCache& gate = ctx.gate_device_cache(li);
-            const bool use_gpu_hash_gate = env_int_or_default("DSV4_CPP_PREFILL_GPU_HASH_GATE", 0) != 0;
+            const bool use_gpu_hash_gate = env_int_or_default("POCKETLLM_CPP_PREFILL_GPU_HASH_GATE", 0) != 0;
             if (static_cast<uint64_t>(li) < config.n_hash_layers && gate.tid2eid != nullptr && use_gpu_hash_gate) {
                 if (!gate_hash_bf16_rows_cuda(d_ffn_norm_rows, gate.weight, gate.tid2eid, d_token_ids + cs, d_route_indices, d_route_weights, cn, gate.dim, gate.hash_topk, route_count, static_cast<float>(config.route_scale))) throw std::runtime_error("prefill hash gate rows launch failed");
             } else if (static_cast<uint64_t>(li) < config.n_hash_layers && gate.tid2eid != nullptr) {
@@ -3306,7 +3306,7 @@ ForwardSmokeResult run_safetensors_prompt_prefill_impl(SafeForwardContext& ctx, 
             stage_t = Clock::now();
 
             if (!moe_group_routes_cuda(d_route_indices, d_route_weights, d_group_route_tokens, d_group_route_weights, d_seg_starts, d_counts, d_offsets, d_total_routes, cn, route_count, expert_start, experts_per_rank, d_token_slot_routes)) throw std::runtime_error("prefill group routes launch failed");
-            const bool profile_moe_host = profile_forward && env_int_or_default("DSV4_CPP_PROFILE_MOE_HOST", 0) != 0;
+            const bool profile_moe_host = profile_forward && env_int_or_default("POCKETLLM_CPP_PROFILE_MOE_HOST", 0) != 0;
             auto moe_host_t0 = Clock::now();
             int32_t total_routes = 0;
             std::vector<int32_t> h_counts(experts_per_rank);
@@ -3321,7 +3321,7 @@ ForwardSmokeResult run_safetensors_prompt_prefill_impl(SafeForwardContext& ctx, 
                 if (c > 0) ++active_experts;
                 route_sum += c;
             }
-            if (env_int_or_default("DSV4_CPP_PREFILL_ROUTE_STATS", 0) != 0 && tp_rank == 0) {
+            if (env_int_or_default("POCKETLLM_CPP_PREFILL_ROUTE_STATS", 0) != 0 && tp_rank == 0) {
                 std::cerr << "CPP_PREFILL_ROUTE_STATS layer=" << li
                           << " chunk=[" << cs << "," << ce << ")"
                           << " total_routes=" << total_routes
@@ -3346,7 +3346,7 @@ ForwardSmokeResult run_safetensors_prompt_prefill_impl(SafeForwardContext& ctx, 
                 sample.s3_bytes = sample_w3.s->nbytes;
                 DeviceFp4ActiveArena& arena = ctx.active_fp4_arena(li, tp_world, tp_rank, experts_per_rank, sample);
                 int staged_this_layer = 0;
-                const bool profile_stage = profile_forward && env_int_or_default("DSV4_CPP_PROFILE_MOE_STAGE", 0) != 0;
+                const bool profile_stage = profile_forward && env_int_or_default("POCKETLLM_CPP_PROFILE_MOE_STAGE", 0) != 0;
                 void* stage_evt_begin = nullptr;
                 void* stage_evt_end = nullptr;
                 if (profile_stage) {
@@ -3406,7 +3406,7 @@ ForwardSmokeResult run_safetensors_prompt_prefill_impl(SafeForwardContext& ctx, 
                 if (prefill_moe_copy_stream_enabled && staged_this_layer > 0) {
                     check_device(event_record(prefill_moe_stage_event, prefill_moe_copy_stream), "record prefill moe stage event");
                 }
-                const bool force_padded_moe = env_int_or_default("DSV4_CPP_MOE_FORCE_PADDED", 0) != 0;
+                const bool force_padded_moe = env_int_or_default("POCKETLLM_CPP_MOE_FORCE_PADDED", 0) != 0;
                 auto moe_build_t0 = profile_moe_host ? Clock::now() : moe_host_t0;
                 std::vector<int32_t> h_tile_experts;
                 std::vector<int32_t> h_tile_rows;
@@ -3458,7 +3458,7 @@ ForwardSmokeResult run_safetensors_prompt_prefill_impl(SafeForwardContext& ctx, 
             sync_prefill_profile("profile sync prefill moe");
             total_prefill_moe_ms += elapsed_ms(stage_t, Clock::now());
             stage_t = Clock::now();
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
             if (ctx.options.tp_world > 1) {
                 if (ctx.options.nccl_id_path.empty()) throw std::runtime_error("TP prefill MoE all-reduce requires --nccl-id-path");
                 all_reduce_sum_fp32_via_bf16_inplace(ctx.options.tp_world, ctx.options.tp_rank, ctx.options.device, ctx.options.nccl_id_path.c_str(), d_moe_rows, static_cast<int>(cn_dim_sz), bf16_reduce_scratch);
@@ -3621,7 +3621,7 @@ ContinuationBatchResult run_safetensors_continuation_batch_impl(
     // layer loop updates streaming compressor state in position order, while
     // dense projections and TP reductions remain row-batched.
 
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
     BF16AllReduceScratch bf16_reduce_scratch;
 #endif
     const int experts_per_rank = tp_world > 1
@@ -3888,7 +3888,7 @@ ContinuationBatchResult run_safetensors_continuation_batch_impl(
                                        w.attn_out, rows, dim, dims.attn_mid)) {
             throw std::runtime_error("continuation WO-B rows launch failed");
         }
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (tp_world > 1) {
             if (ctx.options.nccl_id_path.empty()) {
                 throw std::runtime_error("TP continuation attention all-reduce requires --nccl-id-path");
@@ -4062,7 +4062,7 @@ ContinuationBatchResult run_safetensors_continuation_batch_impl(
                 throw std::runtime_error("continuation active FP4 MoE launch failed");
             }
         }
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (tp_world > 1) {
             if (ctx.options.nccl_id_path.empty()) {
                 throw std::runtime_error("TP continuation MoE all-reduce requires --nccl-id-path");
@@ -4304,7 +4304,7 @@ ForwardSmokeResult run_safetensors_token_forward_impl(SafeForwardContext& ctx, i
     const int local_head_rows = head_rows / tp_world;
     const int local_head_start = tp_rank * local_head_rows;
 
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
     BF16AllReduceScratch bf16_reduce_scratch;
 #endif
 
@@ -4441,10 +4441,10 @@ ForwardSmokeResult run_safetensors_token_forward_impl(SafeForwardContext& ctx, i
     if (!bf16_row_to_float_cuda(d_embed, d_x, 0, dim)) throw std::runtime_error("embed launch failed");
     const bool debug_forward = debug_forward_enabled();
     const bool profile_forward = profile_forward_enabled();
-    const bool profile_decode_sync = profile_forward && env_int_or_default("DSV4_CPP_DECODE_PROFILE", 0) != 0;
-    const bool profile_attn = profile_forward && env_int_or_default("DSV4_CPP_PROFILE_ATTN", 0) != 0;
-    const bool profile_reduce_detail = profile_forward && env_int_or_default("DSV4_CPP_PROFILE_REDUCE_DETAIL", 0) != 0;
-    const int sparse_slots_per_layer = env_int_or_default("DSV4_CPP_DECODE_SPARSE_ARENA", 0);
+    const bool profile_decode_sync = profile_forward && env_int_or_default("POCKETLLM_CPP_DECODE_PROFILE", 0) != 0;
+    const bool profile_attn = profile_forward && env_int_or_default("POCKETLLM_CPP_PROFILE_ATTN", 0) != 0;
+    const bool profile_reduce_detail = profile_forward && env_int_or_default("POCKETLLM_CPP_PROFILE_REDUCE_DETAIL", 0) != 0;
+    const int sparse_slots_per_layer = env_int_or_default("POCKETLLM_CPP_DECODE_SPARSE_ARENA", 0);
     const bool use_sparse_arena = sparse_slots_per_layer > 0;
     double total_route_gate_kernel_ms = 0.0;
     double total_route_d2h_ms = 0.0;
@@ -4726,7 +4726,7 @@ ForwardSmokeResult run_safetensors_token_forward_impl(SafeForwardContext& ctx, i
                 profile_attn ? &attn_profile : nullptr)) {
             throw std::runtime_error("single-token attention smoke launch failed");
         }
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (ctx.options.tp_world > 1) {
             if (ctx.options.nccl_id_path.empty()) throw std::runtime_error("TP attention all-reduce requires --nccl-id-path");
             auto reduce_t = Clock::now();
@@ -4891,7 +4891,7 @@ ForwardSmokeResult run_safetensors_token_forward_impl(SafeForwardContext& ctx, i
         if (profile_decode_sync) check_device(device_synchronize(), "sync moe kernel");
         moe_kernel_ms += elapsed_ms(stage_t, Clock::now());
         stage_t = Clock::now();
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (ctx.options.tp_world > 1) {
             if (ctx.options.nccl_id_path.empty()) throw std::runtime_error("TP MoE all-reduce requires --nccl-id-path");
             all_reduce_sum_fp32_via_bf16_inplace(ctx.options.tp_world, ctx.options.tp_rank, ctx.options.device, ctx.options.nccl_id_path.c_str(), d_moe, dim, bf16_reduce_scratch, profile_reduce_detail ? &moe_reduce_detail : nullptr);
@@ -6005,7 +6005,7 @@ void gguf_layer_forward_moe(const GgufLayerDeviceWeights& w,
         w.routed_w2_dtype == DType::Q2_K;
 
     const int routed_n_experts = w.routed_n_experts > 0 ? w.routed_n_experts : routes;
-    const bool iq1_fused_w13_swiglu = env_int_or_default("DSV4_GGUF_IQ1_FUSED_W13_SWIGLU", 1) != 0;
+    const bool iq1_fused_w13_swiglu = env_int_or_default("POCKETLLM_GGUF_IQ1_FUSED_W13_SWIGLU", 1) != 0;
 
     if (q2_recipe) {
         if (!q2_quantize_x_q8_1_cuda(s.d_x_normed_ffn, s.d_x_q, s.d_x_scale,
@@ -6046,7 +6046,7 @@ void gguf_layer_forward_moe(const GgufLayerDeviceWeights& w,
                                         d.swiglu_limit))
                 throw std::runtime_error("iq1 swiglu failed");
         }
-        const bool iq1_w2_reduce = env_int_or_default("DSV4_GGUF_IQ1_W2_REDUCE", 0) != 0;
+        const bool iq1_w2_reduce = env_int_or_default("POCKETLLM_GGUF_IQ1_W2_REDUCE", 0) != 0;
         const bool w2_ok = iq1_w2_reduce
             ? iq1_moe_single_w2_reduce_cuda(s.d_route_hidden, s.d_route_slots,
                                             w.d_routed_w2, s.d_moe_out,
@@ -8241,83 +8241,83 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
     for (int t : seed_tokens) if (t < 0 || t >= vocab)
         throw std::runtime_error("seed token id out of vocab range");
 
-    const int gguf_min_free_mib = env_int_or_default("DSV4_GGUF_MIN_FREE_MIB", 512);
-    const bool gguf_mem_profile = env_int_or_default("DSV4_GGUF_MEM_PROFILE", 1) != 0;
+    const int gguf_min_free_mib = env_int_or_default("POCKETLLM_GGUF_MIN_FREE_MIB", 512);
+    const bool gguf_mem_profile = env_int_or_default("POCKETLLM_GGUF_MEM_PROFILE", 1) != 0;
     const int gguf_indexed_attn = gguf_indexed_attn_mode_from_env();
     const int gguf_indexed_attn_window = env_int_or_default(
-        "DSV4_GGUF_INDEXED_ATTN_WINDOW",
+        "POCKETLLM_GGUF_INDEXED_ATTN_WINDOW",
         static_cast<int>(ctx.config.window_size == 0 ? 128 : ctx.config.window_size));
     const int gguf_indexed_attn_auto_threshold = env_int_or_default(
-        "DSV4_GGUF_INDEXED_ATTN_AUTO_THRESHOLD", gguf_indexed_attn_window);
-    const bool gguf_sparse_compressor = env_int_or_default("DSV4_GGUF_SPARSE_COMPRESSOR", 0) != 0;
+        "POCKETLLM_GGUF_INDEXED_ATTN_AUTO_THRESHOLD", gguf_indexed_attn_window);
+    const bool gguf_sparse_compressor = env_int_or_default("POCKETLLM_GGUF_SPARSE_COMPRESSOR", 0) != 0;
     // Optional indexer top-k for compressed slots. Default off for now: the main
     // compressor + all compressed slots already cuts 32K attention scans by ~4x,
     // while the GGUF indexer matvec path is not optimized yet.
-    const bool gguf_sparse_indexer = env_int_or_default("DSV4_GGUF_SPARSE_INDEXER", 0) != 0;
-    const bool gguf_kv_swap_requested = env_int_or_default("DSV4_GGUF_KV_SWAP", 0) != 0;
-    const int gguf_kv_swap_gpu_chunks_env = env_int_or_default("DSV4_GGUF_KV_SWAP_GPU_CHUNKS", 0);
-    const int gguf_kv_swap_pinned_mib = env_int_or_default("DSV4_GGUF_KV_SWAP_PINNED_MIB", 16384);
-    const int gguf_kv_swap_sync = env_int_or_default("DSV4_GGUF_KV_SWAP_SYNC", 1);
-    const int gguf_kv_swap_validate = env_int_or_default("DSV4_GGUF_KV_SWAP_VALIDATE", 0);
+    const bool gguf_sparse_indexer = env_int_or_default("POCKETLLM_GGUF_SPARSE_INDEXER", 0) != 0;
+    const bool gguf_kv_swap_requested = env_int_or_default("POCKETLLM_GGUF_KV_SWAP", 0) != 0;
+    const int gguf_kv_swap_gpu_chunks_env = env_int_or_default("POCKETLLM_GGUF_KV_SWAP_GPU_CHUNKS", 0);
+    const int gguf_kv_swap_pinned_mib = env_int_or_default("POCKETLLM_GGUF_KV_SWAP_PINNED_MIB", 16384);
+    const int gguf_kv_swap_sync = env_int_or_default("POCKETLLM_GGUF_KV_SWAP_SYNC", 1);
+    const int gguf_kv_swap_validate = env_int_or_default("POCKETLLM_GGUF_KV_SWAP_VALIDATE", 0);
     const bool gguf_kv_swap_test_allow_topk_reduction =
-        env_int_or_default("DSV4_GGUF_KV_SWAP_TEST_ALLOW_TOPK_REDUCTION", 0) != 0;
-    const bool gguf_flashmemory_plugin = env_int_or_default("DSV4_GGUF_FLASHMEMORY_PLUGIN", 0) != 0;
-    const int gguf_flashmemory_metadata_only = env_int_or_default("DSV4_GGUF_FLASHMEMORY_METADATA_ONLY", 1);
-    const int gguf_flashmemory_load_device = env_int_or_default("DSV4_GGUF_FLASHMEMORY_LOAD_DEVICE", 0);
-    const int gguf_flashmemory_mock_smoke = env_int_or_default("DSV4_GGUF_FLASHMEMORY_MOCK_SCORER_SMOKE", 0);
-    const int gguf_flashmemory_runtime_scoring = env_int_or_default("DSV4_GGUF_FLASHMEMORY_RUNTIME_SCORING", 0);
-    const int gguf_flashmemory_src_layer = env_int_or_default("DSV4_GGUF_FLASHMEMORY_SRC_LAYER", -1);
-    const char* gguf_flashmemory_ensemble_env = std::getenv("DSV4_GGUF_FLASHMEMORY_ENSEMBLE");
+        env_int_or_default("POCKETLLM_GGUF_KV_SWAP_TEST_ALLOW_TOPK_REDUCTION", 0) != 0;
+    const bool gguf_flashmemory_plugin = env_int_or_default("POCKETLLM_GGUF_FLASHMEMORY_PLUGIN", 0) != 0;
+    const int gguf_flashmemory_metadata_only = env_int_or_default("POCKETLLM_GGUF_FLASHMEMORY_METADATA_ONLY", 1);
+    const int gguf_flashmemory_load_device = env_int_or_default("POCKETLLM_GGUF_FLASHMEMORY_LOAD_DEVICE", 0);
+    const int gguf_flashmemory_mock_smoke = env_int_or_default("POCKETLLM_GGUF_FLASHMEMORY_MOCK_SCORER_SMOKE", 0);
+    const int gguf_flashmemory_runtime_scoring = env_int_or_default("POCKETLLM_GGUF_FLASHMEMORY_RUNTIME_SCORING", 0);
+    const int gguf_flashmemory_src_layer = env_int_or_default("POCKETLLM_GGUF_FLASHMEMORY_SRC_LAYER", -1);
+    const char* gguf_flashmemory_ensemble_env = std::getenv("POCKETLLM_GGUF_FLASHMEMORY_ENSEMBLE");
     const std::string gguf_flashmemory_ensemble = gguf_flashmemory_ensemble_env == nullptr ? std::string("max") : std::string(gguf_flashmemory_ensemble_env);
-    const char* gguf_flashmemory_ckpt_env = std::getenv("DSV4_GGUF_FLASHMEMORY_CKPT");
+    const char* gguf_flashmemory_ckpt_env = std::getenv("POCKETLLM_GGUF_FLASHMEMORY_CKPT");
     const std::string gguf_flashmemory_ckpt = gguf_flashmemory_ckpt_env == nullptr ? std::string() : std::string(gguf_flashmemory_ckpt_env);
     if (gguf_flashmemory_plugin && gguf_flashmemory_metadata_only != 0 && gguf_flashmemory_metadata_only != 1)
-        throw std::runtime_error("DSV4_GGUF_FLASHMEMORY_METADATA_ONLY must be 0 or 1");
+        throw std::runtime_error("POCKETLLM_GGUF_FLASHMEMORY_METADATA_ONLY must be 0 or 1");
     if (gguf_flashmemory_plugin && gguf_flashmemory_load_device != 0 && gguf_flashmemory_load_device != 1)
-        throw std::runtime_error("DSV4_GGUF_FLASHMEMORY_LOAD_DEVICE must be 0 or 1");
+        throw std::runtime_error("POCKETLLM_GGUF_FLASHMEMORY_LOAD_DEVICE must be 0 or 1");
     if (gguf_flashmemory_plugin && gguf_flashmemory_mock_smoke != 0 && gguf_flashmemory_mock_smoke != 1)
-        throw std::runtime_error("DSV4_GGUF_FLASHMEMORY_MOCK_SCORER_SMOKE must be 0 or 1");
+        throw std::runtime_error("POCKETLLM_GGUF_FLASHMEMORY_MOCK_SCORER_SMOKE must be 0 or 1");
     if (gguf_flashmemory_plugin && gguf_flashmemory_runtime_scoring != 0 && gguf_flashmemory_runtime_scoring != 1)
-        throw std::runtime_error("DSV4_GGUF_FLASHMEMORY_RUNTIME_SCORING must be 0 or 1");
+        throw std::runtime_error("POCKETLLM_GGUF_FLASHMEMORY_RUNTIME_SCORING must be 0 or 1");
     if (gguf_flashmemory_plugin && gguf_flashmemory_src_layer < -1)
-        throw std::runtime_error("DSV4_GGUF_FLASHMEMORY_SRC_LAYER must be -1 or a non-negative layer id");
+        throw std::runtime_error("POCKETLLM_GGUF_FLASHMEMORY_SRC_LAYER must be -1 or a non-negative layer id");
     if (gguf_flashmemory_plugin && gguf_flashmemory_ensemble != "max" && gguf_flashmemory_ensemble != "mean")
-        throw std::runtime_error("DSV4_GGUF_FLASHMEMORY_ENSEMBLE must be 'max' or 'mean'");
+        throw std::runtime_error("POCKETLLM_GGUF_FLASHMEMORY_ENSEMBLE must be 'max' or 'mean'");
     if (gguf_flashmemory_plugin && gguf_flashmemory_ckpt.empty())
-        throw std::runtime_error("DSV4_GGUF_FLASHMEMORY_PLUGIN requires DSV4_GGUF_FLASHMEMORY_CKPT=/path/flashmemory_ds_v4.safetensors");
+        throw std::runtime_error("POCKETLLM_GGUF_FLASHMEMORY_PLUGIN requires POCKETLLM_GGUF_FLASHMEMORY_CKPT=/path/flashmemory_ds_v4.safetensors");
     if (gguf_flashmemory_plugin && gguf_flashmemory_mock_smoke && !gguf_flashmemory_load_device)
-        throw std::runtime_error("DSV4_GGUF_FLASHMEMORY_MOCK_SCORER_SMOKE requires DSV4_GGUF_FLASHMEMORY_LOAD_DEVICE=1");
+        throw std::runtime_error("POCKETLLM_GGUF_FLASHMEMORY_MOCK_SCORER_SMOKE requires POCKETLLM_GGUF_FLASHMEMORY_LOAD_DEVICE=1");
     if (gguf_flashmemory_plugin && gguf_flashmemory_runtime_scoring && !gguf_flashmemory_load_device)
-        throw std::runtime_error("DSV4_GGUF_FLASHMEMORY_RUNTIME_SCORING requires DSV4_GGUF_FLASHMEMORY_LOAD_DEVICE=1");
+        throw std::runtime_error("POCKETLLM_GGUF_FLASHMEMORY_RUNTIME_SCORING requires POCKETLLM_GGUF_FLASHMEMORY_LOAD_DEVICE=1");
     if (gguf_flashmemory_plugin && gguf_flashmemory_runtime_scoring && !gguf_sparse_compressor)
-        throw std::runtime_error("DSV4_GGUF_FLASHMEMORY_RUNTIME_SCORING requires DSV4_GGUF_SPARSE_COMPRESSOR=1");
+        throw std::runtime_error("POCKETLLM_GGUF_FLASHMEMORY_RUNTIME_SCORING requires POCKETLLM_GGUF_SPARSE_COMPRESSOR=1");
     if (gguf_flashmemory_plugin && gguf_flashmemory_runtime_scoring && !gguf_sparse_indexer)
-        throw std::runtime_error("DSV4_GGUF_FLASHMEMORY_RUNTIME_SCORING requires DSV4_GGUF_SPARSE_INDEXER=1");
+        throw std::runtime_error("POCKETLLM_GGUF_FLASHMEMORY_RUNTIME_SCORING requires POCKETLLM_GGUF_SPARSE_INDEXER=1");
     if (gguf_flashmemory_plugin && gguf_flashmemory_metadata_only == 0 && !gguf_flashmemory_runtime_scoring)
-        throw std::runtime_error("FlashMemory retriever runtime scoring requires DSV4_GGUF_FLASHMEMORY_RUNTIME_SCORING=1; otherwise keep DSV4_GGUF_FLASHMEMORY_METADATA_ONLY=1");
+        throw std::runtime_error("FlashMemory retriever runtime scoring requires POCKETLLM_GGUF_FLASHMEMORY_RUNTIME_SCORING=1; otherwise keep POCKETLLM_GGUF_FLASHMEMORY_METADATA_ONLY=1");
     if (gguf_kv_swap_requested && !gguf_sparse_compressor)
-        throw std::runtime_error("DSV4_GGUF_KV_SWAP requires DSV4_GGUF_SPARSE_COMPRESSOR=1");
+        throw std::runtime_error("POCKETLLM_GGUF_KV_SWAP requires POCKETLLM_GGUF_SPARSE_COMPRESSOR=1");
     if (gguf_kv_swap_requested && gguf_kv_swap_pinned_mib <= 0)
-        throw std::runtime_error("DSV4_GGUF_KV_SWAP_PINNED_MIB must be > 0");
+        throw std::runtime_error("POCKETLLM_GGUF_KV_SWAP_PINNED_MIB must be > 0");
     if (gguf_kv_swap_requested && gguf_kv_swap_gpu_chunks_env < 0)
-        throw std::runtime_error("DSV4_GGUF_KV_SWAP_GPU_CHUNKS must be >= 0");
+        throw std::runtime_error("POCKETLLM_GGUF_KV_SWAP_GPU_CHUNKS must be >= 0");
     if (gguf_kv_swap_requested && gguf_kv_swap_sync != 0 && gguf_kv_swap_sync != 1)
-        throw std::runtime_error("DSV4_GGUF_KV_SWAP_SYNC must be 0 or 1");
+        throw std::runtime_error("POCKETLLM_GGUF_KV_SWAP_SYNC must be 0 or 1");
     const int gguf_sparse_window = env_int_or_default(
-        "DSV4_GGUF_SPARSE_WINDOW",
+        "POCKETLLM_GGUF_SPARSE_WINDOW",
         static_cast<int>(ctx.config.window_size == 0 ? 128 : ctx.config.window_size));
     const int gguf_sparse_attn_threshold = env_int_or_default(
-        "DSV4_GGUF_SPARSE_ATTN_THRESHOLD", gguf_sparse_window);
+        "POCKETLLM_GGUF_SPARSE_ATTN_THRESHOLD", gguf_sparse_window);
     if (gguf_indexed_attn < 0 || gguf_indexed_attn > 2)
-        throw std::runtime_error("DSV4_GGUF_INDEXED_ATTN must be 0, 1, 2, or auto");
+        throw std::runtime_error("POCKETLLM_GGUF_INDEXED_ATTN must be 0, 1, 2, or auto");
     if (gguf_indexed_attn != 0 && gguf_indexed_attn_window <= 0)
-        throw std::runtime_error("DSV4_GGUF_INDEXED_ATTN_WINDOW must be > 0");
+        throw std::runtime_error("POCKETLLM_GGUF_INDEXED_ATTN_WINDOW must be > 0");
     if (gguf_indexed_attn == 2 && gguf_indexed_attn_auto_threshold <= 0)
-        throw std::runtime_error("DSV4_GGUF_INDEXED_ATTN_AUTO_THRESHOLD must be > 0");
+        throw std::runtime_error("POCKETLLM_GGUF_INDEXED_ATTN_AUTO_THRESHOLD must be > 0");
     if (gguf_sparse_compressor && gguf_sparse_window <= 0)
-        throw std::runtime_error("DSV4_GGUF_SPARSE_WINDOW must be > 0");
+        throw std::runtime_error("POCKETLLM_GGUF_SPARSE_WINDOW must be > 0");
     if (gguf_sparse_compressor && (gguf_sparse_attn_threshold < 0 || gguf_sparse_attn_threshold > gguf_sparse_window))
-        throw std::runtime_error("DSV4_GGUF_SPARSE_ATTN_THRESHOLD must be in [0, DSV4_GGUF_SPARSE_WINDOW]");
+        throw std::runtime_error("POCKETLLM_GGUF_SPARSE_ATTN_THRESHOLD must be in [0, POCKETLLM_GGUF_SPARSE_WINDOW]");
     std::unique_ptr<FlashMemoryDeviceWeights> flashmemory_device_weights;
     if (gguf_flashmemory_plugin) {
         FlashMemoryPluginMetadata fm = inspect_flashmemory_checkpoint_metadata(gguf_flashmemory_ckpt);
@@ -8424,7 +8424,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
     std::vector<GgufSparseLayerState> d_sparse_state(n_layers);
     std::vector<const int32_t*> h_tid2eid_table(n_layers, nullptr);
     std::vector<int64_t*> d_tid2eid_table(n_layers, nullptr);
-    const bool hash_table_resident = env_int_or_default("DSV4_GGUF_HASH_TABLE_RESIDENT", 1) != 0;
+    const bool hash_table_resident = env_int_or_default("POCKETLLM_GGUF_HASH_TABLE_RESIDENT", 1) != 0;
 
     for (int L = 0; L < n_layers; ++L) {
         const std::string lp = "layers." + std::to_string(L);
@@ -8654,9 +8654,9 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
     const bool has_iq1_routed = std::any_of(
         layer_w1_dtype.begin(), layer_w1_dtype.end(),
         [](DType t) { return t == DType::IQ1_M; });
-    const int resident_layers_env = env_int_or_default("DSV4_GGUF_RESIDENT_ROUTED_LAYERS", -1);
+    const int resident_layers_env = env_int_or_default("POCKETLLM_GGUF_RESIDENT_ROUTED_LAYERS", -1);
     const bool resident_routed_requested = tp_world > 1 && (
-        env_int_or_default("DSV4_GGUF_RESIDENT_ROUTED_EXPERTS", has_iq1_routed ? 1 : 0) != 0 ||
+        env_int_or_default("POCKETLLM_GGUF_RESIDENT_ROUTED_EXPERTS", has_iq1_routed ? 1 : 0) != 0 ||
         resident_layers_env > 0);
     const int resident_routed_layers = resident_routed_requested
         ? std::max(0, std::min(n_layers, resident_layers_env >= 0 ? resident_layers_env : n_layers))
@@ -8666,16 +8666,16 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
     const bool any_resident_routed = resident_routed_layers > 0;
     const bool all_resident_routed = resident_routed_layers == n_layers;
     const bool device_route_slots = any_resident_routed &&
-        env_int_or_default("DSV4_GGUF_DEVICE_ROUTE_SLOTS", 1) != 0;
+        env_int_or_default("POCKETLLM_GGUF_DEVICE_ROUTE_SLOTS", 1) != 0;
     GgufPinnedStagingRing gguf_pinned_stage;
-    const bool gguf_pinned_stage_enabled = env_int_or_default("DSV4_GGUF_PINNED_STAGE", 1) != 0;
+    const bool gguf_pinned_stage_enabled = env_int_or_default("POCKETLLM_GGUF_PINNED_STAGE", 1) != 0;
     if (gguf_pinned_stage_enabled && !all_resident_routed) {
         const size_t max_stage_copy_bytes = std::max<size_t>(
             static_cast<size_t>(std::max(max_per_w1_bytes, std::max(max_per_w2_bytes, max_per_w3_bytes))),
             static_cast<size_t>(topk) * sizeof(int64_t));
         gguf_pinned_stage.init(max_stage_copy_bytes,
-                               env_int_or_default("DSV4_GGUF_PINNED_STAGE_SLOTS", 32),
-                               env_int_or_default("DSV4_GGUF_PINNED_STAGE_CAP_MIB", 256),
+                               env_int_or_default("POCKETLLM_GGUF_PINNED_STAGE_SLOTS", 32),
+                               env_int_or_default("POCKETLLM_GGUF_PINNED_STAGE_CAP_MIB", 256),
                                tp_rank);
     }
     std::vector<uint8_t*> d_resident_w1(n_layers, nullptr);
@@ -8732,8 +8732,8 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
     // ===== per-layer KV cache sized for full sequence =====
     // To generate K tokens from an N-token seed, positions 0..N-1 are the
     // prefill/TTFT pass and positions N..N+K-2 are continuation decode passes.
-    const int decode_only_context = env_int_or_default("DSV4_GGUF_DECODE_ONLY_CONTEXT", 0);
-    if (decode_only_context < 0) throw std::runtime_error("DSV4_GGUF_DECODE_ONLY_CONTEXT must be >= 0");
+    const int decode_only_context = env_int_or_default("POCKETLLM_GGUF_DECODE_ONLY_CONTEXT", 0);
+    if (decode_only_context < 0) throw std::runtime_error("POCKETLLM_GGUF_DECODE_ONLY_CONTEXT must be >= 0");
     const int generate_total_positions = static_cast<int>(seed_tokens.size()) + std::max(0, max_new_tokens - 1);
     const int total_positions = std::max(generate_total_positions, decode_only_context > 0 ? decode_only_context : 0);
     int max_sparse_compressed_cap = 0;
@@ -8753,15 +8753,15 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
     uint64_t gguf_kv_swap_pinned_bytes = 0;
     if (gguf_kv_swap_requested) {
         if (!gguf_sparse_indexer) {
-            throw std::runtime_error("DSV4_GGUF_KV_SWAP requires DSV4_GGUF_SPARSE_INDEXER=1 for phase-1 correctness");
+            throw std::runtime_error("POCKETLLM_GGUF_KV_SWAP requires POCKETLLM_GGUF_SPARSE_INDEXER=1 for phase-1 correctness");
         }
         if (ctx.config.index_topk == 0) {
-            throw std::runtime_error("DSV4_GGUF_KV_SWAP requires a non-zero index_topk");
+            throw std::runtime_error("POCKETLLM_GGUF_KV_SWAP requires a non-zero index_topk");
         }
         const int default_gpu_chunks = std::max<int>(1, static_cast<int>(ctx.config.index_topk));
         if (gguf_kv_swap_gpu_chunks_env > 0 && gguf_kv_swap_gpu_chunks_env < default_gpu_chunks &&
             !gguf_kv_swap_test_allow_topk_reduction) {
-            throw std::runtime_error("DSV4_GGUF_KV_SWAP_GPU_CHUNKS must be >= index_topk to avoid reducing retrieval coverage; set DSV4_GGUF_KV_SWAP_TEST_ALLOW_TOPK_REDUCTION=1 only for small-context tests");
+            throw std::runtime_error("POCKETLLM_GGUF_KV_SWAP_GPU_CHUNKS must be >= index_topk to avoid reducing retrieval coverage; set POCKETLLM_GGUF_KV_SWAP_TEST_ALLOW_TOPK_REDUCTION=1 only for small-context tests");
         }
         for (int L = 0; L < n_layers; ++L) {
             if (!d_compressor_w[L].present || d_compressor_w[L].ratio <= 0 || !d_indexer_w[L].present) continue;
@@ -8780,7 +8780,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
         const uint64_t pinned_cap_bytes = static_cast<uint64_t>(gguf_kv_swap_pinned_mib) * 1024ULL * 1024ULL;
         if (gguf_kv_swap_enabled && gguf_kv_swap_pinned_bytes > pinned_cap_bytes) {
             std::ostringstream oss;
-            oss << "DSV4_GGUF_KV_SWAP pinned cache exceeds cap: required_mib="
+            oss << "POCKETLLM_GGUF_KV_SWAP pinned cache exceeds cap: required_mib="
                 << (static_cast<double>(gguf_kv_swap_pinned_bytes) / (1024.0 * 1024.0))
                 << " cap_mib=" << gguf_kv_swap_pinned_mib;
             throw std::runtime_error(oss.str());
@@ -9146,7 +9146,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
     gguf_check_min_free("after_scratch", tp_rank, gguf_min_free_mib);
 
     // Optional GGUF KV swap copy stream. Only used when the plugin is enabled
-    // and DSV4_GGUF_KV_SWAP_SYNC=0; the default sync=1 path is unchanged.
+    // and POCKETLLM_GGUF_KV_SWAP_SYNC=0; the default sync=1 path is unchanged.
     const bool gguf_kv_swap_async_h2d = gguf_kv_swap_enabled && gguf_kv_swap_sync == 0;
     void* gguf_kv_swap_copy_stream = nullptr;
     void* gguf_kv_swap_stage_event = nullptr;
@@ -9161,7 +9161,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
     // layer) but kept so future cross-step prefetch can issue early stages on
     // copy_stream while the prior step's MoE drains on default.
     const bool moe_copy_stream_enabled =
-        env_int_or_default("DSV4_GGUF_MOE_COPY_STREAM", 1) != 0;
+        env_int_or_default("POCKETLLM_GGUF_MOE_COPY_STREAM", 1) != 0;
     void* gguf_moe_copy_stream = nullptr;
     void* gguf_moe_stage_event = nullptr;
     void* gguf_moe_consume_event = nullptr;
@@ -9172,7 +9172,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
         check_device(event_record(gguf_moe_consume_event, nullptr),
                      "record initial gguf moe consume event");
     }
-    const bool gguf_prefill_shared_overlap_enabled = env_int_or_default("DSV4_GGUF_PREFILL_SHARED_OVERLAP", 0) != 0;
+    const bool gguf_prefill_shared_overlap_enabled = env_int_or_default("POCKETLLM_GGUF_PREFILL_SHARED_OVERLAP", 0) != 0;
     void* gguf_prefill_shared_stream = nullptr;
     void* gguf_prefill_shared_ready_event = nullptr;
     void* gguf_prefill_shared_done_event = nullptr;
@@ -9182,7 +9182,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
         check_device((gguf_prefill_shared_done_event = event_create()) != nullptr, "create GGUF prefill shared done event");
     }
 
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
     BF16AllReduceScratch bf16_reduce_scratch;
 #endif
     GgufReduceContext reduce_ctx;
@@ -9190,7 +9190,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
     reduce_ctx.rank = tp_rank;
     reduce_ctx.device = tp_device;
     reduce_ctx.id_path = options.nccl_id_path.empty() ? nullptr : options.nccl_id_path.c_str();
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
     reduce_ctx.scratch = &bf16_reduce_scratch;
 #endif
     const GgufReduceContext* reduce_ctx_ptr = (tp_world > 1) ? &reduce_ctx : nullptr;
@@ -9239,17 +9239,17 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
     ls.d_hc_comb = d_hc_comb;
 
     auto t_load_end = std::chrono::steady_clock::now();
-    const bool gguf_load_only = env_int_or_default("DSV4_GGUF_LOAD_ONLY", 0) != 0;
+    const bool gguf_load_only = env_int_or_default("POCKETLLM_GGUF_LOAD_ONLY", 0) != 0;
 
     // ===== per-step forward (embed + 43 layers + final norm + head + argmax) =====
-    const bool profile_gguf = env_int_or_default("DSV4_GGUF_PROFILE", 0) != 0;
-    const bool gguf_host_logits = env_int_or_default("DSV4_GGUF_HOST_LOGITS", 0) != 0;
+    const bool profile_gguf = env_int_or_default("POCKETLLM_GGUF_PROFILE", 0) != 0;
+    const bool gguf_host_logits = env_int_or_default("POCKETLLM_GGUF_HOST_LOGITS", 0) != 0;
     const bool decode_only_attention_only =
-        decode_only_context > 0 && env_int_or_default("DSV4_GGUF_DECODE_ONLY_ATTENTION_ONLY", 0) != 0;
+        decode_only_context > 0 && env_int_or_default("POCKETLLM_GGUF_DECODE_ONLY_ATTENTION_ONLY", 0) != 0;
     if (gguf_mem_profile && tp_rank == 0 && decode_only_context > 0) {
         std::cout << "gguf_decode_only context=" << decode_only_context
                   << " attention_only=" << (decode_only_attention_only ? 1 : 0)
-                  << " warmup=" << env_int_or_default("DSV4_GGUF_DECODE_ONLY_WARMUP", all_resident_routed ? 0 : 1)
+                  << " warmup=" << env_int_or_default("POCKETLLM_GGUF_DECODE_ONLY_WARMUP", all_resident_routed ? 0 : 1)
                   << "\n";
     }
     double prof_attn_ms = 0.0, prof_stage_ms = 0.0, prof_moe_ms = 0.0;
@@ -9267,7 +9267,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
     std::vector<int64_t> h_route_slots(topk);
     std::vector<float> h_logits(local_vocab);
     std::vector<int> debug_logit_tokens;
-    if (const char* dbg = std::getenv("DSV4_GGUF_DEBUG_LOGIT_TOKENS")) {
+    if (const char* dbg = std::getenv("POCKETLLM_GGUF_DEBUG_LOGIT_TOKENS")) {
         std::stringstream ss(dbg);
         std::string item;
         while (std::getline(ss, item, ',')) {
@@ -9625,7 +9625,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
             check_device(memcpy_d2h(&top_t, d_argmax_token, sizeof(int)), "copy argmax token");
             check_device(memcpy_d2h(&top_l, d_argmax_logit, sizeof(float)), "copy argmax logit");
         }
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (tp_world > 1 && !options.nccl_id_path.empty()) {
             TpTopResult global = tp_global_top1(tp_world, tp_rank, tp_device,
                                                    options.nccl_id_path.c_str(),
@@ -9642,7 +9642,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
         return {top_t, top_l};
     };
 
-    const bool gguf_chunked_prefill_requested = env_int_or_default("DSV4_GGUF_CHUNKED_PREFILL", 1) != 0;
+    const bool gguf_chunked_prefill_requested = env_int_or_default("POCKETLLM_GGUF_CHUNKED_PREFILL", 1) != 0;
     const bool gguf_chunked_prefill_available =
         gguf_chunked_prefill_requested &&
         decode_only_context == 0 &&
@@ -9665,7 +9665,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
     auto run_chunked_prefill = [&]() -> std::pair<int, float> {
         const int prompt_tokens = static_cast<int>(seed_tokens.size());
         const bool use_hc = !d_hc_attn_fn.empty() && d_hc_attn_fn[0] != nullptr;
-        int chunk_tokens = env_int_or_default("DSV4_GGUF_PREFILL_CHUNK_TOKENS", 512);
+        int chunk_tokens = env_int_or_default("POCKETLLM_GGUF_PREFILL_CHUNK_TOKENS", 512);
         if (chunk_tokens <= 0 || chunk_tokens > prompt_tokens) chunk_tokens = prompt_tokens;
         const int chunk_alloc = chunk_tokens;
         const int routes_cap = chunk_alloc * topk;
@@ -9677,24 +9677,24 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
         const size_t chunk_inter = static_cast<size_t>(chunk_alloc) * moe_inter;
         const size_t routes_dim = static_cast<size_t>(routes_cap) * dim;
         const size_t routes_inter = static_cast<size_t>(routes_cap) * moe_inter;
-        int prefill_attn_window = env_int_or_default("DSV4_GGUF_PREFILL_ATTN_WINDOW", static_cast<int>(ctx.config.window_size == 0 ? 128 : ctx.config.window_size));
+        int prefill_attn_window = env_int_or_default("POCKETLLM_GGUF_PREFILL_ATTN_WINDOW", static_cast<int>(ctx.config.window_size == 0 ? 128 : ctx.config.window_size));
         if (prefill_attn_window <= 0 || prefill_attn_window > prompt_tokens) prefill_attn_window = prompt_tokens;
         const int prefill_attn_topk = std::min(prompt_tokens, prefill_attn_window);
         const int64_t prefill_attn_index_elems = static_cast<int64_t>(prompt_tokens) * prefill_attn_topk;
-        const int64_t prefill_attn_max_index_elems = static_cast<int64_t>(env_int_or_default("DSV4_GGUF_PREFILL_ATTN_MAX_INDEX_ELEMS", 64 * 1024 * 1024));
-        const int prefill_attn_max_index_topk = env_int_or_default("DSV4_GGUF_PREFILL_INDEXED_ATTN_MAX_TOPK", 8192);
-        const bool use_prefill_indexed_attn = env_int_or_default("DSV4_GGUF_PREFILL_INDEXED_ATTN", 1) != 0 &&
+        const int64_t prefill_attn_max_index_elems = static_cast<int64_t>(env_int_or_default("POCKETLLM_GGUF_PREFILL_ATTN_MAX_INDEX_ELEMS", 64 * 1024 * 1024));
+        const int prefill_attn_max_index_topk = env_int_or_default("POCKETLLM_GGUF_PREFILL_INDEXED_ATTN_MAX_TOPK", 8192);
+        const bool use_prefill_indexed_attn = env_int_or_default("POCKETLLM_GGUF_PREFILL_INDEXED_ATTN", 1) != 0 &&
             prefill_attn_topk > 0 && prefill_attn_index_elems > 0 &&
             (prefill_attn_max_index_topk <= 0 || prefill_attn_topk <= prefill_attn_max_index_topk) &&
             (prefill_attn_max_index_elems <= 0 || prefill_attn_index_elems <= prefill_attn_max_index_elems);
         const bool use_prefill_headpair_serial_attn = use_prefill_indexed_attn &&
-            env_int_or_default("DSV4_GGUF_PREFILL_HEADPAIR_SERIAL_ATTN", 1) != 0;
+            env_int_or_default("POCKETLLM_GGUF_PREFILL_HEADPAIR_SERIAL_ATTN", 1) != 0;
         const bool use_prefill_headpair_attn = use_prefill_indexed_attn && !use_prefill_headpair_serial_attn &&
-            env_int_or_default("DSV4_GGUF_PREFILL_HEADPAIR_ATTN", 0) != 0;
-        const bool iq1_grouped_w2_q8_enabled = env_int_or_default("DSV4_IQ1_GROUPED_W2_Q8", 1) != 0;
-        const bool iq1_grouped_gemm_enabled = env_int_or_default("DSV4_IQ1_GROUPED_GEMM", 1) != 0;
-        const bool iq1_grouped_route_tile4_enabled = env_int_or_default("DSV4_IQ1_GROUPED_ROUTE_TILE4", 0) != 0;
-        const bool iq1_grouped_route_major_enabled = !iq1_grouped_route_tile4_enabled && env_int_or_default("DSV4_IQ1_GROUPED_ROUTE_MAJOR", 1) != 0;
+            env_int_or_default("POCKETLLM_GGUF_PREFILL_HEADPAIR_ATTN", 0) != 0;
+        const bool iq1_grouped_w2_q8_enabled = env_int_or_default("POCKETLLM_IQ1_GROUPED_W2_Q8", 1) != 0;
+        const bool iq1_grouped_gemm_enabled = env_int_or_default("POCKETLLM_IQ1_GROUPED_GEMM", 1) != 0;
+        const bool iq1_grouped_route_tile4_enabled = env_int_or_default("POCKETLLM_IQ1_GROUPED_ROUTE_TILE4", 0) != 0;
+        const bool iq1_grouped_route_major_enabled = !iq1_grouped_route_tile4_enabled && env_int_or_default("POCKETLLM_IQ1_GROUPED_ROUTE_MAJOR", 1) != 0;
         const int iq1_x_groups16 = (dim + 15) / 16;
 
         std::vector<uint16_t> h_embed_chunk(static_cast<size_t>(chunk_alloc) * dim);
@@ -9780,7 +9780,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
             check_device(device_malloc_into(d_prefill_attn_indices, static_cast<size_t>(prefill_attn_index_elems) * sizeof(int32_t)), "alloc GGUF prefill attention indices");
             if (!build_prefill_window_indices_cuda(d_prefill_attn_indices, prompt_tokens, prefill_attn_window, prefill_attn_topk))
                 throw std::runtime_error("GGUF prefill attention window indices failed");
-        } else if (tp_rank == 0 && env_int_or_default("DSV4_GGUF_VERBOSE", 0) != 0) {
+        } else if (tp_rank == 0 && env_int_or_default("POCKETLLM_GGUF_VERBOSE", 0) != 0) {
             std::cout << "gguf_prefill_indexed_attn=0 topk=" << prefill_attn_topk
                       << " max_topk=" << prefill_attn_max_index_topk
                       << " index_elems=" << prefill_attn_index_elems
@@ -10089,7 +10089,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
             check_device(memcpy_d2h(&top_t, d_argmax_token, sizeof(int)), "copy GGUF prefill argmax token");
             check_device(memcpy_d2h(&top_l, d_argmax_logit, sizeof(float)), "copy GGUF prefill argmax logit");
         }
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
         if (tp_world > 1 && !options.nccl_id_path.empty()) {
             TpTopResult global = tp_global_top1(tp_world, tp_rank, tp_device,
                                                    options.nccl_id_path.c_str(),
@@ -10099,7 +10099,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
         }
 #endif
         double prof_prefill_refine_ms = 0.0;
-        int refine_last_tokens = env_int_or_default("DSV4_GGUF_PREFILL_REFINE_LAST_TOKENS", env_int_or_default("DSV4_GGUF_PREFILL_REFINE_LAST", 0) != 0 ? 1 : 0);
+        int refine_last_tokens = env_int_or_default("POCKETLLM_GGUF_PREFILL_REFINE_LAST_TOKENS", env_int_or_default("POCKETLLM_GGUF_PREFILL_REFINE_LAST", 0) != 0 ? 1 : 0);
         if (refine_last_tokens < 0) refine_last_tokens = 0;
         if (refine_last_tokens > prompt_tokens) refine_last_tokens = prompt_tokens;
         if (refine_last_tokens > 0 && prompt_tokens > 0) {
@@ -10165,7 +10165,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
     auto t_decode_end = t_forward_start;
     int last_argmax = 0;
     if (!gguf_load_only && decode_only_context > 0) {
-        if (max_new_tokens <= 0) throw std::runtime_error("DSV4_GGUF_DECODE_ONLY_CONTEXT requires max_new_tokens > 0");
+        if (max_new_tokens <= 0) throw std::runtime_error("POCKETLLM_GGUF_DECODE_ONLY_CONTEXT requires max_new_tokens > 0");
         // Decode-only profiler: allocate caches as if context tokens already exist,
         // then run a single real forward step at position context-1. KV contents are
         // zero/dummy, so this is for timing/scaling only, not logits parity.
@@ -10174,7 +10174,7 @@ GgufDecodeResult run_gguf_generate_smoke(const std::string& ckpt_path,
         // staging (random page faults across an ~86 GiB file). To measure steady
         // state, run a configurable number of warmup steps (excluded from the
         // profile counters and timing) before the measured step.
-        const int warmup = env_int_or_default("DSV4_GGUF_DECODE_ONLY_WARMUP", all_resident_routed ? 0 : 1);
+        const int warmup = env_int_or_default("POCKETLLM_GGUF_DECODE_ONLY_WARMUP", all_resident_routed ? 0 : 1);
         const int feed_token = seed_tokens.empty() ? 1234 : seed_tokens[0];
         for (int w = 0; w < warmup; ++w) {
             (void)run_step(feed_token, decode_only_context - 1);
@@ -10402,7 +10402,7 @@ struct PersistentEngine::State {
           opts(options),
           layer_count(lc),
           max_context(mc) {
-        if (const char* env = std::getenv("DSV4_CPP_EOS_TOKEN_ID")) {
+        if (const char* env = std::getenv("POCKETLLM_CPP_EOS_TOKEN_ID")) {
             try { eos_token_id = std::stoi(env); } catch (...) {}
         }
     }
@@ -10424,7 +10424,7 @@ PersistentEngine::PersistentEngine(const std::string& ckpt_dir,
     ctx.kv_cache_tokens = max_context;
     const int dim = static_cast<int>(ctx.embed->shape[1]);
     ctx.prepare_resident_device_caches(layer_count, opts.tp_world, opts.tp_rank, dim);
-    const bool prepare_fp4_host = !opts.skip_fp4_host_prepare && env_int_or_default("DSV4_CPP_PREPARE_FP4_HOST", 1) != 0;
+    const bool prepare_fp4_host = !opts.skip_fp4_host_prepare && env_int_or_default("POCKETLLM_CPP_PREPARE_FP4_HOST", 1) != 0;
     if (prepare_fp4_host) ctx.prepare_fp4_host_weights(layer_count, opts.tp_world, opts.tp_rank);
 }
 
@@ -10457,7 +10457,7 @@ namespace {
 // Keeping the protocol uniform lets workers run a fixed sequence that doesn't
 // depend on per-request SamplingParams flags they never see.
 // Record the k largest logits of an already-assembled vocabulary slice.
-// Diagnostic only, gated by DSV4_CPP_TOPK_DIAG; k is small so a partial
+// Diagnostic only, gated by POCKETLLM_CPP_TOPK_DIAG; k is small so a partial
 // selection sort is cheaper than sorting the whole vocabulary.
 void record_topk_diag(SafeForwardContext& ctx, const float* values, int count,
                       int base_token, int k) {
@@ -10483,9 +10483,9 @@ int select_token(SafeForwardContext& ctx, const ForwardSmokeOptions& opts,
     const int local = static_cast<int>(ctx.last_local_logits.size());
     if (local <= 0) throw std::runtime_error("select_token: empty local logits");
     const bool greedy = sp.greedy || sp.temperature <= 1.0e-5f;
-    const int topk_diag = env_int_or_default("DSV4_CPP_TOPK_DIAG", 0);
+    const int topk_diag = env_int_or_default("POCKETLLM_CPP_TOPK_DIAG", 0);
 
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
     if (opts.tp_world > 1 && !opts.nccl_id_path.empty()) {
         std::vector<float> all;
         if (opts.tp_rank == 0) all.resize(static_cast<size_t>(opts.tp_world) * static_cast<size_t>(local));
@@ -10539,7 +10539,7 @@ int select_token(SafeForwardContext& ctx, const ForwardSmokeOptions& opts,
 //
 // Only prefill and single-token decode write ctx.dspark_hidden. The batched
 // continuation forward captured its rows into the ContinuationBatchResult and
-// never touched ctx, so with DSV4_CPP_BATCHED_VERIFY=1 every round after the
+// never touched ctx, so with POCKETLLM_CPP_BATCHED_VERIFY=1 every round after the
 // first drafted from a stale seed -- the hidden left behind by the last plain
 // decode. The draft ring was primed correctly, so nothing failed; the drafts
 // were just conditioned on the wrong position and acceptance collapsed.
@@ -10567,7 +10567,7 @@ std::vector<int> select_continuation_tokens(const ContinuationBatchResult& resul
     const bool greedy = sp.greedy || sp.temperature <= 1.0e-5f;
     std::vector<int> tokens(static_cast<size_t>(result.rows));
 
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
     if (opts.tp_world > 1 && !opts.nccl_id_path.empty()) {
         std::vector<float> gathered;
         if (opts.tp_rank == 0) {
@@ -10652,7 +10652,7 @@ int PersistentEngine::prefill(const std::vector<int>& token_ids, const SamplingP
                         static_cast<int>(token_ids.size()) - rows);
     }
     const int token = select_token(ctx, s.opts, sp, s.rng);
-    if (env_int_or_default("DSV4_CPP_DECODE_SPARSE_ARENA", 0) > 0) {
+    if (env_int_or_default("POCKETLLM_CPP_DECODE_SPARSE_ARENA", 0) > 0) {
         ctx.release_active_arenas_with_suffix(":d");
     }
     return token;
@@ -10815,7 +10815,7 @@ std::vector<int> PersistentEngine::speculative_step(int committed_token, int pos
 
     ctx.options = s.opts;
 
-    if (env_int_or_default("DSV4_CPP_BATCHED_VERIFY", 0) != 0) {
+    if (env_int_or_default("POCKETLLM_CPP_BATCHED_VERIFY", 0) != 0) {
         const std::vector<int> next_tokens = batch_verify_step(draft.tokens, position, sp);
         int committed_rows = 1;
         while (committed_rows < static_cast<int>(draft.tokens.size()) &&
@@ -11251,7 +11251,7 @@ void PersistentEngine::warmup_tp() {
     // file is written and the comm is ready before the first request. This
     // is the only NCCL bcast we keep — actual workload bcasts (allgather
     // logits, token bcast) happen inside prefill/decode.
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
     if (!s.opts.nccl_id_path.empty()) {
         int32_t warm[kCmdHeaderInts] = {0, 0, 0, 0};
         tp_broadcast_int32(s.opts.tp_world, s.opts.tp_rank, s.opts.device,
@@ -11260,4 +11260,4 @@ void PersistentEngine::warmup_tp() {
 #endif
 }
 
-}  // namespace dsv4
+}  // namespace pocket

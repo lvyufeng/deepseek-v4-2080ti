@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <algorithm>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 // Append K/V rows to INT8 per-token-head cache with dynamic quantization.
@@ -302,4 +302,4 @@ bool qwen_gqa_decode_attention_int8_per_token_head_cuda(
     return cudaGetLastError() == cudaSuccess;
 }
 
-} // namespace dsv4
+} // namespace pocket

@@ -43,7 +43,7 @@ class DeepSeekV4Spec:
             expert_intermediate_size=metadata_int(md, "deepseek4.expert_feed_forward_length", 0),
             n_shared_experts=metadata_int(md, "deepseek4.expert_shared_count", 1),
             gate_function="hash+sqrtsoftplus",
-            attention_kind="dsv4_mla_compressed_sparse",
+            attention_kind="deepseek_v4_mla_compressed_sparse",
             routed_expert_layout="packed_3d",
             norm_eps=metadata_float(md, "deepseek4.attention.layer_norm_rms_epsilon", 0.0) or None,
         )

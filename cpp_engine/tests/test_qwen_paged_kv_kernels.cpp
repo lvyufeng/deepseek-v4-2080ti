@@ -108,7 +108,7 @@ std::vector<int32_t> fragmented_table(const std::vector<int>& context_lens,
                                       unsigned seed) {
     const size_t slots = context_lens.size();
     std::vector<int32_t> image(slots * static_cast<size_t>(max_blocks_per_seq),
-                              dsv4::QwenBlockPool::kInvalidBlock);
+                              pocket::QwenBlockPool::kInvalidBlock);
     std::mt19937 rng(seed);
     int next = 0;
     std::vector<std::vector<int>> rows(slots);
@@ -195,12 +195,12 @@ void test_paged_append(const Geometry& geometry) {
     // Two appends, so the second starts at a non-zero and non-block-aligned
     // offset the way a decode step after a prefill does.
     const int first = 291;
-    require(dsv4::qwen_append_kv_cache_f16_paged_cuda(
+    require(pocket::qwen_append_kv_cache_f16_paged_cuda(
                 k_rows.get(), v_rows.get(), k_cache.get(), v_cache.get(),
                 first, geometry.kv_heads, geometry.head_dim, 0, table.get(),
                 block_size),
             "paged append (prefill) launch");
-    require(dsv4::qwen_append_kv_cache_f16_paged_cuda(
+    require(pocket::qwen_append_kv_cache_f16_paged_cuda(
                 k_rows.get() + static_cast<size_t>(first) * geometry.kv_stride(),
                 v_rows.get() + static_cast<size_t>(first) * geometry.kv_stride(),
                 k_cache.get(), v_cache.get(), context - first,
@@ -262,12 +262,12 @@ void test_paged_gather(const Geometry& geometry) {
     v_rows.upload(v_host);
     table.upload(image);
 
-    require(dsv4::qwen_append_kv_cache_f16_paged_cuda(
+    require(pocket::qwen_append_kv_cache_f16_paged_cuda(
                 k_rows.get(), v_rows.get(), k_cache.get(), v_cache.get(),
                 context, geometry.kv_heads, geometry.head_dim, 0, table.get(),
                 block_size),
             "gather test append launch");
-    require(dsv4::qwen_gather_kv_cache_f16_paged_cuda(
+    require(pocket::qwen_gather_kv_cache_f16_paged_cuda(
                 k_cache.get(), v_cache.get(), k_dense.get(), v_dense.get(),
                 context, geometry.kv_heads, geometry.head_dim, table.get(),
                 block_size),
@@ -324,7 +324,7 @@ void test_paged_batched_append(const Geometry& geometry) {
     d_positions.upload(std::vector<int32_t>(positions.begin(), positions.end()));
     d_slots.upload(std::vector<int32_t>(slots.begin(), slots.end()));
 
-    require(dsv4::qwen_append_kv_cache_f16_batched_cuda(
+    require(pocket::qwen_append_kv_cache_f16_batched_cuda(
                 k_rows.get(), v_rows.get(), k_cache.get(), v_cache.get(), rows,
                 geometry.kv_heads, geometry.head_dim, d_positions.get(),
                 d_slots.get(), max_context, /*kv_slot_stride=*/0, table.get(),
@@ -442,7 +442,7 @@ void test_paged_batched_decode(const Geometry& geometry, int attention_window,
     d_slots.upload(std::vector<int32_t>(slots.begin(), slots.end()));
     d_table.upload(image);
 
-    const int splits = dsv4::qwen_gqa_decode_batched_split_count(
+    const int splits = pocket::qwen_gqa_decode_batched_split_count(
         max_context_len, geometry.kv_heads, attention_window, sink_tokens);
     require(splits > 0, "split geometry");
     const size_t partial_elements = static_cast<size_t>(rows) *
@@ -450,14 +450,14 @@ void test_paged_batched_decode(const Geometry& geometry, int attention_window,
     DeviceBuffer<float> d_partials_contiguous(partial_elements);
     DeviceBuffer<float> d_partials_paged(partial_elements);
 
-    require(dsv4::qwen_gqa_decode_attention_f16_batched_cuda(
+    require(pocket::qwen_gqa_decode_attention_f16_batched_cuda(
                 d_q.get(), d_k_contiguous.get(), d_v_contiguous.get(),
                 d_out_contiguous.get(), d_partials_contiguous.get(),
                 d_context_lens.get(), d_slots.get(), rows, max_context_len,
                 slot_stride, geometry.q_heads, geometry.kv_heads,
                 geometry.head_dim, max_context, attention_window, sink_tokens),
             "contiguous batched decode launch");
-    require(dsv4::qwen_gqa_decode_attention_f16_batched_cuda(
+    require(pocket::qwen_gqa_decode_attention_f16_batched_cuda(
                 d_q.get(), d_k_paged.get(), d_v_paged.get(), d_out_paged.get(),
                 d_partials_paged.get(), d_context_lens.get(), d_slots.get(),
                 rows, max_context_len, /*kv_slot_stride=*/0, geometry.q_heads,
@@ -503,7 +503,7 @@ void test_paged_batched_decode(const Geometry& geometry, int attention_window,
 }  // namespace
 
 int main() {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::cout << "[SKIP] test_qwen_paged_kv_kernels requires CUDA\n";
         return 0;
     }

@@ -152,7 +152,7 @@ bool run_case(int batch, int rows, int cols, uint64_t seed, const std::string& l
     std::vector<uint16_t> h_scale_fp16(h_scale_bf16.size());
     for (uint16_t& bits : h_scale_bf16) bits = float_to_bf16_bits(scale_dist(rng));
     for (size_t i = 0; i < h_scale_bf16.size(); ++i) {
-        h_scale_fp16[i] = dsv4::qwen_bf16_to_fp16_bits(h_scale_bf16[i]);
+        h_scale_fp16[i] = pocket::qwen_bf16_to_fp16_bits(h_scale_bf16[i]);
     }
 
     std::vector<double> expected(static_cast<size_t>(batch) * rows, 0.0);
@@ -181,20 +181,20 @@ bool run_case(int batch, int rows, int cols, uint64_t seed, const std::string& l
 
     std::vector<float> actual(static_cast<size_t>(batch) * rows, 0.0f);
     if (batch == 1) {
-        if (!dsv4::qwen_fp8_e4m3_fp16scale_matvec_cuda(dev.x, dev.weight, dev.scale, dev.y,
+        if (!pocket::qwen_fp8_e4m3_fp16scale_matvec_cuda(dev.x, dev.weight, dev.scale, dev.y,
                                                        rows, cols, cols, scale_cols)) {
             fail(label + ": FP16-scale matvec kernel launch failed");
             return true;
         }
     } else if (batch >= 32) {
-        if (!dsv4::qwen_fp8_e4m3_fp16scale_matmul_simt_cuda(dev.x, dev.weight, dev.scale, dev.y,
+        if (!pocket::qwen_fp8_e4m3_fp16scale_matmul_simt_cuda(dev.x, dev.weight, dev.scale, dev.y,
                                                             batch, rows, cols, cols, rows,
                                                             cols, scale_cols)) {
             fail(label + ": FP16-scale SIMT matmul kernel launch failed");
             return true;
         }
     } else {
-        if (!dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_cuda(dev.x, dev.weight, dev.scale, dev.y,
+        if (!pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_cuda(dev.x, dev.weight, dev.scale, dev.y,
                                                             batch, rows, cols, cols, rows,
                                                             cols, scale_cols)) {
             fail(label + ": FP16-scale matmul kernel launch failed");
@@ -265,12 +265,12 @@ bool run_swiglu_case() {
     cudaMemcpy(dev.up_weight, up_weight.data(), up_weight.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(dev.gate_scale, gate_scale.data(), gate_scale.size() * sizeof(uint16_t), cudaMemcpyHostToDevice);
     cudaMemcpy(dev.up_scale, up_scale.data(), up_scale.size() * sizeof(uint16_t), cudaMemcpyHostToDevice);
-    if (!dsv4::qwen_fp8_e4m3_fp16scale_matvec_cuda(
+    if (!pocket::qwen_fp8_e4m3_fp16scale_matvec_cuda(
             dev.x, dev.gate_weight, dev.gate_scale, dev.gate, rows, cols, cols, scale_cols) ||
-        !dsv4::qwen_fp8_e4m3_fp16scale_matvec_cuda(
+        !pocket::qwen_fp8_e4m3_fp16scale_matvec_cuda(
             dev.x, dev.up_weight, dev.up_scale, dev.up, rows, cols, cols, scale_cols) ||
-        !dsv4::qwen_silu_mul_rows_cuda(dev.gate, dev.up, dev.reference, 1, rows) ||
-        !dsv4::qwen_fp8_e4m3_fp16scale_swiglu_matvec_cuda(
+        !pocket::qwen_silu_mul_rows_cuda(dev.gate, dev.up, dev.reference, 1, rows) ||
+        !pocket::qwen_fp8_e4m3_fp16scale_swiglu_matvec_cuda(
             dev.x, dev.gate_weight, dev.gate_scale, dev.up_weight, dev.up_scale, dev.fused,
             rows, cols, cols, scale_cols)) {
         fail("fused SwiGLU launch failed");
@@ -323,8 +323,8 @@ bool run_norm_cases() {
     const float eps = 1.0e-6f;
     std::vector<float> got(h_x.size());
 
-    // Qwen rms_norm multiplies by (1 + weight), unlike the DSV4 convention.
-    if (!dsv4::qwen_rmsnorm_f32_cuda(d_x, d_w, d_y, rows, cols, eps)) {
+    // Qwen rms_norm multiplies by (1 + weight), unlike the DeepSeek-V4 convention.
+    if (!pocket::qwen_rmsnorm_f32_cuda(d_x, d_w, d_y, rows, cols, eps)) {
         fail("qwen_rmsnorm launch failed");
     } else {
         cudaDeviceSynchronize();
@@ -347,7 +347,7 @@ bool run_norm_cases() {
     }
 
     // Gated variant: weight * normalized * silu(gate), with no (1 + weight).
-    if (!dsv4::qwen_gated_rmsnorm_f32_cuda(d_x, d_w, d_gate, d_y, rows, cols, eps)) {
+    if (!pocket::qwen_gated_rmsnorm_f32_cuda(d_x, d_w, d_gate, d_y, rows, cols, eps)) {
         fail("qwen_gated_rmsnorm launch failed");
     } else {
         cudaDeviceSynchronize();
@@ -371,7 +371,7 @@ bool run_norm_cases() {
         else std::cout << "  gated_rms_norm(w*norm*silu(z)) max_err=" << max_err << "\n";
     }
 
-    if (!dsv4::qwen_l2_norm_f32_cuda(d_x, d_y, rows, cols)) {
+    if (!pocket::qwen_l2_norm_f32_cuda(d_x, d_y, rows, cols)) {
         fail("qwen_l2_norm launch failed");
     } else {
         cudaDeviceSynchronize();
@@ -403,7 +403,7 @@ bool run_norm_cases() {
 }  // namespace
 
 int main() {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::cout << "[SKIP] test_qwen_fp8_online requires a CUDA device\n";
         return 0;
     }

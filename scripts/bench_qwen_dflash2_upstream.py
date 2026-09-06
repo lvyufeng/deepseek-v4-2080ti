@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ckpt", required=True)
     parser.add_argument("--dflash2", required=True)
-    parser.add_argument("--binary", default="cpp_engine/build/dsv4_cpp_engine")
+    parser.add_argument("--binary", default="cpp_engine/build/pocketllm_engine")
     parser.add_argument("--dataset", choices=sorted(DATASET_FIXTURES), default="gsm8k")
     parser.add_argument("--num-prompts", type=int, default=128)
     parser.add_argument("--max-new-tokens", type=int, default=4096)

@@ -1,7 +1,7 @@
 #pragma once
 
 // Tensor-parallel collective contract, one implementation per backend: NCCL under
-// backends/cuda/collective, HCCL under backends/ascend/collective. DSV4_HAVE_TP_COMM
+// backends/cuda/collective, HCCL under backends/ascend/collective. POCKET_HAVE_TP_COMM
 // means "a collective library is linked", whichever one that is.
 //
 // `id_path` names a file used for rendezvous: rank 0 publishes an opaque id there
@@ -13,7 +13,7 @@
 
 #include <cstdint>
 
-namespace dsv4 {
+namespace pocket {
 
 struct TpTopResult {
     int token = 0;
@@ -22,7 +22,7 @@ struct TpTopResult {
 
 bool tp_comm_available();
 
-#ifdef DSV4_HAVE_TP_COMM
+#ifdef POCKET_HAVE_TP_COMM
 void run_tp_float_sum_smoke(int world, int rank, int device, const char* id_path, float value);
 TpTopResult tp_global_top1(int world, int rank, int device, const char* id_path, int local_token, float local_logit);
 void tp_global_top1_rows(int world, int rank, int device, const char* id_path,
@@ -75,4 +75,4 @@ void tp_broadcast_int32(int world, int rank, int device, const char* id_path, in
 void tp_gather_floats_to_root(int world, int rank, int device, const char* id_path, const float* h_local, int local_count, float* h_root_out, int root);
 #endif
 
-}  // namespace dsv4
+}  // namespace pocket

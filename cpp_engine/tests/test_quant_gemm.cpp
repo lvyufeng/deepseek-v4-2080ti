@@ -128,7 +128,7 @@ void run_case(const std::vector<float>& x, const uint8_t* w, size_t w_bytes, con
     check_cuda(cudaMalloc(&d_y, ref.size() * sizeof(float)), "cudaMalloc y");
     check_cuda(cudaMemcpy(d_x, x.data(), x.size() * sizeof(float), cudaMemcpyHostToDevice), "copy x");
     check_cuda(cudaMemcpy(d_w, w, w_bytes, cudaMemcpyHostToDevice), "copy w");
-    if (!dsv4::q8_0_matvec_cuda(d_x, d_w, d_y, rows, cols)) {
+    if (!pocket::q8_0_matvec_cuda(d_x, d_w, d_y, rows, cols)) {
         throw std::runtime_error("q8_0_matvec_cuda launch failed");
     }
     check_cuda(cudaDeviceSynchronize(), "sync kernel");
@@ -157,7 +157,7 @@ void run_case(const std::vector<float>& x, const uint8_t* w, size_t w_bytes, con
 
 int main(int argc, char** argv) {
     try {
-        if (!dsv4::cuda_runtime_available()) {
+        if (!pocket::cuda_runtime_available()) {
             std::cout << "[SKIP] CUDA runtime is not available\n";
             return 0;
         }
@@ -166,12 +166,12 @@ int main(int argc, char** argv) {
             if (args.tensor.empty()) {
                 throw std::runtime_error("--tensor is required with --model");
             }
-            dsv4::GGUFFile file(args.model);
+            pocket::GGUFFile file(args.model);
             const auto* info = file.find_tensor(args.tensor);
             if (info == nullptr) {
                 throw std::runtime_error("tensor not found: " + args.tensor);
             }
-            if (info->dtype != dsv4::DType::Q8_0 || info->shape.size() != 2) {
+            if (info->dtype != pocket::DType::Q8_0 || info->shape.size() != 2) {
                 throw std::runtime_error("expected a 2D q8_0 tensor");
             }
             const int cols = static_cast<int>(info->shape[0]);

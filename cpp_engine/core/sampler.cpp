@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 int sample_token_top_p(const float* logits, int vocab, float temperature, float top_p, std::mt19937& rng) {
     if (logits == nullptr || vocab <= 0) throw std::runtime_error("sampler: invalid logits");
@@ -67,4 +67,4 @@ int sample_token_top_p(const float* logits, int vocab, float temperature, float 
     return vocab - 1;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

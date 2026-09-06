@@ -14,7 +14,7 @@ void require(bool cond, const std::string& msg) {
     if (!cond) throw std::runtime_error(msg);
 }
 
-void require_tensor(const dsv4::SafeTensorsShard& shard, const std::string& name, dsv4::SafeDType dtype, std::initializer_list<uint64_t> shape) {
+void require_tensor(const pocket::SafeTensorsShard& shard, const std::string& name, pocket::SafeDType dtype, std::initializer_list<uint64_t> shape) {
     const auto* info = shard.find_tensor(name);
     require(info != nullptr, "missing tensor: " + name);
     require(info->dtype == dtype, "bad dtype for " + name);
@@ -35,9 +35,9 @@ void check_u8_payload_roundtrip() {
     output.write(header.data(), static_cast<std::streamsize>(header.size()));
     output.write(reinterpret_cast<const char*>(payload), sizeof(payload));
     output.close();
-    dsv4::SafeTensorsShard shard(path);
+    pocket::SafeTensorsShard shard(path);
     const auto* info = shard.find_tensor("packed");
-    require(info != nullptr && info->dtype == dsv4::SafeDType::U8 &&
+    require(info != nullptr && info->dtype == pocket::SafeDType::U8 &&
                 info->shape == std::vector<uint64_t>({2, 3}),
             "U8 round-trip metadata");
     require(std::memcmp(shard.tensor_data(*info), payload, sizeof(payload)) == 0,
@@ -52,26 +52,26 @@ int main(int argc, char** argv) {
         return 2;
     }
     try {
-        require(dsv4::safe_dtype_from_string("U8") == dsv4::SafeDType::U8,
+        require(pocket::safe_dtype_from_string("U8") == pocket::SafeDType::U8,
                 "U8 dtype parsing");
-        require(dsv4::safe_dtype_name(dsv4::SafeDType::U8) == "U8",
+        require(pocket::safe_dtype_name(pocket::SafeDType::U8) == "U8",
                 "U8 dtype naming");
-        require(dsv4::safe_dtype_size(dsv4::SafeDType::U8) == 1,
+        require(pocket::safe_dtype_size(pocket::SafeDType::U8) == 1,
                 "U8 dtype size");
         check_u8_payload_roundtrip();
         std::string ckpt = argv[1];
-        dsv4::SafeTensorsIndex index(ckpt);
+        pocket::SafeTensorsIndex index(ckpt);
         require(index.tensor_count() == 69187, "unexpected tensor count");
         require(index.shard_count() == 46, "unexpected shard count");
         require(index.shard_for_tensor("embed.weight") != nullptr, "embed.weight missing from index");
 
-        dsv4::SafeTensorsShard shard1(index.shard_path("model-00001-of-00046.safetensors"));
-        require_tensor(shard1, "embed.weight", dsv4::SafeDType::BF16, {129280, 4096});
+        pocket::SafeTensorsShard shard1(index.shard_path("model-00001-of-00046.safetensors"));
+        require_tensor(shard1, "embed.weight", pocket::SafeDType::BF16, {129280, 4096});
 
-        dsv4::SafeTensorsShard shard2(index.shard_path("model-00002-of-00046.safetensors"));
-        require_tensor(shard2, "layers.0.ffn.gate.tid2eid", dsv4::SafeDType::I64, {129280, 6});
-        require_tensor(shard2, "layers.0.attn.wkv.weight", dsv4::SafeDType::F8_E4M3, {512, 4096});
-        require_tensor(shard2, "layers.0.attn.wkv.scale", dsv4::SafeDType::F8_E8M0, {4, 32});
+        pocket::SafeTensorsShard shard2(index.shard_path("model-00002-of-00046.safetensors"));
+        require_tensor(shard2, "layers.0.ffn.gate.tid2eid", pocket::SafeDType::I64, {129280, 6});
+        require_tensor(shard2, "layers.0.attn.wkv.weight", pocket::SafeDType::F8_E4M3, {512, 4096});
+        require_tensor(shard2, "layers.0.attn.wkv.scale", pocket::SafeDType::F8_E8M0, {4, 32});
 
         std::cout << "[PASS] safetensors_reader tensors=" << index.tensor_count() << " shards=" << index.shard_count() << "\n";
         return 0;

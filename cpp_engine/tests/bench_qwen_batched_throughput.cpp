@@ -106,7 +106,7 @@ struct Request {
     bool finished;
 };
 
-double bench_sequential_baseline(dsv4::QwenEngine& engine,
+double bench_sequential_baseline(pocket::QwenEngine& engine,
                                  const std::vector<Request>& requests,
                                  int measured_steps) {
     engine.reset();
@@ -148,7 +148,7 @@ double bench_sequential_baseline(dsv4::QwenEngine& engine,
     return elapsed / total_steps;
 }
 
-double bench_batched_throughput(dsv4::QwenEngine& engine,
+double bench_batched_throughput(pocket::QwenEngine& engine,
                                 const std::vector<Request>& requests,
                                 int measured_steps) {
     engine.reset();
@@ -195,7 +195,7 @@ double bench_batched_throughput(dsv4::QwenEngine& engine,
 }  // namespace
 
 int main(int argc, char** argv) {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::cerr << "CUDA runtime not available\n";
         return 1;
     }
@@ -213,16 +213,16 @@ int main(int argc, char** argv) {
                   << "TP: " << opts.tp_world << " (rank " << opts.tp_rank << ")\n\n";
 
         // Create engine with batching enabled
-        dsv4::QwenEngineOptions engine_opts;
+        pocket::QwenEngineOptions engine_opts;
         engine_opts.tp_world = opts.tp_world;
         engine_opts.tp_rank = opts.tp_rank;
         engine_opts.device = opts.device >= 0 ? opts.device : opts.tp_rank;
         engine_opts.nccl_id_path = opts.nccl_id_path;
-        engine_opts.kv_cache_dtype = dsv4::QwenKvCacheDType::Fp16;
+        engine_opts.kv_cache_dtype = pocket::QwenKvCacheDType::Fp16;
         engine_opts.prefix_cache = false;
         engine_opts.max_batch_size = opts.batch_size * 2;  // Extra headroom
 
-        dsv4::QwenEngine engine(opts.checkpoint_dir, engine_opts);
+        pocket::QwenEngine engine(opts.checkpoint_dir, engine_opts);
         engine.allocate_batch_slots(engine_opts.max_batch_size);
 
         // Create test requests at staggered context lengths

@@ -70,15 +70,15 @@ bool run_case(int rows, int position_offset, int& checked) {
     cudaMemcpy(d_v, host_v.data(), kv_elements * sizeof(uint16_t),
                cudaMemcpyHostToDevice);
 
-    setenv("DSV4_QWEN_GQA_OPTIMIZED", "1", 1);
-    setenv("DSV4_QWEN_GQA_MMA_TILE", "1", 1);
+    setenv("POCKETLLM_QWEN_GQA_OPTIMIZED", "1", 1);
+    setenv("POCKETLLM_QWEN_GQA_MMA_TILE", "1", 1);
 
-    setenv("DSV4_QWEN_GQA_MMA_OCC", "0", 1);
-    const bool base_ok = dsv4::qwen_gqa_prefill_attention_f16_tiled_cuda(
+    setenv("POCKETLLM_QWEN_GQA_MMA_OCC", "0", 1);
+    const bool base_ok = pocket::qwen_gqa_prefill_attention_f16_tiled_cuda(
         d_q, d_k, d_v, d_base, rows, kQHeads, kKvHeads, kHeadDim,
         position_offset, max_context, 0, 0);
-    setenv("DSV4_QWEN_GQA_MMA_OCC", "1", 1);
-    const bool occ_ok = dsv4::qwen_gqa_prefill_attention_f16_tiled_cuda(
+    setenv("POCKETLLM_QWEN_GQA_MMA_OCC", "1", 1);
+    const bool occ_ok = pocket::qwen_gqa_prefill_attention_f16_tiled_cuda(
         d_q, d_k, d_v, d_occ, rows, kQHeads, kKvHeads, kHeadDim,
         position_offset, max_context, 0, 0);
     cudaDeviceSynchronize();
@@ -138,7 +138,7 @@ bool run_case(int rows, int position_offset, int& checked) {
 }  // namespace
 
 int main() {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::printf("[SKIP] test_qwen_gqa_mma_occ requires a CUDA device\n");
         return 0;
     }

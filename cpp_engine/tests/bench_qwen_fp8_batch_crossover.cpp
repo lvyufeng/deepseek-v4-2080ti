@@ -26,7 +26,7 @@ double run(bool cublas, const uint16_t* x, const uint8_t* w, const uint16_t* s,
     setenv("QWEN_FP8_F16_PREFILL_CUBLAS", cublas ? "1" : "0", 1);
     setenv("QWEN_FP8_F16_SMALL_BATCH", cublas ? "0" : "1", 1);
     auto go = [&]() {
-        return dsv4::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
+        return pocket::qwen_fp8_e4m3_fp16scale_matmul_rows_f16_cuda(
             x, w, s, y, batch, rows, cols, cols, rows, cols, sc);
     };
     if (!go()) { std::fprintf(stderr, "launch failed b=%d\n", batch); std::exit(1); }

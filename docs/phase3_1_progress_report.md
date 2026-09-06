@@ -106,7 +106,7 @@ std::vector<int> free_slots;
 
 ### 编译测试中 🔄
 
-**命令**: `make -j8 dsv4_cpp_engine`  
+**命令**: `make -j8 pocketllm_engine`  
 **状态**: 后台运行中（timeout → background task）
 
 **预期**:

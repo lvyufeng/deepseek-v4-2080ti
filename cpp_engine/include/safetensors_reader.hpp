@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 enum class SafeDType {
     BF16,
@@ -111,4 +111,4 @@ uint64_t safe_dtype_size(SafeDType dtype);
 uint64_t safe_tensor_numel(const std::vector<uint64_t>& shape);
 SafeFp4TensorPair resolve_fp4_tensor_pair(const SafeTensorsIndex& index, const SafeTensorsShard& shard, const std::string& weight_name);
 
-}  // namespace dsv4
+}  // namespace pocket

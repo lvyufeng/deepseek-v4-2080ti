@@ -13,7 +13,7 @@
 #include <iostream>
 #include <mutex>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 #include "iq1_grid.inc"
@@ -1317,8 +1317,8 @@ bool iq1_moe_grouped_w13_swiglu_cuda(
     if (grid == nullptr) return false;
     const int w13_blocks_per_row = (dim + 255) / 256;
     dim3 block(256);
-    const bool route_tile4 = local_env_int_or_default("DSV4_IQ1_GROUPED_ROUTE_TILE4", 0) != 0 && max_count >= 4;
-    const bool route_major = !route_tile4 && local_env_int_or_default("DSV4_IQ1_GROUPED_ROUTE_MAJOR", 1) != 0;
+    const bool route_tile4 = local_env_int_or_default("POCKETLLM_IQ1_GROUPED_ROUTE_TILE4", 0) != 0 && max_count >= 4;
+    const bool route_major = !route_tile4 && local_env_int_or_default("POCKETLLM_IQ1_GROUPED_ROUTE_MAJOR", 1) != 0;
     if (route_tile4) {
         constexpr int route_tile = 4;
         dim3 grid_w13(ceil_div(inter_dim, kIQ1TileN), ceil_div(max_count, route_tile), n_experts);
@@ -1372,7 +1372,7 @@ bool moe_prefill_iq1_grouped_cuda_with_workspace(
     const int8_t* grid = iq1_grid_device();
     if (grid == nullptr) return false;
     cudaStream_t cs = static_cast<cudaStream_t>(stream);
-    const bool profile_iq1 = local_env_int_or_default("DSV4_IQ1_GROUPED_PROFILE", 0) != 0;
+    const bool profile_iq1 = local_env_int_or_default("POCKETLLM_IQ1_GROUPED_PROFILE", 0) != 0;
     cudaEvent_t ev0 = nullptr, ev1 = nullptr, ev2 = nullptr, ev3 = nullptr, ev4 = nullptr;
     if (profile_iq1) {
         cudaEventCreate(&ev0); cudaEventCreate(&ev1); cudaEventCreate(&ev2); cudaEventCreate(&ev3); cudaEventCreate(&ev4);
@@ -1385,17 +1385,17 @@ bool moe_prefill_iq1_grouped_cuda_with_workspace(
     const int x_groups16 = ceil_div(dim, 16);
     const int hidden_groups = ceil_div(inter_dim, 16);
     dim3 block(256);
-    const bool route_tile4 = local_env_int_or_default("DSV4_IQ1_GROUPED_ROUTE_TILE4", 0) != 0 && max_count >= 4;
-    const bool route_major = !route_tile4 && local_env_int_or_default("DSV4_IQ1_GROUPED_ROUTE_MAJOR", 1) != 0;
-    const bool q8_w2 = local_env_int_or_default("DSV4_IQ1_GROUPED_W2_Q8", 1) != 0 &&
+    const bool route_tile4 = local_env_int_or_default("POCKETLLM_IQ1_GROUPED_ROUTE_TILE4", 0) != 0 && max_count >= 4;
+    const bool route_major = !route_tile4 && local_env_int_or_default("POCKETLLM_IQ1_GROUPED_ROUTE_MAJOR", 1) != 0;
+    const bool q8_w2 = local_env_int_or_default("POCKETLLM_IQ1_GROUPED_W2_Q8", 1) != 0 &&
         workspace.d_hidden_q != nullptr && workspace.d_hidden_scale != nullptr;
     const bool tile_workspace = workspace.d_tile_experts != nullptr && workspace.d_tile_rows != nullptr &&
         workspace.tile_count > 0 && workspace.tile_cap >= workspace.tile_count && workspace.routes_cap >= routes;
-    const bool gemm_enabled = local_env_int_or_default("DSV4_IQ1_GROUPED_GEMM", 1) != 0 && tile_workspace;
-    const bool gemm_w13 = gemm_enabled && local_env_int_or_default("DSV4_IQ1_GROUPED_GEMM_W13", 1) != 0 &&
+    const bool gemm_enabled = local_env_int_or_default("POCKETLLM_IQ1_GROUPED_GEMM", 1) != 0 && tile_workspace;
+    const bool gemm_w13 = gemm_enabled && local_env_int_or_default("POCKETLLM_IQ1_GROUPED_GEMM_W13", 1) != 0 &&
         workspace.d_x_q != nullptr && workspace.d_x_scale != nullptr && workspace.dim >= dim;
-    const bool gemm_w2 = gemm_enabled && local_env_int_or_default("DSV4_IQ1_GROUPED_GEMM_W2", 1) != 0 && q8_w2;
-    const int nsplit = local_env_int_or_default("DSV4_IQ1_GROUPED_GEMM_NSPLIT", 4);
+    const bool gemm_w2 = gemm_enabled && local_env_int_or_default("POCKETLLM_IQ1_GROUPED_GEMM_W2", 1) != 0 && q8_w2;
+    const int nsplit = local_env_int_or_default("POCKETLLM_IQ1_GROUPED_GEMM_NSPLIT", 4);
 
     if (gemm_w13) {
         dim3 q_grid(routes, x_groups16);
@@ -1527,4 +1527,4 @@ bool moe_prefill_iq1_grouped_cuda_with_workspace(
     return last == cudaSuccess;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

@@ -8,7 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 constexpr int kBlock = 128;
@@ -1262,4 +1262,4 @@ bool qwen_fp8_dequant_kv_cache_cuda(
 }
 
 
-}  // namespace dsv4
+}  // namespace pocket

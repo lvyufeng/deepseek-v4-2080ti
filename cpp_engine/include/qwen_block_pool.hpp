@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 // Host-side bookkeeping for a paged KV cache.
 //
@@ -67,4 +67,4 @@ private:
     std::vector<int> refcounts_;
 };
 
-}  // namespace dsv4
+}  // namespace pocket

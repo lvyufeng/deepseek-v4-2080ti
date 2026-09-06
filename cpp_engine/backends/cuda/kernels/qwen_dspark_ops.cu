@@ -7,7 +7,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 constexpr int kThreads = 256;
@@ -427,4 +427,4 @@ bool qwen_dspark_confidence_f16_cuda(
     return cudaGetLastError() == cudaSuccess;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

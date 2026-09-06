@@ -2,7 +2,7 @@
 
 #include <numeric>
 
-namespace dsv4 {
+namespace pocket {
 
 std::string dtype_name(DType dtype) {
     switch (dtype) {
@@ -30,4 +30,4 @@ uint64_t tensor_element_count(const std::vector<uint64_t>& shape) {
     return total;
 }
 
-}  // namespace dsv4
+}  // namespace pocket

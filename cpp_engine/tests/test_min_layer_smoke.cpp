@@ -1,4 +1,4 @@
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -10,7 +10,7 @@ int main(int argc, char** argv) {
             std::cerr << "usage: test_min_layer_smoke <ckpt_dir>\n";
             return 2;
         }
-        dsv4::ForwardSmokeResult result = dsv4::run_safetensors_min_layer_smoke(argv[1]);
+        pocket::ForwardSmokeResult result = pocket::run_safetensors_min_layer_smoke(argv[1]);
         std::cout << "[PASS] min_layer_smoke token=" << result.token
                   << " dim=" << result.dim
                   << " inter=" << result.inter

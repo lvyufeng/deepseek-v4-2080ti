@@ -531,11 +531,11 @@ def rewrite_gguf(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Create a quantization-source GGUF for DSV4 by preserving template metadata/non-routed tensors "
+            "Create a quantization-source GGUF for DeepSeek-V4 by preserving template metadata/non-routed tensors "
             "and replacing selected routed FP4 safetensors experts with F16 GGUF tensors."
         )
     )
-    parser.add_argument("--template-gguf", required=True, help="Existing DSV4 GGUF template with tokenizer/metadata/non-routed tensors")
+    parser.add_argument("--template-gguf", required=True, help="Existing DeepSeek-V4 GGUF template with tokenizer/metadata/non-routed tensors")
     parser.add_argument("--hf-ckpt-path", required=True, help="Original DeepSeek-V4-Flash FP4 safetensors directory")
     parser.add_argument("--output", required=True, help="Output GGUF path; must not already exist")
     parser.add_argument("--layers", default=None, help="Optional comma/range list, e.g. '0,3-5'. Default: all layers")

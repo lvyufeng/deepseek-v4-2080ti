@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 
 // Logical-to-physical position mapping for the paged KV cache, one row per slot.
 //
@@ -70,4 +70,4 @@ private:
     bool dirty_ = true;
 };
 
-}  // namespace dsv4
+}  // namespace pocket

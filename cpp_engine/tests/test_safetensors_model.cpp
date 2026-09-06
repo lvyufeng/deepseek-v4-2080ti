@@ -21,9 +21,9 @@ int main(int argc, char** argv) {
     }
     try {
         std::string ckpt = argv[1];
-        dsv4::SafeTensorsIndex index(ckpt);
-        dsv4::ModelConfig config = dsv4::ModelConfig::from_hf_config(ckpt);
-        dsv4::SafeTensorsModelMap map(index, config);
+        pocket::SafeTensorsIndex index(ckpt);
+        pocket::ModelConfig config = pocket::ModelConfig::from_hf_config(ckpt);
+        pocket::SafeTensorsModelMap map(index, config);
 
         require(map.embed().name == "embed.weight", "bad embed tensor");
         require(map.embed().shape == std::vector<uint64_t>({129280, 4096}), "bad embed shape");
@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
         require(map.layers()[0].ffn.experts.size() == 256, "bad expert count");
         require(map.layers()[0].attn.wq_a.shape == std::vector<uint64_t>({1024, 4096}), "bad wq_a shape");
         require(map.layers()[0].attn.wkv.shape == std::vector<uint64_t>({512, 4096}), "bad wkv shape");
-        require(map.layers()[0].attn.attn_sink.dtype == dsv4::SafeDType::F32, "bad attn_sink dtype");
+        require(map.layers()[0].attn.attn_sink.dtype == pocket::SafeDType::F32, "bad attn_sink dtype");
         require(map.layers()[0].ffn.gate_weight.shape == std::vector<uint64_t>({256, 4096}), "bad gate weight shape");
         require(!map.layers()[0].ffn.gate_tid2eid.name.empty(), "missing layer 0 tid2eid");
         require(map.layers()[3].ffn.gate_tid2eid.name.empty(), "unexpected layer 3 tid2eid");

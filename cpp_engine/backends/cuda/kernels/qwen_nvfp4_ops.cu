@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 constexpr int kBlockWeights = 64;
@@ -933,4 +933,4 @@ bool qwen_nvfp4_group16_swiglu_q8_wmma_f16_cuda(
         q8_stride, y_stride, blocks_per_row, stream);
 }
 
-}  // namespace dsv4
+}  // namespace pocket

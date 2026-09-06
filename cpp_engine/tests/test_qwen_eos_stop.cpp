@@ -65,18 +65,18 @@ struct RunOutcome {
 // Each run takes its own slot: a slot carries both KV state and a prefix cache
 // after a run, so re-prefilling the same prompt on a used slot would resume from
 // that state instead of starting clean.
-RunOutcome run_request(dsv4::QwenEngine& engine, const std::vector<int>& prompt,
+RunOutcome run_request(pocket::QwenEngine& engine, const std::vector<int>& prompt,
                        int slot_id,
-                       const dsv4::QwenBatchSamplingParams& sampling) {
+                       const pocket::QwenBatchSamplingParams& sampling) {
     RunOutcome out;
-    auto req = std::make_unique<dsv4::QwenBatchedRequest>();
+    auto req = std::make_unique<pocket::QwenBatchedRequest>();
     req->request_id = static_cast<uint64_t>(slot_id) + 1;
     req->prompt_tokens = prompt;
     req->slot_id = slot_id;
     req->sampling = sampling;
 
-    std::vector<dsv4::QwenBatchedRequest*> batch{req.get()};
-    const dsv4::QwenBatchPrefillResult prefilled = engine.batch_prefill(batch, 0);
+    std::vector<pocket::QwenBatchedRequest*> batch{req.get()};
+    const pocket::QwenBatchPrefillResult prefilled = engine.batch_prefill(batch, 0);
     out.tokens.push_back(prefilled.results[0].top_token);
 
     // batch_prefill marks the request finished when the prompt's first predicted
@@ -90,7 +90,7 @@ RunOutcome run_request(dsv4::QwenEngine& engine, const std::vector<int>& prompt,
     while (static_cast<int>(out.tokens.size()) < sampling.max_new_tokens) {
         // batch_decode_step and batch_prefill announce their own collectives to
         // the workers, so this loop is the same at TP1 and TP4.
-        const dsv4::QwenBatchDecodeResult step = engine.batch_decode_step(batch);
+        const pocket::QwenBatchDecodeResult step = engine.batch_decode_step(batch);
         out.tokens.push_back(step.next_tokens[0]);
         if (step.hit_stop_token[0]) out.stop_flag_seen = true;
         if (step.finished[0]) {
@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
     constexpr int kMaxNewTokens = 24;
     constexpr int kMaxContext = 2048;
 
-    dsv4::QwenEngineOptions engine_opts;
+    pocket::QwenEngineOptions engine_opts;
     engine_opts.device = opts.device >= 0 ? opts.device : opts.tp_rank;
     // Three slots: one per run, since a used slot carries KV and prefix state.
     engine_opts.max_batch_size = 3;
@@ -145,7 +145,7 @@ int main(int argc, char** argv) {
         engine_opts.nccl_id_path = opts.nccl_id_path;
     }
 
-    dsv4::QwenEngine engine(opts.checkpoint, engine_opts, opts.layers, kMaxContext);
+    pocket::QwenEngine engine(opts.checkpoint, engine_opts, opts.layers, kMaxContext);
     engine.allocate_batch_slots(3);
     engine.warmup_tp();
 
@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
 
     // Baseline: ignore_eos, so this must produce exactly max_new_tokens and
     // gives the reference token sequence.
-    dsv4::QwenBatchSamplingParams baseline_params;
+    pocket::QwenBatchSamplingParams baseline_params;
     baseline_params.max_new_tokens = kMaxNewTokens;
     baseline_params.ignore_eos = true;
     const RunOutcome baseline = run_request(engine, prompt, 0, baseline_params);
@@ -205,7 +205,7 @@ int main(int argc, char** argv) {
     std::printf("\nstop token %d, expected at output index %d\n", stop_token,
                 kStopIndex);
 
-    dsv4::QwenBatchSamplingParams stop_params;
+    pocket::QwenBatchSamplingParams stop_params;
     stop_params.max_new_tokens = kMaxNewTokens;
     stop_params.stop_token_ids = {stop_token};
     const RunOutcome stopped = run_request(engine, prompt, 1, stop_params);
@@ -227,7 +227,7 @@ int main(int argc, char** argv) {
 
     // A stop id the model does not produce must not shorten anything: this
     // catches a stop check that fires on the wrong comparison.
-    dsv4::QwenBatchSamplingParams absent_params;
+    pocket::QwenBatchSamplingParams absent_params;
     absent_params.max_new_tokens = kMaxNewTokens;
     absent_params.stop_token_ids = {-424242};
     const RunOutcome absent = run_request(engine, prompt, 2, absent_params);

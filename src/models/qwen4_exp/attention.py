@@ -123,7 +123,7 @@ def cuda_gated_delta_rule(
             device=query.device,
             dtype=torch.float32,
         )
-    groups_per_block = int(os.environ.get("DSV4_QWEN4_GDN_GROUPS_PER_CTA", "1"))
+    groups_per_block = int(os.environ.get("POCKETLLM_QWEN4_GDN_GROUPS_PER_CTA", "1"))
     if groups_per_block not in (1, 2, 4, 8):
         groups_per_block = 1
     output, state = ext.qwen4_exp_gated_delta_bf16_forward(
@@ -147,7 +147,7 @@ def cuda_qsa_attention(
     softmax_scale: float,
 ) -> torch.Tensor | None:
     """Indexed BF16 GQA attention for the real TP4 sparse-attention shape."""
-    enabled = os.environ.get("DSV4_QWEN4_QSA_CUDA", "1").lower() in {
+    enabled = os.environ.get("POCKETLLM_QWEN4_QSA_CUDA", "1").lower() in {
         "1",
         "true",
         "yes",
@@ -340,13 +340,13 @@ class GatedDeltaNet:
             weights["norm"], config.rms_norm_eps, activation=config.output_gate_type or config.hidden_act
         )
         self.cuda_rule_enabled = os.environ.get(
-            "DSV4_QWEN4_GDN_CUDA", "1"
+            "POCKETLLM_QWEN4_GDN_CUDA", "1"
         ).lower() in {"1", "true", "yes"}
         self.last_profile: dict[str, float] = {}
 
     def __call__(self, hidden_states: torch.Tensor, cache: GatedDeltaNetCache | None) -> torch.Tensor:
         batch_size, seq_len, _ = hidden_states.shape
-        profile = os.environ.get("DSV4_QWEN4_ATTN_PHASE_PROFILE", "0").lower() in {
+        profile = os.environ.get("POCKETLLM_QWEN4_ATTN_PHASE_PROFILE", "0").lower() in {
             "1",
             "true",
             "yes",
@@ -629,7 +629,7 @@ class QSAAttention:
         past_len: int,
     ) -> torch.Tensor:
         batch_size, seq_len, _ = hidden_states.shape
-        profile = os.environ.get("DSV4_QWEN4_ATTN_PHASE_PROFILE", "0").lower() in {
+        profile = os.environ.get("POCKETLLM_QWEN4_ATTN_PHASE_PROFILE", "0").lower() in {
             "1",
             "true",
             "yes",
@@ -676,7 +676,7 @@ class QSAAttention:
             # available.
             query_rows = max(
                 1,
-                int(os.environ.get("DSV4_QWEN4_QSA_FALLBACK_ROWS", "16")),
+                int(os.environ.get("POCKETLLM_QWEN4_QSA_FALLBACK_ROWS", "16")),
             )
             key_tokens = key.transpose(1, 2)
             value_tokens = value.transpose(1, 2)

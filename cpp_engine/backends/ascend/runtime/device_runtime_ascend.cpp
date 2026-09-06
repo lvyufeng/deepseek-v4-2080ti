@@ -24,7 +24,7 @@
 #include <mutex>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 constexpr int kMaxDevices = 64;
@@ -351,4 +351,4 @@ void device_range_push(const char* /*label*/) {
 
 void device_range_pop() {}
 
-}  // namespace dsv4
+}  // namespace pocket

@@ -28,8 +28,8 @@ void require(bool condition, const std::string& message) {
 }
 
 void test_batched_decode_parity(const std::string& dir,
-                                dsv4::QwenKvCacheDType cache_dtype) {
-    dsv4::QwenEngineOptions options;
+                                pocket::QwenKvCacheDType cache_dtype) {
+    pocket::QwenEngineOptions options;
     options.tp_world = 1;
     options.tp_rank = 0;
     options.device = 0;
@@ -37,7 +37,7 @@ void test_batched_decode_parity(const std::string& dir,
     options.kv_cache_dtype = cache_dtype;
     options.prefix_cache = false;  // Isolate batching from prefix cache
     options.max_batch_size = 8;
-    dsv4::QwenEngine engine(dir, options, 2, 8192);
+    pocket::QwenEngine engine(dir, options, 2, 8192);
     engine.allocate_batch_slots(8);
 
     // Four sequences at positions 4096, 5000, 6144, 7500 in slots 1, 3, 5, 6
@@ -55,12 +55,12 @@ void test_batched_decode_parity(const std::string& dir,
         for (int i = 0; i < len; ++i) {
             tokens[static_cast<size_t>(i)] = (seq * 7 + i) % 64;
         }
-        const dsv4::QwenForwardResult prefill = engine.prefill(tokens, slot);
+        const pocket::QwenForwardResult prefill = engine.prefill(tokens, slot);
         require(prefill.position == len, "prefill position accounting");
     }
 
     // Sequential baseline: decode one step per sequence independently
-    std::vector<dsv4::QwenForwardResult> sequential_results(
+    std::vector<pocket::QwenForwardResult> sequential_results(
         static_cast<size_t>(num_seqs));
     std::vector<int> sequential_tokens(static_cast<size_t>(num_seqs));
     for (int seq = 0; seq < num_seqs; ++seq) {
@@ -89,7 +89,7 @@ void test_batched_decode_parity(const std::string& dir,
     for (int seq = 0; seq < num_seqs; ++seq) {
         batch_tokens[static_cast<size_t>(seq)] = (seq * 13 + 42) % 128;
     }
-    const std::vector<dsv4::QwenForwardResult> batched_results =
+    const std::vector<pocket::QwenForwardResult> batched_results =
         engine.batch_decode_tokens(batch_tokens, slots);
 
     // Compare: every sequence's top_token, top_logit, and checksum must match
@@ -97,8 +97,8 @@ void test_batched_decode_parity(const std::string& dir,
            "batch result count mismatch");
     for (int seq = 0; seq < num_seqs; ++seq) {
         const size_t index = static_cast<size_t>(seq);
-        const dsv4::QwenForwardResult& seq_result = sequential_results[index];
-        const dsv4::QwenForwardResult& batch_result = batched_results[index];
+        const pocket::QwenForwardResult& seq_result = sequential_results[index];
+        const pocket::QwenForwardResult& batch_result = batched_results[index];
         const int slot = slots[index];
         const int pos = prompt_lens[index] + 1;
         const std::string label = "seq=" + std::to_string(seq) +
@@ -117,14 +117,14 @@ void test_batched_decode_parity(const std::string& dir,
     }
 
     std::cout << "  cache_dtype="
-              << dsv4::qwen_kv_cache_dtype_name(cache_dtype)
+              << pocket::qwen_kv_cache_dtype_name(cache_dtype)
               << " sequences=" << num_seqs << " token-exact parity PASS\n";
 }
 
 }  // namespace
 
 int main() {
-    if (!dsv4::cuda_runtime_available()) {
+    if (!pocket::cuda_runtime_available()) {
         std::cout << "[SKIP] test_qwen_batched_engine_parity requires CUDA\n";
         return 0;
     }
@@ -132,7 +132,7 @@ int main() {
         const std::string dir = qwen_fixture::fixture_dir(
             "qwen_batched_engine_parity_fixture");
         require(write_fixture(dir), "could not create batched parity fixture");
-        test_batched_decode_parity(dir, dsv4::QwenKvCacheDType::Fp16);
+        test_batched_decode_parity(dir, pocket::QwenKvCacheDType::Fp16);
         // FP8 and TurboQuant batched decode are not yet implemented
         std::cout << "[PASS] test_qwen_batched_engine_parity\n";
         return 0;

@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-namespace dsv4 {
+namespace pocket {
 
 // Non-owning view of the target model's vocab-parallel head. External drafters
 // use this instead of assuming the checkpoint keeps a dense FP16 lm_head.
@@ -22,4 +22,4 @@ struct QwenTargetHeadAdapter {
                             void* stream = nullptr) const;
 };
 
-}  // namespace dsv4
+}  // namespace pocket

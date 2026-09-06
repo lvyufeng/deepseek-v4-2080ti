@@ -1,7 +1,7 @@
 // Definitions that stand in for the CUDA-only engines on the Ascend backend.
 //
 // Three subsystems are still CUDA-only: the DeepSeek-V4 forward engine
-// (engine/dsv4_engine.cpp, which also owns PersistentEngine), the DSpark draft
+// (engine/deepseek_v4_engine.cpp, which also owns PersistentEngine), the DSpark draft
 // engine (engine/dspark_engine.cpp), and the two Qwen external drafters
 // (engine/qwen_dspark.cpp, engine/qwen_dflash2.cpp). Together they name ~120
 // CUDA kernels directly, so they are excluded from the Ascend target rather than
@@ -11,15 +11,15 @@
 // in the link has to resolve even when its branch is unreachable. Excluding the
 // sources removes those references, and this translation unit supplies the
 // handful of definitions the surviving callers still need -- main.cpp and
-// core/openai_server.cpp for the DSV4 entry points, and engine/qwen_engine.cpp
+// core/openai_server.cpp for the DeepSeek-V4 entry points, and engine/qwen_engine.cpp
 // for the drafter runtime methods its shared bookkeeping calls.
 //
 // Every entry point throws. None of them is reachable from the Qwen FP16 path
 // that this backend does implement: QwenEngine's constructor rejects a drafter
-// checkpoint before any runtime is built, and the DSV4 model is a different
+// checkpoint before any runtime is built, and the DeepSeek-V4 model is a different
 // architecture altogether.
 
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 #include "persistent_engine.hpp"
 #include "qwen_dflash2.hpp"
 #include "qwen_dspark.hpp"
@@ -28,7 +28,7 @@
 #include <string>
 #include <vector>
 
-namespace dsv4 {
+namespace pocket {
 namespace {
 
 [[noreturn]] void unimplemented(const char* what) {
@@ -40,60 +40,60 @@ namespace {
 
 // --- DeepSeek-V4 forward entry points ---------------------------------------
 //
-// Dsv4Engine itself only parses GGUF metadata on the host, so it keeps its real
+// DeepSeekV4Engine itself only parses GGUF metadata on the host, so it keeps its real
 // behaviour; the forward entry points below are what need the device.
 
-Dsv4Engine::Dsv4Engine(const std::string& model_path)
+DeepSeekV4Engine::DeepSeekV4Engine(const std::string& model_path)
     : gguf_(model_path), config_(ModelConfig::from_gguf(gguf_)) {}
 
 ForwardSmokeResult run_safetensors_min_layer_smoke(const std::string&) {
-    unimplemented("DSV4 safetensors forward");
+    unimplemented("DeepSeek-V4 safetensors forward");
 }
 
 ForwardSmokeResult run_safetensors_layer_loop_smoke(const std::string&, int) {
-    unimplemented("DSV4 safetensors forward");
+    unimplemented("DeepSeek-V4 safetensors forward");
 }
 
 ForwardSmokeResult run_safetensors_token_forward(const std::string&, int, int) {
-    unimplemented("DSV4 safetensors forward");
+    unimplemented("DeepSeek-V4 safetensors forward");
 }
 
 ForwardSmokeResult run_safetensors_token_forward_at_position(
     const std::string&, int, int, int) {
-    unimplemented("DSV4 safetensors forward");
+    unimplemented("DeepSeek-V4 safetensors forward");
 }
 
 ForwardSmokeResult run_safetensors_token_forward_with_options(
     const std::string&, int, int, int, const ForwardSmokeOptions&) {
-    unimplemented("DSV4 safetensors forward");
+    unimplemented("DeepSeek-V4 safetensors forward");
 }
 
 ForwardSmokeResult run_safetensors_prompt_forward(
     const std::string&, const std::vector<int>&, int) {
-    unimplemented("DSV4 safetensors forward");
+    unimplemented("DeepSeek-V4 safetensors forward");
 }
 
 ForwardSmokeResult run_safetensors_prompt_forward_with_options(
     const std::string&, const std::vector<int>&, int,
     const ForwardSmokeOptions&) {
-    unimplemented("DSV4 safetensors forward");
+    unimplemented("DeepSeek-V4 safetensors forward");
 }
 
 std::vector<ForwardSmokeResult> run_safetensors_generate_tokens(
     const std::string&, const std::vector<int>&, int, int) {
-    unimplemented("DSV4 safetensors generate");
+    unimplemented("DeepSeek-V4 safetensors generate");
 }
 
 std::vector<ForwardSmokeResult> run_safetensors_generate_tokens_with_options(
     const std::string&, const std::vector<int>&, int, int,
     const ForwardSmokeOptions&) {
-    unimplemented("DSV4 safetensors generate");
+    unimplemented("DeepSeek-V4 safetensors generate");
 }
 
 GenerateSmokeResult run_safetensors_generate_tokens_timed_with_options(
     const std::string&, const std::vector<int>&, int, int,
     const ForwardSmokeOptions&) {
-    unimplemented("DSV4 safetensors generate");
+    unimplemented("DeepSeek-V4 safetensors generate");
 }
 
 // --- PersistentEngine -------------------------------------------------------
@@ -105,57 +105,57 @@ struct PersistentEngine::State {};
 
 PersistentEngine::PersistentEngine(const std::string&,
                                    const ForwardSmokeOptions&, int, int) {
-    unimplemented("DSV4 PersistentEngine");
+    unimplemented("DeepSeek-V4 PersistentEngine");
 }
 
 PersistentEngine::~PersistentEngine() = default;
 
 void PersistentEngine::reset_session() {
-    unimplemented("DSV4 PersistentEngine");
+    unimplemented("DeepSeek-V4 PersistentEngine");
 }
 
 int PersistentEngine::prefill(const std::vector<int>&, const SamplingParams&) {
-    unimplemented("DSV4 PersistentEngine");
+    unimplemented("DeepSeek-V4 PersistentEngine");
 }
 
 int PersistentEngine::decode_step(int, int, const SamplingParams&) {
-    unimplemented("DSV4 PersistentEngine");
+    unimplemented("DeepSeek-V4 PersistentEngine");
 }
 
 int PersistentEngine::eos_id() const {
-    unimplemented("DSV4 PersistentEngine");
+    unimplemented("DeepSeek-V4 PersistentEngine");
 }
 
 int PersistentEngine::max_context() const {
-    unimplemented("DSV4 PersistentEngine");
+    unimplemented("DeepSeek-V4 PersistentEngine");
 }
 
 const Tokenizer& PersistentEngine::tokenizer() const {
-    unimplemented("DSV4 PersistentEngine");
+    unimplemented("DeepSeek-V4 PersistentEngine");
 }
 
 void PersistentEngine::run_worker_loop() {
-    unimplemented("DSV4 PersistentEngine");
+    unimplemented("DeepSeek-V4 PersistentEngine");
 }
 
 void PersistentEngine::warmup_tp() {
-    unimplemented("DSV4 PersistentEngine");
+    unimplemented("DeepSeek-V4 PersistentEngine");
 }
 
 void PersistentEngine::worker_command_prefill(const std::vector<int>&) {
-    unimplemented("DSV4 PersistentEngine");
+    unimplemented("DeepSeek-V4 PersistentEngine");
 }
 
 void PersistentEngine::worker_command_decode(int32_t, int32_t) {
-    unimplemented("DSV4 PersistentEngine");
+    unimplemented("DeepSeek-V4 PersistentEngine");
 }
 
 void PersistentEngine::worker_command_reset() {
-    unimplemented("DSV4 PersistentEngine");
+    unimplemented("DeepSeek-V4 PersistentEngine");
 }
 
 void PersistentEngine::worker_command_shutdown() {
-    unimplemented("DSV4 PersistentEngine");
+    unimplemented("DeepSeek-V4 PersistentEngine");
 }
 
 // --- Qwen external drafters -------------------------------------------------
@@ -265,4 +265,4 @@ QwenDFlash2Proposal QwenDFlash2Runtime::propose(int) {
     unimplemented("Qwen DFlash2 drafter");
 }
 
-}  // namespace dsv4
+}  // namespace pocket

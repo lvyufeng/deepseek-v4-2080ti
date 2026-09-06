@@ -3,7 +3,7 @@
 // layers, both hash (0..n_hash-1) and non-hash (n_hash..n_layers-1) gate
 // paths, and ends with a sane top token + logit.
 
-#include "dsv4_engine.hpp"
+#include "deepseek_v4_engine.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
     const int token = argc >= 3 ? std::atoi(argv[2]) : 1234;
     const int position = argc >= 4 ? std::atoi(argv[3]) : 0;
     try {
-        auto r = dsv4::run_gguf_full_forward_smoke(argv[1], token, position);
+        auto r = pocket::run_gguf_full_forward_smoke(argv[1], token, position);
         std::printf("token=%d position=%d n_layers=%d dim=%d vocab=%d\n",
                     token, position, r.n_layers, r.dim, r.vocab);
         std::printf("final_x_rms      = %.4f\n", r.final_x_rms);
