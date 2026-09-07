@@ -3,8 +3,10 @@
 #include "device_runtime.hpp"
 #include "deepseek_v4_engine.hpp"
 #include "model_config.hpp"
+#include "model_registry.hpp"
 #include "openai_server.hpp"
 #include "persistent_engine.hpp"
+#include "persistent_engine_adapter.hpp"
 #include "qwen_config.hpp"
 #include "qwen_engine.hpp"
 #include "python_sidecar.hpp"
@@ -388,18 +390,38 @@ int main(int argc, char** argv) {
         }
         if (args.serve) {
             if (args.ckpt.empty()) throw std::runtime_error("--serve requires --ckpt");
-            if (pocket::is_qwen3_5_checkpoint(args.ckpt)) {
-                throw std::runtime_error("Qwen checkpoint is not supported by the DeepSeek-V4 OpenAI server yet; use --smoke-forward or --generate-token");
+            pocket::register_builtin_engines();
+            // The remaining restriction is the server's, not the checkpoint's:
+            // OpenAIServer still takes a PersistentEngine& and drives it through
+            // prefill/decode_step by hand, so only the engine behind that type
+            // can be served. Checked before construction, because otherwise a
+            // Qwen checkpoint would load 27B of weights only to be rejected.
+            // Giving the server an InferenceEngine& deletes this whole guard.
+            const std::string architecture = pocket::detect_architecture(args.ckpt);
+            if (architecture != "deepseek_v4") {
+                throw std::runtime_error(
+                    "the OpenAI server currently accepts only the DeepSeek-V4 persistent "
+                    "engine; '" + (architecture.empty() ? std::string("<undeclared>") : architecture) +
+                    "' checkpoints are served through the Python backend for now");
             }
-            const int layer_count = args.smoke_layers > 0 ? args.smoke_layers : 43;
             const int max_context = args.max_context > 0 ? args.max_context : 8192;
-            pocket::ForwardSmokeOptions opts;
-            opts.tp_world = args.tp_world;
-            opts.tp_rank = args.tp_rank;
-            opts.device = args.device >= 0 ? args.device : args.tp_rank;
-            opts.nccl_id_path = args.nccl_id_path;
+            pocket::EngineOptions engine_options;
+            engine_options.tp_world = args.tp_world;
+            engine_options.tp_rank = args.tp_rank;
+            engine_options.device = args.device >= 0 ? args.device : args.tp_rank;
+            engine_options.nccl_id_path = args.nccl_id_path;
+            engine_options.layer_count = args.smoke_layers;
+            engine_options.max_context = max_context;
             const pocket::ModelConfig model_cfg = pocket::ModelConfig::from_hf_config(args.ckpt);
-            pocket::PersistentEngine engine(args.ckpt, opts, layer_count, max_context);
+            std::unique_ptr<pocket::InferenceEngine> runtime =
+                pocket::create_engine(args.ckpt, engine_options);
+            auto* adapter = dynamic_cast<pocket::PersistentEngineAdapter*>(runtime.get());
+            if (adapter == nullptr) {
+                throw std::runtime_error(
+                    "the engine registered for '" + architecture +
+                    "' is not the persistent engine the OpenAI server drives");
+            }
+            pocket::PersistentEngine& engine = adapter->engine();
             std::cout << "server_max_context=" << max_context << "\n";
             std::cout << "model_context_length=" << model_cfg.context_length << "\n";
             engine.warmup_tp();
@@ -422,7 +444,8 @@ int main(int argc, char** argv) {
             return 0;
         }
         if (!args.ckpt.empty()) {
-            const bool qwen_checkpoint = pocket::is_qwen3_5_checkpoint(args.ckpt);
+            const bool qwen_checkpoint =
+                pocket::detect_architecture(args.ckpt) == "qwen3_5";
             pocket::SafeTensorsIndex index(args.ckpt);
             std::cout << "pocketllm_engine opened " << args.ckpt << "\n";
             std::cout << "format=safetensors tensors=" << index.tensor_count()

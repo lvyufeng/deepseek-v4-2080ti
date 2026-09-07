@@ -15,6 +15,31 @@ BatchScheduler::BatchScheduler(InferenceEngine* engine, int max_batch_size)
         throw std::invalid_argument("BatchScheduler: max_batch_size must be > 0");
     }
 
+    caps_ = engine_->caps();
+
+    // Honour what the engine declared rather than what the caller asked for. An
+    // engine that runs one session at a time will reject a wider
+    // allocate_batch_slots outright, and an engine that supports slots but not
+    // concurrent execution would have its caches interleaved by two live
+    // requests. Clamping here means a caller can hand the same max_batch_size to
+    // any engine and get that engine's honest width.
+    int allowed = caps_.continuous_batching ? caps_.max_slots : 1;
+    if (allowed < 1) allowed = 1;
+    if (max_batch_size_ > allowed) {
+        std::cerr << "BatchScheduler: engine declares max_slots=" << caps_.max_slots
+                  << (caps_.continuous_batching ? "" : " and no continuous batching")
+                  << "; running at width " << allowed
+                  << " instead of the requested " << max_batch_size_ << std::endl;
+        max_batch_size_ = allowed;
+    }
+
+    // A budget only means something to an engine that can return an unfinished
+    // prompt. Sending one to an engine that cannot would have it silently run the
+    // whole prompt anyway, so the scheduler stops pretending it chunked.
+    if (!caps_.chunked_prefill) {
+        prefill_token_budget_ = 0;
+    }
+
     // Allocate batch slots in the engine
     engine_->allocate_batch_slots(max_batch_size_);
 
@@ -82,7 +107,7 @@ uint64_t BatchScheduler::submit_request(
     // blocking everything behind it forever. Safe outside queue_mutex_: this
     // reads only the pool geometry, fixed once the engine is constructed, and
     // the request's own fields, which no other thread can see yet.
-    if (engine_->kv_paged() &&
+    if (caps_.paged_kv &&
         worst_case_blocks(*req) > engine_->kv_total_blocks()) {
         return 0;
     }
@@ -210,7 +235,7 @@ void BatchScheduler::schedule_loop() {
 }
 
 int BatchScheduler::worst_case_blocks(const SchedulerRequest& req) const {
-    if (!engine_->kv_paged()) return 0;
+    if (!caps_.paged_kv) return 0;
     // Prompt plus every token the request is still allowed to generate. Charging
     // only the prompt would admit a request whose decode cannot be backed, and a
     // decode step must write its K/V somewhere. Requests therefore hold their
@@ -231,8 +256,11 @@ void BatchScheduler::admit_requests() {
         // blocks its context will span, so a queue of short prompts can run at
         // full width while long ones are held back. The contiguous arena gives
         // every slot max_context up front, so there is nothing to weigh and the
-        // slot bound above is the whole admission rule.
-        if (engine_->kv_paged()) {
+        // slot bound above is the whole admission rule. Which of the two applies
+        // is what the engine declared, not what its block counters happen to
+        // read: an engine with no paging at all reports the same zeros as a
+        // contiguous arena.
+        if (caps_.paged_kv) {
             const int needed =
                 worst_case_blocks(*waiting_queue_.front());
             // Checked against the pool total minus what admitted requests may

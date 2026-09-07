@@ -283,6 +283,22 @@ class CppBackend(BackendBase):
         except BackendUnavailableError:
             return False
 
+    def _registered_architectures(self) -> tuple[str, ...]:
+        """Models this build can serve, read from the native engine registry.
+
+        This is the same list the C++ CLI dispatches on, so a build that links a
+        second engine reports it here without anyone editing a literal.  The
+        fallback covers a native module predating the registry, and a
+        capabilities report is not worth failing a backend over.
+        """
+        listed = getattr(self._native, "registered_architectures", None)
+        if listed is None:
+            return ("qwen3_5",)
+        try:
+            return tuple(str(name) for name in listed())
+        except Exception:
+            return ("qwen3_5",)
+
     @property
     def capabilities(self) -> BackendCapabilities:
         # The Ascend build rejects the external drafters, so report only what the
@@ -291,7 +307,7 @@ class CppBackend(BackendBase):
         speculative: tuple[str, ...] = ("mtp",) if native_backend == "ascend" else ("mtp", "dspark", "dflash2")
         return BackendCapabilities(
             name="cpp",
-            models=("qwen3.5",),
+            models=self._registered_architectures(),
             model_formats=("safetensors",),
             devices=(native_backend,) if native_backend else ("cuda", "ascend"),
             supports_batch=self._batching_enabled,  # Phase 3.4: dynamic based on scheduler
@@ -332,12 +348,14 @@ class CppBackend(BackendBase):
             return None
 
     def _construct_engine(self) -> Any:
-        # QwenEngine is the default at every world size.  It has its own worker
-        # loop, so TP no longer has to fall back to PersistentEngine — that
-        # fallback silently routed Qwen checkpoints into the DeepSeek-V4 loader,
-        # which fails on `embed.weight`.  PersistentEngine stays opt-in for
-        # DeepSeek-V4 checkpoints via backend_options["engine_kind"].
-        kind = str(self.args.backend_options.get("engine_kind", "qwen")).lower()
+        # Which engine opens a checkpoint is the checkpoint's own declaration,
+        # read through the same C++ model registry the native CLI dispatches on.
+        # `engine_kind` remains as an explicit override for the cases detection
+        # cannot cover -- a directory without a config.json, or forcing one
+        # runtime onto a checkpoint for a comparison.
+        kind = str(self.args.backend_options.get("engine_kind", "auto")).lower()
+        if kind == "auto":
+            kind = self._detect_engine_kind()
 
         if kind == "persistent":
             return self._construct_persistent_engine()
@@ -345,8 +363,45 @@ class CppBackend(BackendBase):
             return self._construct_qwen_engine()
         else:
             raise UnsupportedFeatureError(
-                f"unsupported engine_kind: {kind}; use 'persistent' or 'qwen'"
+                f"unsupported engine_kind: {kind}; use 'auto', 'persistent' or 'qwen'"
             )
+
+    # Architectures the registry knows, mapped to the native engine class this
+    # backend constructs for them.  The backend builds the concrete classes
+    # rather than going through create_engine() because it needs their full
+    # option surface (KV dtype, drafters, prefill chunk), which the registry's
+    # model-agnostic EngineOptions deliberately does not carry.
+    _ENGINE_KIND_BY_ARCHITECTURE = {
+        "qwen3_5": "qwen",
+        "deepseek_v4": "persistent",
+    }
+
+    def _detect_engine_kind(self) -> str:
+        """Ask the native registry which engine this checkpoint wants."""
+        detect = getattr(self._native, "detect_architecture", None)
+        checkpoint = self.args.checkpoint_dir
+        if detect is None or not checkpoint:
+            # An older native module, or a caller that passed no checkpoint at
+            # all (token-only tests).  Keep the previous default rather than
+            # failing on a path that never needed detecting.
+            return "qwen"
+        try:
+            architecture = str(detect(checkpoint))
+        except Exception as exc:
+            raise ConfigurationError(
+                f"could not detect the model architecture of {checkpoint}: {exc}; "
+                "pass --engine-kind qwen or --engine-kind persistent to choose one"
+            ) from exc
+
+        kind = self._ENGINE_KIND_BY_ARCHITECTURE.get(architecture)
+        if kind is None:
+            known = ", ".join(sorted(self._ENGINE_KIND_BY_ARCHITECTURE)) or "none"
+            raise UnsupportedFeatureError(
+                f"no cpp backend engine for architecture "
+                f"'{architecture or '<undeclared>'}' declared by {checkpoint}; "
+                f"known architectures: {known}"
+            )
+        return kind
 
     def _construct_persistent_engine(self) -> Any:
         """Construct PersistentEngine (supports TP worker loop)."""

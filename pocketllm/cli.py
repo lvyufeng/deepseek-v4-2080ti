@@ -56,7 +56,11 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--max-batch-size", type=int, default=1)
     serve_parser.add_argument("--host", default="0.0.0.0")
     serve_parser.add_argument("--port", type=int, default=8000)
-    serve_parser.add_argument("--engine-kind", default="qwen")
+    # "auto" asks the native model registry which engine the checkpoint wants.
+    # The explicit values stay for checkpoints that declare nothing, and for
+    # forcing one runtime onto a checkpoint to compare them.
+    serve_parser.add_argument("--engine-kind", default="auto",
+                              choices=["auto", "qwen", "persistent"])
     # Matches the legacy server default: routed experts live in host memory so
     # a 4x2080Ti box can hold the model. "gpu" needs far more device memory.
     serve_parser.add_argument("--routed-experts-device", choices=["gpu", "cpu"], default="cpu")
