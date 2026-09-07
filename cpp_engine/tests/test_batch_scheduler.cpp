@@ -1,5 +1,5 @@
-// Test QwenBatchScheduler with synthetic requests
-#include "qwen_batch_scheduler.hpp"
+// Test BatchScheduler with synthetic requests
+#include "batch_scheduler.hpp"
 #include "qwen_engine.hpp"
 #include <iostream>
 #include <vector>
@@ -36,8 +36,8 @@ void test_stats() {
     // Test scheduler without engine (will fail in constructor)
     // This demonstrates the API contract
     try {
-        QwenBatchScheduler* scheduler = nullptr;
-        // scheduler = new QwenBatchScheduler(nullptr, 8);  // Would throw
+        BatchScheduler* scheduler = nullptr;
+        // scheduler = new BatchScheduler(nullptr, 8);  // Would throw
 
         std::cout << "Stats API signature validated" << std::endl;
     } catch (const std::exception& e) {
@@ -46,7 +46,7 @@ void test_stats() {
 }
 
 int main(int argc, char** argv) {
-    std::cout << "QwenBatchScheduler Unit Tests" << std::endl;
+    std::cout << "BatchScheduler Unit Tests" << std::endl;
     std::cout << "==============================" << std::endl;
 
     if (argc < 2) {
@@ -85,13 +85,13 @@ int main(int argc, char** argv) {
         QwenEngine engine(ckpt_dir, options, layers, 8192);
 
         std::cout << "Creating scheduler with max_batch_size=4" << std::endl;
-        QwenBatchScheduler scheduler(&engine, 4);
+        BatchScheduler scheduler(&engine, 4);
 
         // Test 1: Single request
         std::cout << "\n=== Test 1: Single Request ===" << std::endl;
         {
             std::vector<int> prompt = {1, 2, 3, 4, 5};  // Dummy tokens
-            QwenBatchSamplingParams sampling;
+            BatchSamplingParams sampling;
             sampling.max_new_tokens = 10;
 
             bool completed = false;
@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
             std::vector<int> prompt2 = {4, 5, 6, 7};
             std::vector<int> prompt3 = {8, 9};
 
-            QwenBatchSamplingParams sampling;
+            BatchSamplingParams sampling;
             sampling.max_new_tokens = 5;
 
             uint64_t req1 = scheduler.submit_request(prompt1, sampling, callback);

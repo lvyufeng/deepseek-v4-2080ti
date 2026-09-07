@@ -325,7 +325,7 @@ struct QwenRecurrentSnapshot {
     bool periodic = false;
     // A request-boundary snapshot can answer an exact shorter-prefix prefill
     // without re-running its final token.
-    QwenForwardResult result;
+    ForwardResult result;
     bool has_result = false;
 
     uint64_t bytes() const {
@@ -542,7 +542,7 @@ struct QwenEngine::Impl {
         // Ordered by ascending position. Index 0 is always the implicit empty
         // state, which is not stored.
         std::vector<QwenRecurrentSnapshot> snapshots;
-        QwenForwardResult cached_result;
+        ForwardResult cached_result;
         bool has_cached_result = false;
     };
     std::vector<SlotPrefixState> slot_prefix;
@@ -676,7 +676,7 @@ struct QwenEngine::Impl {
         SlotPrefixState& prefix = prefix_for(slot_id);
         prefix.cached_prompt.clear();
         prefix.snapshots.clear();
-        prefix.cached_result = QwenForwardResult{};
+        prefix.cached_result = ForwardResult{};
         prefix.has_cached_result = false;
         set_slot_position(slot_id, 0, engine_position);
     }
@@ -1540,7 +1540,7 @@ struct QwenEngine::Impl {
     }
 
     QwenRecurrentSnapshot capture_recurrent_state(
-        int position, const QwenForwardResult* result = nullptr,
+        int position, const ForwardResult* result = nullptr,
         bool periodic = false, int slot_id = 0) {
         QwenRecurrentSnapshot snapshot;
         snapshot.position = position;
@@ -1680,7 +1680,7 @@ struct QwenEngine::Impl {
 
     // Keeps snapshots ordered and bounded. The newest position wins because a
     // monotonically growing prompt resumes from the deepest available point.
-    void record_snapshot(int position, const QwenForwardResult* result = nullptr,
+    void record_snapshot(int position, const ForwardResult* result = nullptr,
                          bool periodic = false, int slot_id = 0) {
         if (!options.prefix_cache ||
             options.state_snapshot_interval_tokens <= 0 ||
@@ -3625,13 +3625,13 @@ struct QwenEngine::Impl {
         return result;
     }
 
-    QwenForwardResult logits_for(const uint16_t* hidden, int last_row,
+    ForwardResult logits_for(const uint16_t* hidden, int last_row,
                                  int position_after, int active_layers) {
         const int hidden_size = static_cast<int>(config.hidden_size);
         QwenVerifyBatch batch = top_tokens_for(
             hidden + static_cast<size_t>(last_row) * hidden_size, 1,
             &final_norm, position_after);
-        QwenForwardResult result;
+        ForwardResult result;
         result.layers = active_layers;
         result.dim = hidden_size;
         result.logits = static_cast<int>(config.vocab_size);
@@ -3647,12 +3647,12 @@ struct QwenEngine::Impl {
         return top_tokens_for(hidden, rows, &final_norm, position_after);
     }
 
-    QwenForwardResult mtp_logits_for(const uint16_t* normalized_hidden,
+    ForwardResult mtp_logits_for(const uint16_t* normalized_hidden,
                                      int position_after) {
         const int hidden_size = static_cast<int>(config.hidden_size);
         QwenVerifyBatch batch = top_tokens_for(normalized_hidden, 1, nullptr,
                                                position_after);
-        QwenForwardResult result;
+        ForwardResult result;
         result.layers = 1;
         result.dim = hidden_size;
         result.logits = static_cast<int>(config.vocab_size);
@@ -3663,7 +3663,7 @@ struct QwenEngine::Impl {
         return result;
     }
 
-    QwenForwardResult mtp_forward_rows(const std::vector<int>& tokens,
+    ForwardResult mtp_forward_rows(const std::vector<int>& tokens,
                                        const uint16_t* hidden, int position) {
         if (!mtp_enabled) {
             throw std::runtime_error("Qwen MTP rows requested while disabled");
@@ -3712,7 +3712,7 @@ struct QwenEngine::Impl {
              mtp_normalized_output.f16_data(), rows, hidden_size);
         const uint16_t* last_hidden = mtp_normalized_output.f16_data() +
             static_cast<size_t>(rows - 1) * hidden_size;
-        QwenForwardResult result = mtp_logits_for(last_hidden, position + rows);
+        ForwardResult result = mtp_logits_for(last_hidden, position + rows);
         allocate_half(mtp_seed_hidden, hidden_size, {config.hidden_size});
         // Recursive Qwen3.5 MTP consumes the prior predictor's returned hidden,
         // and that return is after mtp.norm in both vLLM and SGLang.
@@ -3728,12 +3728,12 @@ struct QwenEngine::Impl {
         return result;
     }
 
-    QwenForwardResult mtp_forward_row(int token, const uint16_t* hidden,
+    ForwardResult mtp_forward_row(int token, const uint16_t* hidden,
                                       int position) {
         return mtp_forward_rows({token}, hidden, position);
     }
 
-    QwenForwardResult prime_target_mtp(const std::vector<int>& shifted_tokens,
+    ForwardResult prime_target_mtp(const std::vector<int>& shifted_tokens,
                                        int position) {
         const int rows = static_cast<int>(shifted_tokens.size());
         const int hidden_size = static_cast<int>(config.hidden_size);
@@ -3747,7 +3747,7 @@ struct QwenEngine::Impl {
                                 position);
     }
 
-    QwenForwardResult seed_mtp(int input_token) {
+    ForwardResult seed_mtp(int input_token) {
         if (!has_target_last_hidden) {
             throw std::runtime_error(
                 "Qwen MTP seed requires a committed target hidden");
@@ -3768,7 +3768,7 @@ struct QwenEngine::Impl {
                                   QwenMtpStats* stats) {
         if (count <= 0) return {};
         const auto started = std::chrono::steady_clock::now();
-        QwenForwardResult next;
+        ForwardResult next;
         if (mtp_seed_ready && mtp_seed_input_token == input_token) {
             next.top_token = mtp_next_token;
             next.top_logit = mtp_next_logit;
@@ -3792,7 +3792,7 @@ struct QwenEngine::Impl {
         return drafts;
     }
 
-    QwenForwardResult dflash2_speculative_step(int input_token,
+    ForwardResult dflash2_speculative_step(int input_token,
                                                QwenMtpStats* stats) {
         if (!dflash2_enabled) {
             throw std::runtime_error("Qwen DFlash2 speculative step is disabled");
@@ -3882,7 +3882,7 @@ struct QwenEngine::Impl {
                     std::chrono::steady_clock::now() - replay_started).count();
             }
         }
-        QwenForwardResult result;
+        ForwardResult result;
         result.top_token = bonus;
         result.bonus_token = bonus;
         result.correct_drafts = correct;
@@ -3901,7 +3901,7 @@ struct QwenEngine::Impl {
         return result;
     }
 
-    QwenForwardResult dspark_speculative_step(int input_token,
+    ForwardResult dspark_speculative_step(int input_token,
                                               QwenMtpStats* stats) {
         if (!dspark_enabled) {
             throw std::runtime_error("Qwen DSpark speculative step is disabled");
@@ -3980,7 +3980,7 @@ struct QwenEngine::Impl {
                     std::chrono::steady_clock::now() - replay_started).count();
             }
         }
-        QwenForwardResult result;
+        ForwardResult result;
         result.top_token = bonus;
         result.bonus_token = bonus;
         result.correct_drafts = correct;
@@ -3999,7 +3999,7 @@ struct QwenEngine::Impl {
         return result;
     }
 
-    QwenForwardResult speculative_step(int input_token, int draft_count,
+    ForwardResult speculative_step(int input_token, int draft_count,
                                        QwenMtpStats* stats) {
         if (!mtp_enabled || draft_count <= 0) {
             return run_chunk({input_token}, mtp_position,
@@ -4063,7 +4063,7 @@ struct QwenEngine::Impl {
         // The target state now ends after the accepted input sequence. The
         // bonus is the next input and must not be consumed by target yet. The
         // MTP boundary row is already primed with that bonus for the next round.
-        QwenForwardResult result;
+        ForwardResult result;
         result.top_token = bonus;
         result.bonus_token = bonus;
         result.correct_drafts = correct;
@@ -4086,7 +4086,7 @@ struct QwenEngine::Impl {
                config.vocab_size / options.tp_world;
     }
 
-    QwenForwardResult run_chunk(const std::vector<int>& token_ids,
+    ForwardResult run_chunk(const std::vector<int>& token_ids,
                                 int position_offset, int active_layers,
                                 bool compute_logits,
                                 QwenVerifyBatch* verify_batch = nullptr,
@@ -4247,7 +4247,7 @@ struct QwenEngine::Impl {
         }
         if (compute_logits) {
             if (verify_batch != nullptr) {
-                QwenForwardResult result;
+                ForwardResult result;
                 result.layers = active_layers;
                 result.dim = hidden_size;
                 result.logits = static_cast<int>(config.vocab_size);
@@ -4260,7 +4260,7 @@ struct QwenEngine::Impl {
             return logits_for(
                 hidden, rows - 1, position_offset + rows, active_layers);
         }
-        QwenForwardResult result;
+        ForwardResult result;
         result.layers = active_layers;
         result.dim = hidden_size;
         result.logits = static_cast<int>(config.vocab_size);
@@ -4541,7 +4541,7 @@ void QwenEngine::set_dflash2_debug_callback(
     impl_->dflash2->set_debug_callback(std::move(callback));
 }
 
-QwenForwardResult QwenEngine::debug_prefill_dflash2(
+ForwardResult QwenEngine::debug_prefill_dflash2(
     const std::vector<int>& token_ids,
     const std::vector<int>& target_layer_ids,
     QwenDFlash2DebugCallback callback) {
@@ -4559,7 +4559,7 @@ QwenForwardResult QwenEngine::debug_prefill_dflash2(
     impl_->dflash2_debug_target_layer_ids = target_layer_ids;
     impl_->dflash2_target_debug_callback = std::move(callback);
     try {
-        QwenForwardResult result = prefill(token_ids);
+        ForwardResult result = prefill(token_ids);
         impl_->dflash2_debug_target_layer_ids.clear();
         impl_->dflash2_target_debug_callback = {};
         return result;
@@ -4600,7 +4600,7 @@ void QwenEngine::clear_prefix_cache() {
     for (Impl::SlotPrefixState& slot : impl_->slot_prefix) {
         slot.cached_prompt.clear();
         slot.snapshots.clear();
-        slot.cached_result = QwenForwardResult{};
+        slot.cached_result = ForwardResult{};
         slot.has_cached_result = false;
     }
     std::fill(impl_->slot_positions.begin(), impl_->slot_positions.end(), 0);
@@ -4622,6 +4622,20 @@ void QwenEngine::clear_prefix_cache() {
 }
 
 // ========== Batch API implementation (Phase 3.1) ==========
+
+Capabilities QwenEngine::caps() const {
+    Capabilities c;
+    // Paging is a construction-time option, so this reports the configured
+    // cache rather than what the engine could be built to do.
+    c.paged_kv = impl_->kv_paged();
+    // Batched execution needs more than one slot; a single-slot engine still
+    // runs the batch API, but one request at a time.
+    c.continuous_batching = options_.max_batch_size > 1;
+    // batch_prefill honours its token budget on every configuration.
+    c.chunked_prefill = true;
+    c.max_slots = options_.max_batch_size;
+    return c;
+}
 
 bool QwenEngine::supports_batching() const {
     return true;  // Phase 3.1: always supported, opt-in via allocate_batch_slots
@@ -4723,8 +4737,8 @@ void QwenEngine::free_slot(uint64_t request_id) {
     worker_command_free_slot(slot_id);
 }
 
-QwenBatchPrefillResult QwenEngine::batch_prefill(
-    const std::vector<QwenBatchedRequest*>& requests, int token_budget) {
+BatchPrefillResult QwenEngine::batch_prefill(
+    const std::vector<BatchedRequest*>& requests, int token_budget) {
 
     // Requests still run one at a time: the saturation sweep
     // (bench_qwen_prefill_saturation) measured 1890 tok/s at a 4096-token chunk
@@ -4734,14 +4748,14 @@ QwenBatchPrefillResult QwenEngine::batch_prefill(
     // prompt holding the device: with `token_budget` set, each request advances
     // by at most that many tokens per call, so the scheduler regains control
     // between chunks and can interleave decode.
-    QwenBatchPrefillResult result;
+    BatchPrefillResult result;
     result.results.reserve(requests.size());
     result.incomplete.reserve(requests.size());
     result.total_tokens = 0;
 
     auto start = std::chrono::steady_clock::now();
 
-    for (QwenBatchedRequest* req : requests) {
+    for (BatchedRequest* req : requests) {
         if (!req || req->prompt_tokens.empty()) {
             throw std::runtime_error("QwenEngine::batch_prefill: invalid request");
         }
@@ -4755,7 +4769,7 @@ QwenBatchPrefillResult QwenEngine::batch_prefill(
         worker_command_prefill(req->prompt_tokens, req->slot_id, token_budget);
 
         // Phase 3.3: Use req->slot_id to isolate KV cache
-        QwenPartialPrefillResult step =
+        PartialPrefillResult step =
             prefill_bounded(req->prompt_tokens, req->slot_id,
                             std::max(0, token_budget));
 
@@ -4784,7 +4798,7 @@ QwenBatchPrefillResult QwenEngine::batch_prefill(
     return result;
 }
 
-std::vector<QwenForwardResult> QwenEngine::batch_decode_tokens(
+std::vector<ForwardResult> QwenEngine::batch_decode_tokens(
     const std::vector<int>& tokens, const std::vector<int>& slot_ids) {
     if (tokens.size() != slot_ids.size()) {
         throw std::runtime_error(
@@ -4826,12 +4840,12 @@ std::vector<QwenForwardResult> QwenEngine::batch_decode_tokens(
     QwenVerifyBatch batch = impl_->run_batched_decode(
         tokens, positions, slot_ids, active_layers_);
 
-    std::vector<QwenForwardResult> results(static_cast<size_t>(rows));
+    std::vector<ForwardResult> results(static_cast<size_t>(rows));
     for (int row = 0; row < rows; ++row) {
         const size_t index = static_cast<size_t>(row);
         const int slot = slot_ids[index];
         const int position_after = positions[index] + 1;
-        QwenForwardResult& forward = results[index];
+        ForwardResult& forward = results[index];
         forward.layers = active_layers_;
         forward.dim = static_cast<int>(config_.hidden_size);
         forward.logits = static_cast<int>(config_.vocab_size);
@@ -4853,7 +4867,7 @@ std::vector<QwenForwardResult> QwenEngine::batch_decode_tokens(
     return results;
 }
 
-bool QwenEngine::is_stop_token(const QwenBatchSamplingParams& sampling,
+bool QwenEngine::is_stop_token(const BatchSamplingParams& sampling,
                                int token) const {
     if (sampling.ignore_eos) return false;
     const std::vector<int>& stops = sampling.stop_token_ids.empty()
@@ -4862,10 +4876,10 @@ bool QwenEngine::is_stop_token(const QwenBatchSamplingParams& sampling,
     return std::find(stops.begin(), stops.end(), token) != stops.end();
 }
 
-QwenBatchDecodeResult QwenEngine::batch_decode_step(
-    const std::vector<QwenBatchedRequest*>& requests) {
+BatchDecodeResult QwenEngine::batch_decode_step(
+    const std::vector<BatchedRequest*>& requests) {
 
-    QwenBatchDecodeResult result;
+    BatchDecodeResult result;
     result.next_tokens.reserve(requests.size());
     result.finished.reserve(requests.size());
     result.hit_stop_token.reserve(requests.size());
@@ -4880,7 +4894,7 @@ QwenBatchDecodeResult QwenEngine::batch_decode_step(
     std::vector<int> slots;
     tokens.reserve(requests.size());
     slots.reserve(requests.size());
-    for (QwenBatchedRequest* req : requests) {
+    for (BatchedRequest* req : requests) {
         if (!req) {
             throw std::runtime_error("QwenEngine::batch_decode_step: null request");
         }
@@ -4893,11 +4907,11 @@ QwenBatchDecodeResult QwenEngine::batch_decode_step(
     // announces the batch before running it or the group deadlocks with rank 0
     // computing alone. No-op at world size 1.
     worker_command_batch_decode(tokens, slots);
-    std::vector<QwenForwardResult> forwards = batch_decode_tokens(tokens, slots);
+    std::vector<ForwardResult> forwards = batch_decode_tokens(tokens, slots);
 
     for (size_t index = 0; index < requests.size(); ++index) {
-        QwenBatchedRequest* req = requests[index];
-        const QwenForwardResult& forward = forwards[index];
+        BatchedRequest* req = requests[index];
+        const ForwardResult& forward = forwards[index];
         req->last_token = forward.top_token;
         req->last_result = forward;
         req->seq_len++;
@@ -4923,18 +4937,18 @@ QwenBatchDecodeResult QwenEngine::batch_decode_step(
     return result;
 }
 
-QwenForwardResult QwenEngine::prefill(const std::vector<int>& token_ids, int slot_id) {
+ForwardResult QwenEngine::prefill(const std::vector<int>& token_ids, int slot_id) {
     // Budget 0 means "no bound", so this is the whole prompt in one call and the
     // result is always complete.
     return prefill_bounded(token_ids, slot_id, 0).result;
 }
 
-QwenPartialPrefillResult QwenEngine::prefill_partial(
+PartialPrefillResult QwenEngine::prefill_partial(
     const std::vector<int>& token_ids, int slot_id, int max_tokens) {
     return prefill_bounded(token_ids, slot_id, std::max(0, max_tokens));
 }
 
-QwenPartialPrefillResult QwenEngine::prefill_bounded(
+PartialPrefillResult QwenEngine::prefill_bounded(
     const std::vector<int>& token_ids, int slot_id, int max_tokens) {
     std::optional<Impl::RangeScope> range;
     if (impl_->range_profile) range.emplace("qwen.prefill");
@@ -5053,7 +5067,7 @@ QwenPartialPrefillResult QwenEngine::prefill_bounded(
             token_ids[static_cast<size_t>(start_position)],
             start_position - 1);
     }
-    QwenForwardResult result;
+    ForwardResult result;
     // A budget both caps how far this call advances and shrinks the chunk, since
     // a budget under prefill_chunk_tokens would otherwise be rounded up to a
     // whole chunk and silently consume the entire prompt. Stopping at an
@@ -5160,7 +5174,7 @@ QwenPartialPrefillResult QwenEngine::prefill_bounded(
     return {result, budget_limit, complete};
 }
 
-QwenForwardResult QwenEngine::decode_step(int token_id, int slot_id) {
+ForwardResult QwenEngine::decode_step(int token_id, int slot_id) {
     std::optional<Impl::RangeScope> range;
     if (impl_->range_profile) range.emplace("qwen.decode_step");
 
@@ -5178,7 +5192,7 @@ QwenForwardResult QwenEngine::decode_step(int token_id, int slot_id) {
     // block boundary, and the table upload is skipped when nothing changed.
     impl_->reserve_paged_slot(slot_id, current_position + 1);
     impl_->sync_block_table();
-    QwenForwardResult result = impl_->run_chunk(
+    ForwardResult result = impl_->run_chunk(
         {token_id}, current_position, active_layers_, true, nullptr, nullptr, slot_id);
 
     ++current_position;
@@ -5198,7 +5212,7 @@ QwenForwardResult QwenEngine::decode_step(int token_id, int slot_id) {
     return result;
 }
 
-std::vector<QwenForwardResult> QwenEngine::generate(
+std::vector<ForwardResult> QwenEngine::generate(
     const std::vector<int>& prompt_ids, int max_new_tokens, bool stop_at_eos) {
     // Checked against config_.eos_token_ids directly: this path has no
     // per-request sampling params, and an empty list makes this always false.
@@ -5219,14 +5233,14 @@ std::vector<QwenForwardResult> QwenEngine::generate(
     if (impl_->range_profile) range_generate.emplace("qwen.generate");
     mtp_stats_ = QwenMtpStats{};
     const auto prefill_started = std::chrono::steady_clock::now();
-    QwenForwardResult next = prefill(prompt_ids);
+    ForwardResult next = prefill(prompt_ids);
     mtp_stats_.prefill_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - prefill_started).count();
     // Prefill already reported; reset so the decode/verify phases are attributed
     // on their own rather than buried under the prompt pass.
     impl_->phase_seconds.clear();
     impl_->phase_calls.clear();
-    std::vector<QwenForwardResult> results;
+    std::vector<ForwardResult> results;
     results.reserve(static_cast<size_t>(max_new_tokens));
     if (!options_.mtp && options_.dspark_checkpoint.empty() &&
         options_.dflash2_checkpoint.empty()) {
@@ -5322,7 +5336,7 @@ std::vector<QwenForwardResult> QwenEngine::generate(
         bool stop_in_block = false;
         for (size_t index = 0; index < next.accept_tokens.size(); ++index) {
             if (static_cast<int>(results.size()) == max_new_tokens) break;
-            QwenForwardResult token_result = next;
+            ForwardResult token_result = next;
             token_result.top_token = next.accept_tokens[index];
             token_result.top_logit = next.accept_logits[index];
             token_result.checksum = next.accept_checksums[index];

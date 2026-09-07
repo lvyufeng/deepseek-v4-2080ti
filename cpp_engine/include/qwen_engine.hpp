@@ -1,5 +1,6 @@
 #pragma once
 
+#include "inference_engine.hpp"
 #include "qwen_config.hpp"
 #include "qwen_dflash2.hpp"
 #include "qwen_weights.hpp"
@@ -129,23 +130,6 @@ struct QwenEngineOptions {
     uint64_t kv_cache_bytes = 0;
 };
 
-struct QwenForwardResult {
-    int token = 0;
-    int layers = 0;
-    int dim = 0;
-    int logits = 0;
-    int top_token = 0;
-    // Filled by native MTP speculative steps; plain forwards leave these zero.
-    int correct_drafts = 0;
-    int bonus_token = 0;
-    std::vector<int> accept_tokens;
-    std::vector<float> accept_logits;
-    std::vector<float> accept_checksums;
-    float top_logit = 0.0f;
-    float checksum = 0.0f;
-    int position = 0;
-};
-
 // Accounting for one native-MTP or external-DSpark generate call.
 struct QwenMtpStats {
     uint64_t verify_count = 0;
@@ -217,77 +201,21 @@ struct QwenPrefixCacheStats {
     int misses = 0;
 };
 
-// ========== Batched request types (Phase 3.1) ==========
-
-// Sampling parameters for one batched request
-struct QwenBatchSamplingParams {
-    float temperature = 0.0f;
-    float top_p = 1.0f;
-    int top_k = 20;
-    unsigned long long seed = 0;
-    int max_new_tokens = 128;
-    // Tokens that end this request. Left empty, the engine falls back to the
-    // checkpoint's eos ids from generation_config.json; set it to override for
-    // this request only. `ignore_eos` runs to max_new_tokens regardless, which
-    // is what benchmarks want so their token counts stay fixed.
-    std::vector<int> stop_token_ids;
-    bool ignore_eos = false;
-};
-
-// Per-request state for batched continuous execution
-struct QwenBatchedRequest {
-    uint64_t request_id = 0;
-    std::vector<int> prompt_tokens;
-    int seq_len = 0;
-    int slot_id = -1;
-    int cached_prefix_len = 0;
-    QwenBatchSamplingParams sampling;
-    bool finished = false;
-    int last_token = 0;
-    std::vector<int> generated_tokens;
-    QwenForwardResult last_result;
-};
-
-// Result from batch_prefill
-struct QwenBatchPrefillResult {
-    std::vector<QwenForwardResult> results;
-    int total_tokens = 0;
-    double seconds = 0.0;
-    // Rows whose prompt is not yet fully consumed, parallel to `results`. A
-    // partial row's `results` entry holds the last chunk's logits, which are
-    // not a prediction for the prompt's final token and must not be sampled.
-    std::vector<bool> incomplete;
-};
-
-// Outcome of one bounded prefill step.
-struct QwenPartialPrefillResult {
-    QwenForwardResult result;
-    // Prompt tokens consumed so far, i.e. where the next step resumes.
-    int consumed_tokens = 0;
-    // False while tokens remain; `result` is only a sampleable prediction for
-    // the prompt once this is true.
-    bool complete = false;
-};
-
-// Result from batch_decode_step
-struct QwenBatchDecodeResult {
-    std::vector<int> next_tokens;
-    std::vector<bool> finished;
-    // Rows that stopped on a stop token rather than on max_new_tokens, parallel
-    // to `next_tokens`. Callers need the distinction to report finish_reason,
-    // which cannot be recovered from `finished` alone.
-    std::vector<bool> hit_stop_token;
-    double seconds = 0.0;
-};
-
 // Independent Qwen3.5 hybrid dense runtime. Checkpoint BF16 tensors are
 // materialized as FP16 on Turing; FP8 projections retain their compressed
 // codes and BF16 block scales are uploaded as FP16 for online unpack.
-class QwenEngine {
+//
+// The batched request and result types this engine speaks -- ForwardResult,
+// BatchSamplingParams, BatchedRequest, BatchPrefillResult, BatchDecodeResult,
+// PartialPrefillResult -- live in inference_engine.hpp, because a scheduler has
+// to name them without naming a model. What stays here is what is genuinely
+// Qwen3.5's: its options, weight map, prefix-cache and MTP accounting, TP
+// worker protocol, and speculative-decoding entry points.
+class QwenEngine : public InferenceEngine {
 public:
     QwenEngine(const std::string& ckpt_dir, const QwenEngineOptions& options,
                int layer_count = 0, int max_context = 8192);
-    ~QwenEngine();
+    ~QwenEngine() override;
 
     QwenEngine(const QwenEngine&) = delete;
     QwenEngine& operator=(const QwenEngine&) = delete;
@@ -295,7 +223,9 @@ public:
     const QwenConfig& config() const { return config_; }
     const QwenWeightMap& weight_map() const { return weights_; }
     const QwenEngineOptions& options() const { return options_; }
-    int max_context() const { return max_context_; }
+    Capabilities caps() const override;
+    int max_context() const override { return max_context_; }
+    int device() const override { return options_.device; }
     int position() const { return position_; }
     uint64_t resident_weight_bytes() const { return resident_weight_bytes_; }
     uint64_t resident_scale_bytes() const { return resident_scale_bytes_; }
@@ -315,7 +245,7 @@ public:
     // captured [row, tap, hidden] DFlash2 feature matrix through the callback.
     // This path does not load the drafter and is therefore usable in TP=1 within
     // one 22 GiB card.
-    QwenForwardResult debug_prefill_dflash2(
+    ForwardResult debug_prefill_dflash2(
         const std::vector<int>& token_ids,
         const std::vector<int>& target_layer_ids,
         QwenDFlash2DebugCallback callback);
@@ -324,7 +254,7 @@ public:
     // Drops every cached prefix so the next prefill recomputes from zero.
     void clear_prefix_cache();
     void warmup_tp();
-    QwenForwardResult prefill(const std::vector<int>& token_ids, int slot_id = 0);
+    ForwardResult prefill(const std::vector<int>& token_ids, int slot_id = 0);
     // Prefill that consumes at most `max_tokens` prompt tokens and returns,
     // leaving the rest for a later call. This is what lets a scheduler keep a
     // long prompt from monopolising the GPU: a 65K prompt run in 8192-token
@@ -334,15 +264,15 @@ public:
     // Resumption rides the existing growing-prompt prefix path, so callers pass
     // the same full `token_ids` every time and the engine skips what this slot
     // already holds. `max_tokens <= 0` consumes the whole remainder.
-    QwenPartialPrefillResult prefill_partial(const std::vector<int>& token_ids,
+    PartialPrefillResult prefill_partial(const std::vector<int>& token_ids,
                                              int slot_id, int max_tokens);
-    QwenForwardResult decode_step(int token_id, int slot_id = 0);
+    ForwardResult decode_step(int token_id, int slot_id = 0);
     // `stop_at_eos` ends generation on one of the checkpoint's eos ids, keeping
     // that token as the last element. It defaults to false so existing callers
     // and benchmarks keep returning exactly max_new_tokens results; under TP
     // every rank runs this loop and decides independently, so the flag has to be
     // the same on all of them or they stop at different lengths.
-    std::vector<QwenForwardResult> generate(const std::vector<int>& prompt_ids,
+    std::vector<ForwardResult> generate(const std::vector<int>& prompt_ids,
                                              int max_new_tokens,
                                              bool stop_at_eos = false);
 
@@ -351,31 +281,31 @@ public:
     // Allocate KV cache slots for batched execution
     // Must be called before using batch_prefill/batch_decode_step
     // max_batch_size: maximum number of concurrent requests
-    void allocate_batch_slots(int max_batch_size);
+    void allocate_batch_slots(int max_batch_size) override;
 
     // Allocate a KV cache slot for a new request
     // Returns slot_id on success, -1 if no slots available
-    int allocate_slot(uint64_t request_id);
+    int allocate_slot(uint64_t request_id) override;
 
     // Free a KV cache slot when request completes
-    void free_slot(uint64_t request_id);
+    void free_slot(uint64_t request_id) override;
 
     // ========== Paged KV admission (for the scheduler) ==========
 
     // Whether the paged block pool is in use. False means the contiguous arena
     // is, in which case a slot already owns max_context tokens and the block
     // accounting below carries no information.
-    bool kv_paged() const;
+    bool kv_paged() const override;
 
     // Blocks free right now, and the pool total. Under the contiguous arena both
     // are 0.
-    int kv_free_blocks() const;
-    int kv_total_blocks() const;
+    int kv_free_blocks() const override;
+    int kv_total_blocks() const override;
 
     // Blocks a sequence of `tokens` logical positions needs in total. This is
     // the unit admission has to reason in: a request's cost is set by the blocks
     // its context will span, not by the single slot it occupies.
-    int kv_blocks_for_tokens(int tokens) const;
+    int kv_blocks_for_tokens(int tokens) const override;
 
     // Batch prefill: process multiple requests in their prefill phase.
     // Each request may have a different prompt length, and requests are still
@@ -386,23 +316,23 @@ public:
     // call; 0 runs every prompt to completion as before. With a budget, a row
     // whose prompt is unfinished is reported through `result.incomplete` and its
     // logits must not be sampled. Call again with the same requests to continue.
-    QwenBatchPrefillResult batch_prefill(
-        const std::vector<QwenBatchedRequest*>& requests,
-        int token_budget = 0);
+    BatchPrefillResult batch_prefill(
+        const std::vector<BatchedRequest*>& requests,
+        int token_budget) override;
 
     // Batch decode step: process one decode step for all active requests
     // Every request advances one token in a single batched forward, so the
     // requests may sit at different positions; they must occupy distinct slots.
     // Returns next token for each request
-    QwenBatchDecodeResult batch_decode_step(
-        const std::vector<QwenBatchedRequest*>& requests);
+    BatchDecodeResult batch_decode_step(
+        const std::vector<BatchedRequest*>& requests) override;
 
     // One batched decode step over raw tokens and the slots they belong to.
     // batch_decode_step is the request-oriented wrapper around this; tests and
     // the TP worker loop use this form because they carry no request objects.
     // Does not announce anything to the TP workers: callers on rank 0 drive that
     // themselves so a batch is announced exactly once.
-    std::vector<QwenForwardResult> batch_decode_tokens(
+    std::vector<ForwardResult> batch_decode_tokens(
         const std::vector<int>& tokens, const std::vector<int>& slot_ids);
 
     // Check if batched API is supported (depends on build config)
@@ -444,12 +374,12 @@ private:
     // Shared body behind prefill() and prefill_partial(). `max_tokens` of 0
     // means unbounded, which is what makes the full-prompt path byte-for-byte
     // the same work it was before the bounded entry point existed.
-    QwenPartialPrefillResult prefill_bounded(const std::vector<int>& token_ids,
+    PartialPrefillResult prefill_bounded(const std::vector<int>& token_ids,
                                              int slot_id, int max_tokens);
 
     // Whether `token` ends generation under these params: the request's own
     // stop_token_ids when set, otherwise the checkpoint's eos ids.
-    bool is_stop_token(const QwenBatchSamplingParams& sampling, int token) const;
+    bool is_stop_token(const BatchSamplingParams& sampling, int token) const;
 
     std::string ckpt_dir_;
     QwenEngineOptions options_;

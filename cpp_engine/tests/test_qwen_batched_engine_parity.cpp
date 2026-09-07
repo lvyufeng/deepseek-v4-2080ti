@@ -55,12 +55,12 @@ void test_batched_decode_parity(const std::string& dir,
         for (int i = 0; i < len; ++i) {
             tokens[static_cast<size_t>(i)] = (seq * 7 + i) % 64;
         }
-        const pocket::QwenForwardResult prefill = engine.prefill(tokens, slot);
+        const pocket::ForwardResult prefill = engine.prefill(tokens, slot);
         require(prefill.position == len, "prefill position accounting");
     }
 
     // Sequential baseline: decode one step per sequence independently
-    std::vector<pocket::QwenForwardResult> sequential_results(
+    std::vector<pocket::ForwardResult> sequential_results(
         static_cast<size_t>(num_seqs));
     std::vector<int> sequential_tokens(static_cast<size_t>(num_seqs));
     for (int seq = 0; seq < num_seqs; ++seq) {
@@ -89,7 +89,7 @@ void test_batched_decode_parity(const std::string& dir,
     for (int seq = 0; seq < num_seqs; ++seq) {
         batch_tokens[static_cast<size_t>(seq)] = (seq * 13 + 42) % 128;
     }
-    const std::vector<pocket::QwenForwardResult> batched_results =
+    const std::vector<pocket::ForwardResult> batched_results =
         engine.batch_decode_tokens(batch_tokens, slots);
 
     // Compare: every sequence's top_token, top_logit, and checksum must match
@@ -97,8 +97,8 @@ void test_batched_decode_parity(const std::string& dir,
            "batch result count mismatch");
     for (int seq = 0; seq < num_seqs; ++seq) {
         const size_t index = static_cast<size_t>(seq);
-        const pocket::QwenForwardResult& seq_result = sequential_results[index];
-        const pocket::QwenForwardResult& batch_result = batched_results[index];
+        const pocket::ForwardResult& seq_result = sequential_results[index];
+        const pocket::ForwardResult& batch_result = batched_results[index];
         const int slot = slots[index];
         const int pos = prompt_lens[index] + 1;
         const std::string label = "seq=" + std::to_string(seq) +

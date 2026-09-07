@@ -1,32 +1,32 @@
-#include "qwen_batch_scheduler.hpp"
-#include "qwen_engine.hpp"
+#include "batch_scheduler.hpp"
 #include "device_runtime.hpp"
-#include <iostream>
 #include <algorithm>
+#include <iostream>
+#include <stdexcept>
 
 namespace pocket {
 
-QwenBatchScheduler::QwenBatchScheduler(QwenEngine* engine, int max_batch_size)
+BatchScheduler::BatchScheduler(InferenceEngine* engine, int max_batch_size)
     : engine_(engine), max_batch_size_(max_batch_size) {
     if (!engine_) {
-        throw std::invalid_argument("QwenBatchScheduler: engine cannot be null");
+        throw std::invalid_argument("BatchScheduler: engine cannot be null");
     }
     if (max_batch_size_ <= 0) {
-        throw std::invalid_argument("QwenBatchScheduler: max_batch_size must be > 0");
+        throw std::invalid_argument("BatchScheduler: max_batch_size must be > 0");
     }
 
     // Allocate batch slots in the engine
     engine_->allocate_batch_slots(max_batch_size_);
 
     // Start scheduler thread
-    schedule_thread_ = std::thread(&QwenBatchScheduler::schedule_loop, this);
+    schedule_thread_ = std::thread(&BatchScheduler::schedule_loop, this);
 }
 
-QwenBatchScheduler::~QwenBatchScheduler() {
+BatchScheduler::~BatchScheduler() {
     stop();
 }
 
-void QwenBatchScheduler::stop() {
+void BatchScheduler::stop() {
     bool expected = true;
     if (!running_.compare_exchange_strong(expected, false)) {
         return;  // Already stopped
@@ -59,9 +59,9 @@ void QwenBatchScheduler::stop() {
     reserved_blocks_ = 0;
 }
 
-uint64_t QwenBatchScheduler::submit_request(
+uint64_t BatchScheduler::submit_request(
     const std::vector<int>& prompt_tokens,
-    const QwenBatchSamplingParams& sampling,
+    const BatchSamplingParams& sampling,
     std::function<void(const SchedulerGenerationResult&)> callback) {
 
     if (prompt_tokens.empty()) {
@@ -97,7 +97,7 @@ uint64_t QwenBatchScheduler::submit_request(
     return request_id;
 }
 
-bool QwenBatchScheduler::cancel_request(uint64_t request_id) {
+bool BatchScheduler::cancel_request(uint64_t request_id) {
     std::lock_guard<std::mutex> lock(queue_mutex_);
 
     // Check if request is waiting or running
@@ -115,7 +115,7 @@ bool QwenBatchScheduler::cancel_request(uint64_t request_id) {
     return true;
 }
 
-bool QwenBatchScheduler::poll_result(
+bool BatchScheduler::poll_result(
     uint64_t request_id, SchedulerGenerationResult* out, int timeout_ms) {
 
     if (!out) {
@@ -150,7 +150,7 @@ bool QwenBatchScheduler::poll_result(
     }
 }
 
-QwenBatchScheduler::Stats QwenBatchScheduler::get_stats() const {
+BatchScheduler::Stats BatchScheduler::get_stats() const {
     std::lock_guard<std::mutex> lock(queue_mutex_);
 
     Stats stats;
@@ -166,13 +166,13 @@ QwenBatchScheduler::Stats QwenBatchScheduler::get_stats() const {
     return stats;
 }
 
-void QwenBatchScheduler::schedule_loop() {
+void BatchScheduler::schedule_loop() {
     // The current device is per-thread, and the engine bound it on the thread
     // that constructed it.  This loop runs every forward pass from its own
     // thread, so it has to bind the same device before touching device memory.
-    if (!device_set(engine_->options().device)) {
-        std::cerr << "QwenBatchScheduler: failed to select device "
-                  << engine_->options().device
+    if (!device_set(engine_->device())) {
+        std::cerr << "BatchScheduler: failed to select device "
+                  << engine_->device()
                   << "; scheduler thread stopping" << std::endl;
         running_.store(false);
         return;
@@ -191,7 +191,7 @@ void QwenBatchScheduler::schedule_loop() {
             progressed |= run_decode_batch();
             handle_completions();
         } catch (const std::exception& e) {
-            std::cerr << "QwenBatchScheduler: exception in schedule loop: "
+            std::cerr << "BatchScheduler: exception in schedule loop: "
                      << e.what() << std::endl;
         }
 
@@ -209,7 +209,7 @@ void QwenBatchScheduler::schedule_loop() {
     }
 }
 
-int QwenBatchScheduler::worst_case_blocks(const SchedulerRequest& req) const {
+int BatchScheduler::worst_case_blocks(const SchedulerRequest& req) const {
     if (!engine_->kv_paged()) return 0;
     // Prompt plus every token the request is still allowed to generate. Charging
     // only the prompt would admit a request whose decode cannot be backed, and a
@@ -221,7 +221,7 @@ int QwenBatchScheduler::worst_case_blocks(const SchedulerRequest& req) const {
     return engine_->kv_blocks_for_tokens(max_context_tokens);
 }
 
-void QwenBatchScheduler::admit_requests() {
+void BatchScheduler::admit_requests() {
     std::lock_guard<std::mutex> lock(queue_mutex_);
 
     while (!waiting_queue_.empty() &&
@@ -277,8 +277,8 @@ void QwenBatchScheduler::admit_requests() {
     }
 }
 
-bool QwenBatchScheduler::run_prefill_batch() {
-    std::vector<QwenBatchedRequest*> prefill_batch;
+bool BatchScheduler::run_prefill_batch() {
+    std::vector<BatchedRequest*> prefill_batch;
     std::vector<SchedulerRequest*> prefill_requests;
 
     {
@@ -291,10 +291,10 @@ bool QwenBatchScheduler::run_prefill_batch() {
             }
 
             if (!req->prefill_complete) {
-                // Create QwenBatchedRequest wrapper. seq_len carries how far the
+                // Create BatchedRequest wrapper. seq_len carries how far the
                 // prompt already got so batch_prefill can charge only the new
                 // tokens to its token total.
-                auto* batch_req = new QwenBatchedRequest();
+                auto* batch_req = new BatchedRequest();
                 batch_req->request_id = req->request_id;
                 batch_req->prompt_tokens = req->prompt_tokens;
                 batch_req->slot_id = req->slot_id;
@@ -350,7 +350,7 @@ bool QwenBatchScheduler::run_prefill_batch() {
             }
         }
     } catch (const std::exception& e) {
-        std::cerr << "QwenBatchScheduler: prefill failed: " << e.what() << std::endl;
+        std::cerr << "BatchScheduler: prefill failed: " << e.what() << std::endl;
     }
 
     // Clean up temporary batch requests
@@ -361,8 +361,8 @@ bool QwenBatchScheduler::run_prefill_batch() {
     return true;
 }
 
-bool QwenBatchScheduler::run_decode_batch() {
-    std::vector<QwenBatchedRequest*> decode_batch;
+bool BatchScheduler::run_decode_batch() {
+    std::vector<BatchedRequest*> decode_batch;
     std::vector<SchedulerRequest*> decode_requests;
 
     {
@@ -379,8 +379,8 @@ bool QwenBatchScheduler::run_decode_batch() {
             // decoding there would append a generated token into the middle of
             // the prompt's own KV positions.
             if (req->prefill_complete && !req->finished) {
-                // Create QwenBatchedRequest wrapper
-                auto* batch_req = new QwenBatchedRequest();
+                // Create BatchedRequest wrapper
+                auto* batch_req = new BatchedRequest();
                 batch_req->request_id = req->request_id;
                 batch_req->slot_id = req->slot_id;
                 batch_req->seq_len = req->seq_len;
@@ -432,7 +432,7 @@ bool QwenBatchScheduler::run_decode_batch() {
             }
         }
     } catch (const std::exception& e) {
-        std::cerr << "QwenBatchScheduler: decode failed: " << e.what() << std::endl;
+        std::cerr << "BatchScheduler: decode failed: " << e.what() << std::endl;
     }
 
     // Clean up temporary batch requests
@@ -443,7 +443,7 @@ bool QwenBatchScheduler::run_decode_batch() {
     return true;
 }
 
-void QwenBatchScheduler::handle_completions() {
+void BatchScheduler::handle_completions() {
     std::vector<std::unique_ptr<SchedulerRequest>> completed;
     std::vector<bool> cancelled_completions;
 
@@ -517,7 +517,7 @@ void QwenBatchScheduler::handle_completions() {
     }
 }
 
-void QwenBatchScheduler::notify_result(SchedulerRequest* req) {
+void BatchScheduler::notify_result(SchedulerRequest* req) {
     if (!req || req->callback_invoked) {
         return;
     }
@@ -555,7 +555,7 @@ void QwenBatchScheduler::notify_result(SchedulerRequest* req) {
         try {
             req->callback(result);
         } catch (const std::exception& e) {
-            std::cerr << "QwenBatchScheduler: callback exception: " << e.what() << std::endl;
+            std::cerr << "BatchScheduler: callback exception: " << e.what() << std::endl;
         }
     }
 

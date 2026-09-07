@@ -206,13 +206,13 @@ int main(int argc, char** argv) {
         }
 
         // Deterministic, identical prompts across both arms.
-        std::vector<std::unique_ptr<pocket::QwenBatchedRequest>> owned;
-        std::vector<pocket::QwenBatchedRequest*> batch;
+        std::vector<std::unique_ptr<pocket::BatchedRequest>> owned;
+        std::vector<pocket::BatchedRequest*> batch;
         std::vector<std::vector<int>> generated;
         const int prompt_len = std::min(256, opts.max_context - 1);
         const int decode = opts.decode_steps;
         for (int i = 0; i < opts.batch_size; ++i) {
-            auto req = std::make_unique<pocket::QwenBatchedRequest>();
+            auto req = std::make_unique<pocket::BatchedRequest>();
             req->request_id = static_cast<uint64_t>(1000 + i);
             req->slot_id = engine.allocate_slot(req->request_id);
             if (req->slot_id < 0) {
@@ -238,7 +238,7 @@ int main(int argc, char** argv) {
         // Measure decode: aggregate wall-time, then per-request token streams.
         double decode_seconds = 0.0;
         for (int step = 0; step < decode; ++step) {
-            const pocket::QwenBatchDecodeResult dec = engine.batch_decode_step(batch);
+            const pocket::BatchDecodeResult dec = engine.batch_decode_step(batch);
             decode_seconds += dec.seconds;
             for (size_t i = 0; i < batch.size(); ++i) {
                 generated[i].push_back(dec.next_tokens[i]);

@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
                 target_checkpoint, options, 0,
                 static_cast<int>(tokens.size()) + draft_config.block_size + 1);
             target->warmup_tp();
-            const pocket::QwenForwardResult target_result =
+            const pocket::ForwardResult target_result =
                 target->debug_prefill_dflash2(
                     tokens, draft_config.target_layer_ids,
                     [&](const auto& tensor) {

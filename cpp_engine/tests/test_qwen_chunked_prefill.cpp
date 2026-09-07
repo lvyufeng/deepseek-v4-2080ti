@@ -56,8 +56,8 @@ void expect(bool ok, const std::string& what) {
 // Compares the sampled token plus checksum and top logit. The token alone would
 // miss a drift that has not yet moved the argmax; the checksum covers the whole
 // logit row, so it catches a difference anywhere in the vocabulary.
-void expect_same_result(const pocket::QwenForwardResult& chunked,
-                        const pocket::QwenForwardResult& whole,
+void expect_same_result(const pocket::ForwardResult& chunked,
+                        const pocket::ForwardResult& whole,
                         const std::string& label) {
     if (chunked.top_token != whole.top_token) {
         std::printf("  [FAIL] %s: token %d vs %d\n", label.c_str(),
@@ -169,11 +169,11 @@ int main(int argc, char** argv) {
                 engine_opts.prefill_chunk_tokens);
 
     if (opts.tp_world > 1) engine.worker_command_prefill(prompt, 1, 0);
-    const pocket::QwenForwardResult whole = engine.prefill(prompt, 1);
+    const pocket::ForwardResult whole = engine.prefill(prompt, 1);
 
     int steps = 0;
     int consumed = 0;
-    pocket::QwenPartialPrefillResult step;
+    pocket::PartialPrefillResult step;
     do {
         if (opts.tp_world > 1) {
             engine.worker_command_prefill(prompt, 0, budget);

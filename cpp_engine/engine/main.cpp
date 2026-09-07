@@ -343,7 +343,7 @@ void run_qwen_persistent_worker(pocket::QwenEngine& qwen,
         } else if (command == QwenPersistentCommand::Decode) {
             (void)qwen.decode_step(header[1]);
         } else if (command == QwenPersistentCommand::Generate) {
-            const std::vector<pocket::QwenForwardResult> outputs =
+            const std::vector<pocket::ForwardResult> outputs =
                 qwen.generate(payload, header[1]);
             std::cout << "qwen_persistent_worker_result=1 tp_rank="
                       << qwen.options().tp_rank << " tokens=";
@@ -680,9 +680,9 @@ int main(int argc, char** argv) {
                                     !qwen.options().dflash2_checkpoint.empty()) {
                                     qwen_send_command(*channel, QwenPersistentCommand::Generate,
                                                       max_new_tokens, 0, &ids);
-                                    const std::vector<pocket::QwenForwardResult> outputs =
+                                    const std::vector<pocket::ForwardResult> outputs =
                                         qwen.generate(ids, max_new_tokens);
-                                    for (const pocket::QwenForwardResult& output : outputs) {
+                                    for (const pocket::ForwardResult& output : outputs) {
                                         generated.push_back(output.top_token);
                                     }
                                 } else {
@@ -690,7 +690,7 @@ int main(int argc, char** argv) {
                                                       0, 0, &ids);
                                     const auto prefill_started =
                                         std::chrono::steady_clock::now();
-                                    pocket::QwenForwardResult next = qwen.prefill(ids);
+                                    pocket::ForwardResult next = qwen.prefill(ids);
                                     plain_prefill_seconds = std::chrono::duration<double>(
                                         std::chrono::steady_clock::now() - prefill_started).count();
                                     generated.push_back(next.top_token);
@@ -774,7 +774,7 @@ int main(int argc, char** argv) {
                         using Clock = std::chrono::steady_clock;
                         const auto t_total0 = Clock::now();
                         const auto t_prefill0 = Clock::now();
-                        std::vector<pocket::QwenForwardResult> generated;
+                        std::vector<pocket::ForwardResult> generated;
                         generated.reserve(static_cast<size_t>(args.max_new_tokens));
                         pocket::QwenPrefixCacheStats prefix_stats;
                         Clock::time_point t_prefill1;
@@ -788,7 +788,7 @@ int main(int argc, char** argv) {
                                 std::chrono::duration<double>(qwen.mtp_stats().prefill_seconds));
                             t_decode0 = t_prefill1;
                         } else {
-                            pocket::QwenForwardResult next = qwen.prefill(prompt_ids);
+                            pocket::ForwardResult next = qwen.prefill(prompt_ids);
                             prefix_stats = qwen.prefix_cache_stats();
                             t_prefill1 = Clock::now();
                             t_decode0 = t_prefill1;
@@ -924,7 +924,7 @@ int main(int argc, char** argv) {
                                          process_started).count()
                                   << "\n";
                     } else {
-                        pocket::QwenForwardResult result = qwen.prefill(prompt_ids);
+                        pocket::ForwardResult result = qwen.prefill(prompt_ids);
                         qwen_telemetry = qwen.runtime_telemetry();
                         std::cout << "smoke_forward=1 qwen_runtime=1 token=" << prompt_ids.back()
                                   << " layers=" << result.layers

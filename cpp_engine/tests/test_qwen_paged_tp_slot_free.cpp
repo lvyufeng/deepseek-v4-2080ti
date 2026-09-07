@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
         // point: the sequence stays inside one 16-token block, so the working
         // set is one block and the pool floor is what dominates.
         const std::vector<int> prompt = {1, 2};
-        pocket::QwenBatchSamplingParams sampling;
+        pocket::BatchSamplingParams sampling;
         sampling.max_new_tokens = kCycles;  // never the stopping bound
         sampling.ignore_eos = true;
 
@@ -197,14 +197,14 @@ int main(int argc, char** argv) {
                 return 1;
             }
 
-            auto req = std::make_unique<pocket::QwenBatchedRequest>();
+            auto req = std::make_unique<pocket::BatchedRequest>();
             req->request_id = request_id;
             req->prompt_tokens = prompt;
             req->slot_id = slot;
             req->sampling = sampling;
-            std::vector<pocket::QwenBatchedRequest*> batch{req.get()};
+            std::vector<pocket::BatchedRequest*> batch{req.get()};
 
-            const pocket::QwenBatchPrefillResult prefilled =
+            const pocket::BatchPrefillResult prefilled =
                 engine.batch_prefill(batch, 0);
             if (prefilled.results.empty()) {
                 expect(false, "prefill returned no result");

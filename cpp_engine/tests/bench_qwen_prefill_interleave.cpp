@@ -14,7 +14,7 @@
 // Usage: ./bench_qwen_prefill_interleave <checkpoint_dir> [--long N] [--budget N]
 //                                        [--layers N] [--tp-world N] [--tp-rank N]
 //                                        [--device N] [--nccl-id PATH]
-#include "qwen_batch_scheduler.hpp"
+#include "batch_scheduler.hpp"
 #include "qwen_engine.hpp"
 
 #include <atomic>
@@ -47,10 +47,10 @@ struct Trial {
 // each got its first token.
 Trial run_trial(pocket::QwenEngine& engine, int budget, int long_len,
                 int short_len, int max_new) {
-    pocket::QwenBatchScheduler scheduler(&engine, 4);
+    pocket::BatchScheduler scheduler(&engine, 4);
     scheduler.set_prefill_token_budget(budget);
 
-    pocket::QwenBatchSamplingParams sampling;
+    pocket::BatchSamplingParams sampling;
     sampling.temperature = 0.0f;  // greedy
     sampling.max_new_tokens = max_new;
 

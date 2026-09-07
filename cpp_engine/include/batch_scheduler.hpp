@@ -1,6 +1,6 @@
 #pragma once
 
-#include "qwen_engine.hpp"
+#include "inference_engine.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -33,7 +33,7 @@ struct SchedulerGenerationResult {
 struct SchedulerRequest {
     uint64_t request_id = 0;
     std::vector<int> prompt_tokens;
-    QwenBatchSamplingParams sampling;
+    BatchSamplingParams sampling;
     int slot_id = -1;
     int seq_len = 0;  // Tokens processed (prompt + generated)
     // Prompt tokens prefilled so far. Chunked prefill advances this a bounded
@@ -62,7 +62,7 @@ struct SchedulerRequest {
     bool callback_invoked = false;
 };
 
-// Continuous batching scheduler for QwenEngine
+// Continuous batching scheduler over any InferenceEngine.
 //
 // This scheduler runs a background thread that:
 // 1. Admits waiting requests when slots are available
@@ -72,21 +72,21 @@ struct SchedulerRequest {
 // 5. Handles completions and frees slots
 //
 // Thread-safe: submit_request/cancel_request can be called concurrently
-class QwenBatchScheduler {
+class BatchScheduler {
 public:
-    explicit QwenBatchScheduler(QwenEngine* engine, int max_batch_size);
-    ~QwenBatchScheduler();
+    BatchScheduler(InferenceEngine* engine, int max_batch_size);
+    ~BatchScheduler();
 
     // No copy/move
-    QwenBatchScheduler(const QwenBatchScheduler&) = delete;
-    QwenBatchScheduler& operator=(const QwenBatchScheduler&) = delete;
+    BatchScheduler(const BatchScheduler&) = delete;
+    BatchScheduler& operator=(const BatchScheduler&) = delete;
 
     // Submit a new generation request
     // Returns request_id (> 0) on success, 0 on failure
     // The callback will be invoked from the scheduler thread when generation completes
     uint64_t submit_request(
         const std::vector<int>& prompt_tokens,
-        const QwenBatchSamplingParams& sampling,
+        const BatchSamplingParams& sampling,
         std::function<void(const SchedulerGenerationResult&)> callback = nullptr);
 
     // Cancel a pending or running request
@@ -154,7 +154,7 @@ private:
     void notify_result(SchedulerRequest* req);
 
     // Internal state
-    QwenEngine* engine_;
+    InferenceEngine* engine_;
     int max_batch_size_;
     // Default 4096: the largest chunk that still measured full prefill
     // throughput on TP4 27B, so interleaving costs nothing on the prefill side.
