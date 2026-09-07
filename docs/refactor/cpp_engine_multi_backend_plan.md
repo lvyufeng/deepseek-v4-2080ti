@@ -21,7 +21,7 @@ Three measured facts make the refactor tractable:
    boundary.
 2. **The kernel headers are already vendor-neutral.** `cuda_ops.hpp` and `qwen_cuda_ops.hpp` include
    only `<cstddef>` / `<cstdint>`, and 91 of 93 declarations take `void* stream`. Only
-   `qwen_sampler.hpp` leaks CUDA types.
+   `sampler_ops.hpp` leaks CUDA types.
 3. **Device memory is already funnelled.** In `deepseek_v4_engine.cpp`, 892 of ~934 CUDA call sites go
    through the `check_cuda(...)` wrapper; only 42 raw `cudaMalloc` sites bypass it.
 
@@ -106,7 +106,7 @@ Each phase ends in a buildable, testable state.
 
 ### Phase 0 — Neutralize leaks (no behavior change)
 
-- Remove the CUDA leak from `qwen_sampler.hpp`: `#include <cuda_runtime.h>` + 5x `cudaStream_t`
+- Remove the CUDA leak from `sampler_ops.hpp`: `#include <cuda_runtime.h>` + 5x `cudaStream_t`
   become `void* stream`, matching the other 91 declarations.
 - Rename `*_cuda` operator symbols to vendor-neutral names, keeping thin deprecated aliases so no
   call site breaks in this phase.

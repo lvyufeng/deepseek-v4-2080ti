@@ -1,43 +1,43 @@
-#include "qwen_block_table.hpp"
+#include "block_table.hpp"
 
 #include <stdexcept>
 #include <string>
 
 namespace pocket {
 
-QwenBlockTable::QwenBlockTable(QwenBlockPool* pool, int max_slots,
+BlockTable::BlockTable(BlockPool* pool, int max_slots,
                               int max_context)
     : pool_(pool), max_slots_(max_slots), max_context_(max_context) {
     if (pool_ == nullptr) {
-        throw std::runtime_error("QwenBlockTable: pool must not be null");
+        throw std::runtime_error("BlockTable: pool must not be null");
     }
     if (max_slots <= 0) {
         throw std::runtime_error(
-            "QwenBlockTable: max_slots must be >= 1, got " +
+            "BlockTable: max_slots must be >= 1, got " +
             std::to_string(max_slots));
     }
     if (max_context <= 0) {
         throw std::runtime_error(
-            "QwenBlockTable: max_context must be >= 1, got " +
+            "BlockTable: max_context must be >= 1, got " +
             std::to_string(max_context));
     }
     max_blocks_per_seq_ = pool_->blocks_for_tokens(max_context);
     rows_.assign(static_cast<size_t>(max_slots), {});
     image_.assign(static_cast<size_t>(max_slots) *
                       static_cast<size_t>(max_blocks_per_seq_),
-                  QwenBlockPool::kInvalidBlock);
+                  BlockPool::kInvalidBlock);
 }
 
-bool QwenBlockTable::ensure_capacity(int slot, int tokens) {
+bool BlockTable::ensure_capacity(int slot, int tokens) {
     validate_slot(slot);
     if (tokens < 0) {
         throw std::runtime_error(
-            "QwenBlockTable::ensure_capacity: tokens must be >= 0, got " +
+            "BlockTable::ensure_capacity: tokens must be >= 0, got " +
             std::to_string(tokens));
     }
     if (tokens > max_context_) {
         throw std::runtime_error(
-            "QwenBlockTable::ensure_capacity: " + std::to_string(tokens) +
+            "BlockTable::ensure_capacity: " + std::to_string(tokens) +
             " tokens exceeds max_context " + std::to_string(max_context_));
     }
     std::vector<int>& row = rows_[static_cast<size_t>(slot)];
@@ -55,7 +55,7 @@ bool QwenBlockTable::ensure_capacity(int slot, int tokens) {
     return true;
 }
 
-void QwenBlockTable::release(int slot) {
+void BlockTable::release(int slot) {
     validate_slot(slot);
     std::vector<int>& row = rows_[static_cast<size_t>(slot)];
     if (row.empty()) return;
@@ -64,16 +64,16 @@ void QwenBlockTable::release(int slot) {
     dirty_ = true;
 }
 
-void QwenBlockTable::release_all() {
+void BlockTable::release_all() {
     for (int slot = 0; slot < max_slots_; ++slot) release(slot);
 }
 
-size_t QwenBlockTable::element_offset(int slot, int position,
+size_t BlockTable::element_offset(int slot, int position,
                                      size_t kv_stride) const {
     validate_slot(slot);
     if (position < 0) {
         throw std::runtime_error(
-            "QwenBlockTable::element_offset: negative position " +
+            "BlockTable::element_offset: negative position " +
             std::to_string(position));
     }
     const int block_size = pool_->block_size();
@@ -82,7 +82,7 @@ size_t QwenBlockTable::element_offset(int slot, int position,
     const std::vector<int>& row = rows_[static_cast<size_t>(slot)];
     if (index >= row.size()) {
         throw std::runtime_error(
-            "QwenBlockTable::element_offset: position " +
+            "BlockTable::element_offset: position " +
             std::to_string(position) + " is not backed for slot " +
             std::to_string(slot));
     }
@@ -93,20 +93,20 @@ size_t QwenBlockTable::element_offset(int slot, int position,
             within) * kv_stride;
 }
 
-const std::vector<int>& QwenBlockTable::row(int slot) const {
+const std::vector<int>& BlockTable::row(int slot) const {
     validate_slot(slot);
     return rows_[static_cast<size_t>(slot)];
 }
 
-int QwenBlockTable::capacity_tokens(int slot) const {
+int BlockTable::capacity_tokens(int slot) const {
     validate_slot(slot);
     return static_cast<int>(rows_[static_cast<size_t>(slot)].size()) *
            pool_->block_size();
 }
 
-const std::vector<int32_t>& QwenBlockTable::device_image() {
+const std::vector<int32_t>& BlockTable::device_image() {
     if (!dirty_) return image_;
-    image_.assign(image_.size(), QwenBlockPool::kInvalidBlock);
+    image_.assign(image_.size(), BlockPool::kInvalidBlock);
     for (int slot = 0; slot < max_slots_; ++slot) {
         const std::vector<int>& row = rows_[static_cast<size_t>(slot)];
         const size_t base = static_cast<size_t>(slot) *
@@ -119,10 +119,10 @@ const std::vector<int32_t>& QwenBlockTable::device_image() {
     return image_;
 }
 
-void QwenBlockTable::validate_slot(int slot) const {
+void BlockTable::validate_slot(int slot) const {
     if (slot < 0 || slot >= max_slots_) {
         throw std::runtime_error(
-            "QwenBlockTable: slot " + std::to_string(slot) +
+            "BlockTable: slot " + std::to_string(slot) +
             " out of range [0, " + std::to_string(max_slots_) + ")");
     }
 }

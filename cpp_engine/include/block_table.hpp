@@ -1,6 +1,6 @@
 #pragma once
 
-#include "qwen_block_pool.hpp"
+#include "block_pool.hpp"
 
 #include <cstdint>
 #include <vector>
@@ -19,9 +19,9 @@ namespace pocket {
 // the same rows, which is what the kernels index. It is kept as host memory here
 // and uploaded by the engine, so this class stays free of device calls and can
 // be tested without a GPU.
-class QwenBlockTable {
+class BlockTable {
 public:
-    QwenBlockTable(QwenBlockPool* pool, int max_slots, int max_context);
+    BlockTable(BlockPool* pool, int max_slots, int max_context);
 
     // Ensures `slot` is backed to at least `tokens` logical positions, taking
     // blocks from the pool as needed. Returns false without changing anything
@@ -61,7 +61,7 @@ public:
 private:
     void validate_slot(int slot) const;
 
-    QwenBlockPool* pool_;
+    BlockPool* pool_;
     int max_slots_;
     int max_context_;
     int max_blocks_per_seq_;

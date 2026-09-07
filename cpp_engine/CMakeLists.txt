@@ -39,8 +39,8 @@ set(POCKET_CORE_SOURCES
     core/weight_source.cpp
     core/model_config.cpp
     core/qwen_config.cpp
-    core/qwen_block_pool.cpp
-    core/qwen_block_table.cpp
+    core/block_pool.cpp
+    core/block_table.cpp
     core/qwen_weight_map.cpp
     core/tokenizer.cpp
     core/tensor.cpp
@@ -143,7 +143,7 @@ if(POCKET_BACKEND STREQUAL "cuda")
         backends/cuda/kernels/qwen_int8_per_token_head_ops.cu
         backends/cuda/kernels/qwen_dspark_ops.cu
         backends/cuda/kernels/qwen_dflash2_ops.cu
-        backends/cuda/kernels/qwen_sampler.cu
+        backends/cuda/kernels/sampler_ops.cu
         backends/cuda/kernels/q2_ops.cu
         backends/cuda/kernels/iq1_ops.cu
         backends/cuda/kernels/rmsnorm_rope.cu
@@ -680,9 +680,9 @@ add_executable(test_qwen_dflash2_ops tests/test_qwen_dflash2_ops.cpp)
 target_link_libraries(test_qwen_dflash2_ops PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_dflash2_ops PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
-add_executable(test_qwen_sampler tests/test_qwen_sampler.cpp)
-target_link_libraries(test_qwen_sampler PRIVATE pocket_cpp_core)
-set_target_properties(test_qwen_sampler PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+add_executable(test_sampler_ops tests/test_sampler_ops.cpp)
+target_link_libraries(test_sampler_ops PRIVATE pocket_cpp_core)
+set_target_properties(test_sampler_ops PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_fp8_online tests/test_qwen_fp8_online.cpp)
 target_link_libraries(test_qwen_fp8_online PRIVATE pocket_cpp_core)
@@ -732,9 +732,9 @@ add_executable(test_qwen_eos_stop tests/test_qwen_eos_stop.cpp)
 target_link_libraries(test_qwen_eos_stop PRIVATE pocket_cpp_core)
 set_target_properties(test_qwen_eos_stop PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
-add_executable(test_qwen_block_pool tests/test_qwen_block_pool.cpp)
-target_link_libraries(test_qwen_block_pool PRIVATE pocket_cpp_core)
-set_target_properties(test_qwen_block_pool PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+add_executable(test_block_pool tests/test_block_pool.cpp)
+target_link_libraries(test_block_pool PRIVATE pocket_cpp_core)
+set_target_properties(test_block_pool PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(test_qwen_paged_kv_kernels tests/test_qwen_paged_kv_kernels.cpp)
 target_link_libraries(test_qwen_paged_kv_kernels PRIVATE pocket_cpp_core)

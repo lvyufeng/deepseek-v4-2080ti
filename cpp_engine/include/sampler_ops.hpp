@@ -6,12 +6,12 @@ namespace pocket {
 
 // Opaque per-row RNG state. The concrete type is backend-private (curandState on
 // CUDA), so callers only ever handle it as a byte buffer sized by
-// `qwen_sampler_rng_state_size()`. Keeping it opaque is what lets this header
+// `sampler_rng_state_size()`. Keeping it opaque is what lets this header
 // stay free of vendor SDK includes.
 struct DeviceRngState;
 
 // Byte size of one `DeviceRngState`, for allocating an [rows] array.
-size_t qwen_sampler_rng_state_size();
+size_t sampler_rng_state_size();
 
 // Device top-k -> temperature -> top-p sampling over FP32 logit rows.
 //
@@ -36,7 +36,7 @@ size_t qwen_sampler_rng_state_size();
 // TP note: with vocab sharding each rank sees only its own shard, so the
 // caller must still reduce across ranks to pick one global token. Passing a
 // shared `uniforms` row makes that reduction agree on every rank.
-bool qwen_sample_top_k_top_p_rows(
+bool sample_top_k_top_p_rows(
     const float* logits,
     int* out_tokens,
     float* out_logits,
@@ -53,7 +53,7 @@ bool qwen_sample_top_k_top_p_rows(
 // TP stage 1: reduce each sharded row to its local top-k, emitted as global ids
 // into [rows, top_k] buffers so NCCL can merge candidates across ranks. Short
 // rows are padded with token -1 and logit -inf.
-bool qwen_local_topk_candidates(
+bool local_topk_candidates(
     const float* logits,
     int* out_tokens,
     float* out_logits,
@@ -67,7 +67,7 @@ bool qwen_local_topk_candidates(
 // Input layout is world-major [world, rows, top_k], matching ncclAllGather;
 // output layout is row-major [rows, top_k]. Ordering is descending logit with
 // ascending global token id as the deterministic tie-break.
-bool qwen_merge_topk_candidates(
+bool merge_topk_candidates(
     const int* gathered_tokens,
     const float* gathered_logits,
     int* out_tokens,
@@ -80,7 +80,7 @@ bool qwen_merge_topk_candidates(
 // TP stage 2: sample from candidates already merged across ranks. `cand_tokens`
 // are global ids, so no vocab_start offset is applied. Pass the same `uniforms`
 // on every rank to make all ranks commit the same token.
-bool qwen_sample_from_candidates(
+bool sample_from_candidates(
     const int* cand_tokens,
     const float* cand_logits,
     int* out_tokens,
@@ -95,10 +95,10 @@ bool qwen_sample_from_candidates(
     void* stream = nullptr);
 
 // Largest supported top_k; callers must not request more.
-int qwen_sampler_max_top_k();
+int sampler_max_top_k();
 
 // Initialize one generator per row. Seed identically across TP ranks.
-bool qwen_init_rng_states(
+bool init_rng_states(
     DeviceRngState* states,
     int count,
     unsigned long long seed,

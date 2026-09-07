@@ -1,4 +1,4 @@
-#include "qwen_sampler.hpp"
+#include "sampler_ops.hpp"
 
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
@@ -300,9 +300,9 @@ __global__ void init_curand_kernel(curandState* states, int count,
 
 }  // namespace
 
-size_t qwen_sampler_rng_state_size() { return sizeof(curandState); }
+size_t sampler_rng_state_size() { return sizeof(curandState); }
 
-bool qwen_init_rng_states(DeviceRngState* states, int count,
+bool init_rng_states(DeviceRngState* states, int count,
                           unsigned long long seed, void* stream) {
     if (states == nullptr || count <= 0) return false;
     const int threads = 256;
@@ -312,7 +312,7 @@ bool qwen_init_rng_states(DeviceRngState* states, int count,
     return cudaGetLastError() == cudaSuccess;
 }
 
-bool qwen_sample_top_k_top_p_rows(
+bool sample_top_k_top_p_rows(
     const float* logits, int* out_tokens, float* out_logits, int rows,
     int vocab, int vocab_start, float temperature, float top_p, int top_k,
     DeviceRngState* rng_states, const float* uniforms, void* stream) {
@@ -328,7 +328,7 @@ bool qwen_sample_top_k_top_p_rows(
     return cudaGetLastError() == cudaSuccess;
 }
 
-bool qwen_local_topk_candidates(
+bool local_topk_candidates(
     const float* logits, int* out_tokens, float* out_logits, int rows,
     int vocab, int vocab_start, int top_k, void* stream) {
     if (logits == nullptr || out_tokens == nullptr || out_logits == nullptr) {
@@ -343,7 +343,7 @@ bool qwen_local_topk_candidates(
     return cudaGetLastError() == cudaSuccess;
 }
 
-bool qwen_merge_topk_candidates(
+bool merge_topk_candidates(
     const int* gathered_tokens, const float* gathered_logits,
     int* out_tokens, float* out_logits, int world, int rows, int top_k,
     void* stream) {
@@ -361,7 +361,7 @@ bool qwen_merge_topk_candidates(
     return cudaGetLastError() == cudaSuccess;
 }
 
-bool qwen_sample_from_candidates(
+bool sample_from_candidates(
     const int* cand_tokens, const float* cand_logits, int* out_tokens,
     float* out_logits, int rows, int cand_stride, float temperature,
     float top_p, int top_k, DeviceRngState* rng_states, const float* uniforms,
@@ -380,6 +380,6 @@ bool qwen_sample_from_candidates(
     return cudaGetLastError() == cudaSuccess;
 }
 
-int qwen_sampler_max_top_k() { return kMaxTopK; }
+int sampler_max_top_k() { return kMaxTopK; }
 
 }  // namespace pocket

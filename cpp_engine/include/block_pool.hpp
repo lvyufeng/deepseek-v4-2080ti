@@ -21,13 +21,13 @@ namespace pocket {
 // Blocks are refcounted even though nothing shares them yet: prefix sharing
 // across sequences needs exactly this counter, and retrofitting it later would
 // mean revisiting every free site.
-class QwenBlockPool {
+class BlockPool {
 public:
     static constexpr int kInvalidBlock = -1;
 
     // `block_size` is tokens per block; `num_blocks` is the pool extent. Both
     // must be positive.
-    QwenBlockPool(int num_blocks, int block_size);
+    BlockPool(int num_blocks, int block_size);
 
     // Takes `count` blocks, or returns empty when the pool cannot satisfy the
     // whole request. Partial allocation is deliberately not offered: a sequence
