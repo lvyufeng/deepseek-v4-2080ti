@@ -61,8 +61,8 @@ std::vector<int> prompt_for(int seq, int length) {
     return tokens;
 }
 
-void compare(const pocket::QwenForwardResult& contiguous,
-             const pocket::QwenForwardResult& paged, const std::string& label) {
+void compare(const pocket::ForwardResult& contiguous,
+             const pocket::ForwardResult& paged, const std::string& label) {
     require(contiguous.top_token == paged.top_token,
             label + " top_token mismatch: contiguous " +
                 std::to_string(contiguous.top_token) + " vs paged " +
@@ -152,9 +152,9 @@ void test_batched_decode_parity(const std::string& dir) {
         for (size_t seq = 0; seq < slots.size(); ++seq) {
             tokens[seq] = (static_cast<int>(seq) * 13 + step * 7 + 42) % 64;
         }
-        const std::vector<pocket::QwenForwardResult> reference =
+        const std::vector<pocket::ForwardResult> reference =
             contiguous.batch_decode_tokens(tokens, slots);
-        const std::vector<pocket::QwenForwardResult> actual =
+        const std::vector<pocket::ForwardResult> actual =
             paged.batch_decode_tokens(tokens, slots);
         require(reference.size() == actual.size(),
                 "batch result count mismatch");
@@ -191,7 +191,7 @@ void test_block_reuse(const std::string& dir) {
     const int slot_a = engine.allocate_slot(1001);
     require(slot_a >= 0, "could not acquire first slot");
     const std::vector<int> long_prompt = prompt_for(0, 6000);
-    const pocket::QwenForwardResult first = engine.prefill(long_prompt, slot_a);
+    const pocket::ForwardResult first = engine.prefill(long_prompt, slot_a);
     require(first.position == 6000, "first prefill position");
     engine.free_slot(1001);
 
@@ -199,7 +199,7 @@ void test_block_reuse(const std::string& dir) {
     // this throws, since 6000 more tokens do not fit alongside the first.
     const int slot_b = engine.allocate_slot(1002);
     require(slot_b >= 0, "could not acquire second slot");
-    const pocket::QwenForwardResult second = engine.prefill(long_prompt, slot_b);
+    const pocket::ForwardResult second = engine.prefill(long_prompt, slot_b);
     require(second.position == 6000, "second prefill position");
     // Same prompt, same weights, different slot: the result must not depend on
     // which physical blocks happened to back it.

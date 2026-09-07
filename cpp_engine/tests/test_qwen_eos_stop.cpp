@@ -7,7 +7,7 @@
 // that directly caps concurrency.
 //
 // The model will not emit EOS on cue, so these checks drive the stop through
-// QwenBatchSamplingParams::stop_token_ids: run once unrestricted, note a token
+// BatchSamplingParams::stop_token_ids: run once unrestricted, note a token
 // the model actually produces at a known step, then re-run with that token as
 // the stop and require generation to end exactly there. That tests the stop
 // machinery, which is what changed; it does not depend on the checkpoint's own
@@ -67,16 +67,16 @@ struct RunOutcome {
 // that state instead of starting clean.
 RunOutcome run_request(pocket::QwenEngine& engine, const std::vector<int>& prompt,
                        int slot_id,
-                       const pocket::QwenBatchSamplingParams& sampling) {
+                       const pocket::BatchSamplingParams& sampling) {
     RunOutcome out;
-    auto req = std::make_unique<pocket::QwenBatchedRequest>();
+    auto req = std::make_unique<pocket::BatchedRequest>();
     req->request_id = static_cast<uint64_t>(slot_id) + 1;
     req->prompt_tokens = prompt;
     req->slot_id = slot_id;
     req->sampling = sampling;
 
-    std::vector<pocket::QwenBatchedRequest*> batch{req.get()};
-    const pocket::QwenBatchPrefillResult prefilled = engine.batch_prefill(batch, 0);
+    std::vector<pocket::BatchedRequest*> batch{req.get()};
+    const pocket::BatchPrefillResult prefilled = engine.batch_prefill(batch, 0);
     out.tokens.push_back(prefilled.results[0].top_token);
 
     // batch_prefill marks the request finished when the prompt's first predicted
@@ -90,7 +90,7 @@ RunOutcome run_request(pocket::QwenEngine& engine, const std::vector<int>& promp
     while (static_cast<int>(out.tokens.size()) < sampling.max_new_tokens) {
         // batch_decode_step and batch_prefill announce their own collectives to
         // the workers, so this loop is the same at TP1 and TP4.
-        const pocket::QwenBatchDecodeResult step = engine.batch_decode_step(batch);
+        const pocket::BatchDecodeResult step = engine.batch_decode_step(batch);
         out.tokens.push_back(step.next_tokens[0]);
         if (step.hit_stop_token[0]) out.stop_flag_seen = true;
         if (step.finished[0]) {
@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
 
     // Baseline: ignore_eos, so this must produce exactly max_new_tokens and
     // gives the reference token sequence.
-    pocket::QwenBatchSamplingParams baseline_params;
+    pocket::BatchSamplingParams baseline_params;
     baseline_params.max_new_tokens = kMaxNewTokens;
     baseline_params.ignore_eos = true;
     const RunOutcome baseline = run_request(engine, prompt, 0, baseline_params);
@@ -205,7 +205,7 @@ int main(int argc, char** argv) {
     std::printf("\nstop token %d, expected at output index %d\n", stop_token,
                 kStopIndex);
 
-    pocket::QwenBatchSamplingParams stop_params;
+    pocket::BatchSamplingParams stop_params;
     stop_params.max_new_tokens = kMaxNewTokens;
     stop_params.stop_token_ids = {stop_token};
     const RunOutcome stopped = run_request(engine, prompt, 1, stop_params);
@@ -227,7 +227,7 @@ int main(int argc, char** argv) {
 
     // A stop id the model does not produce must not shorten anything: this
     // catches a stop check that fires on the wrong comparison.
-    pocket::QwenBatchSamplingParams absent_params;
+    pocket::BatchSamplingParams absent_params;
     absent_params.max_new_tokens = kMaxNewTokens;
     absent_params.stop_token_ids = {-424242};
     const RunOutcome absent = run_request(engine, prompt, 2, absent_params);

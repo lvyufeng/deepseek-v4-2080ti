@@ -254,8 +254,8 @@ void require(bool condition, const std::string& message) {
 }
 
 void require_same_generation(
-    const std::vector<pocket::QwenForwardResult>& actual,
-    const std::vector<pocket::QwenForwardResult>& expected,
+    const std::vector<pocket::ForwardResult>& actual,
+    const std::vector<pocket::ForwardResult>& expected,
     const std::string& label) {
     require(actual.size() == expected.size(), label + " output count");
     for (size_t index = 0; index < actual.size(); ++index) {
@@ -277,7 +277,7 @@ void require_same_mtp_decisions(const pocket::QwenMtpStats& actual,
             label + " MTP decision parity");
 }
 
-std::vector<pocket::QwenForwardResult> require_cached_mtp_matches_cold(
+std::vector<pocket::ForwardResult> require_cached_mtp_matches_cold(
     const std::string& dir, pocket::QwenEngine& cached,
     const pocket::QwenEngineOptions& cached_options,
     const std::vector<int>& prompt, int max_new_tokens,
@@ -313,7 +313,7 @@ void exercise_prefix_cache(const std::string& dir,
     options.max_state_snapshots = 8;
     pocket::QwenEngine engine(dir, options, 2, 8);
 
-    const pocket::QwenForwardResult baseline = engine.prefill({1, 2, 3});
+    const pocket::ForwardResult baseline = engine.prefill({1, 2, 3});
     const pocket::QwenPrefixCacheStats first = engine.prefix_cache_stats();
     require(first.reused_tokens == 0 && first.computed_tokens == 3,
             "initial prefix cache accounting");
@@ -324,7 +324,7 @@ void exercise_prefix_cache(const std::string& dir,
                 appended.computed_tokens == 2,
             "appended prompt must reuse live recurrent state");
 
-    const pocket::QwenForwardResult shortened_result = engine.prefill({1, 2, 3});
+    const pocket::ForwardResult shortened_result = engine.prefill({1, 2, 3});
     const pocket::QwenPrefixCacheStats shortened = engine.prefix_cache_stats();
     require(shortened.resume_source == "snapshot" &&
                 shortened.reused_tokens == 3 && shortened.computed_tokens == 0,
@@ -334,14 +334,14 @@ void exercise_prefix_cache(const std::string& dir,
                 shortened_result.checksum == baseline.checksum,
             "snapshot result must match cold prefill");
 
-    const pocket::QwenForwardResult branched_result = engine.prefill({1, 2, 9});
+    const pocket::ForwardResult branched_result = engine.prefill({1, 2, 9});
     const pocket::QwenPrefixCacheStats branched = engine.prefix_cache_stats();
     require(branched.resume_source == "snapshot" && branched.reused_tokens == 2 &&
                 branched.computed_tokens == 1,
             "branched prompt must resume from interior snapshot");
 
     pocket::QwenEngine cold_engine(dir, options, 2, 8);
-    const pocket::QwenForwardResult cold_branch = cold_engine.prefill({1, 2, 9});
+    const pocket::ForwardResult cold_branch = cold_engine.prefill({1, 2, 9});
     require(branched_result.top_token == cold_branch.top_token &&
                 branched_result.top_logit == cold_branch.top_logit &&
                 branched_result.checksum == cold_branch.checksum,
@@ -376,10 +376,10 @@ void exercise_prefix_cache(const std::string& dir,
     wide_options.prefill_chunk_tokens = 8;
     wide_options.state_snapshot_interval_tokens = 4;
     pocket::QwenEngine wide(dir, wide_options, 2, 8);
-    const pocket::QwenForwardResult wide_baseline = wide.prefill({1, 2, 3, 4, 5, 6});
+    const pocket::ForwardResult wide_baseline = wide.prefill({1, 2, 3, 4, 5, 6});
     require(wide.prefix_cache_stats().computed_tokens == 6,
             "wide chunk prefill accounting");
-    const pocket::QwenForwardResult wide_again = wide.prefill({1, 2, 3, 4, 5, 6});
+    const pocket::ForwardResult wide_again = wide.prefill({1, 2, 3, 4, 5, 6});
     require(wide.prefix_cache_stats().resume_source == "live" &&
                 wide.prefix_cache_stats().computed_tokens == 0 &&
                 wide_again.top_token == wide_baseline.top_token,
@@ -388,7 +388,7 @@ void exercise_prefix_cache(const std::string& dir,
     pocket::QwenEngineOptions wide_cold = wide_options;
     wide_cold.prefix_cache = false;
     pocket::QwenEngine wide_cold_engine(dir, wide_cold, 2, 8);
-    const pocket::QwenForwardResult wide_expected =
+    const pocket::ForwardResult wide_expected =
         wide_cold_engine.prefill({1, 2, 3, 4, 5, 6});
     require(wide_baseline.top_token == wide_expected.top_token,
             "wide chunk prefill must match cold prefill");
@@ -530,19 +530,19 @@ void exercise_cache_lifecycle(const std::string& dir,
                 "TurboQuant K8V4 metadata is embedded in slots");
     }
 
-    const pocket::QwenForwardResult prefill = engine.prefill({1, 2, 3});
+    const pocket::ForwardResult prefill = engine.prefill({1, 2, 3});
     require(prefill.layers == 2 && prefill.dim == 128, "prefill metadata");
     require(prefill.position == 3, "chunked prefill position");
     require(prefill.top_token == 0, "zero fixture prefill greedy token");
     require(engine.activation_workspace_peak_bytes() > 0, "activation accounting");
 
-    const pocket::QwenForwardResult decoded = engine.decode_step(4);
+    const pocket::ForwardResult decoded = engine.decode_step(4);
     require(decoded.position == 4, "decode position");
     require(decoded.top_token == 0, "zero fixture decode greedy token");
 
     engine.reset();
     require(engine.position() == 0, "reset position");
-    const pocket::QwenForwardResult second = engine.prefill({4, 5});
+    const pocket::ForwardResult second = engine.prefill({4, 5});
     require(second.position == 2 && second.top_token == 0,
             "reset and second chunked prefill");
     std::cout << "  cache_dtype=" << pocket::qwen_kv_cache_dtype_name(cache_dtype)
@@ -566,12 +566,12 @@ void exercise_batch_isolation(const std::string& dir,
     pocket::QwenEngine engine(dir, options, 2, 8);
 
     // Slot 0: prompt [1, 2, 3]
-    const pocket::QwenForwardResult r0 = engine.prefill({1, 2, 3}, 0);
+    const pocket::ForwardResult r0 = engine.prefill({1, 2, 3}, 0);
     require(r0.position == 3, "slot 0 prefill position");
 
     // Slot 1: prompt [4, 5, 6] — different tokens, so the recurrent state
     // diverges immediately and the final checksum must differ.
-    const pocket::QwenForwardResult r1 = engine.prefill({4, 5, 6}, 1);
+    const pocket::ForwardResult r1 = engine.prefill({4, 5, 6}, 1);
     require(r1.position == 3, "slot 1 prefill position");
     // Phase 3.4: With zero weights, the output logits are deterministic zero
     // regardless of input, so checksums may match. The isolation test is that
@@ -579,8 +579,8 @@ void exercise_batch_isolation(const std::string& dir,
     // state. A non-zero-weight fixture would show different checksums here.
 
     // Decode step on each slot to verify state persists correctly
-    const pocket::QwenForwardResult d0 = engine.decode_step(r0.top_token, 0);
-    const pocket::QwenForwardResult d1 = engine.decode_step(r1.top_token, 1);
+    const pocket::ForwardResult d0 = engine.decode_step(r0.top_token, 0);
+    const pocket::ForwardResult d1 = engine.decode_step(r1.top_token, 1);
     require(d0.position == 4, "slot 0 decode position");
     require(d1.position == 4, "slot 1 decode position");
     // With zero weights, decode checksums also match; the test is successful

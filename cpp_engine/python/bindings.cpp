@@ -8,7 +8,7 @@
 #include "qwen_config.hpp"
 #include "qwen_engine.hpp"
 #include "qwen_weights.hpp"
-#include "qwen_batch_scheduler.hpp"
+#include "batch_scheduler.hpp"
 #include "device_runtime.hpp"
 
 #include <pybind11/functional.h>
@@ -22,7 +22,7 @@ using namespace pocket;
 
 namespace {
 
-py::dict forward_result_dict(const QwenForwardResult& result) {
+py::dict forward_result_dict(const ForwardResult& result) {
     py::dict out;
     out["token"] = result.token;
     out["layers"] = result.layers;
@@ -136,18 +136,18 @@ py::dict options_dict(const ForwardSmokeOptions& options) {
     return out;
 }
 
-QwenForwardResult qwen_prefill(QwenEngine& engine, const std::vector<int>& tokens,
+ForwardResult qwen_prefill(QwenEngine& engine, const std::vector<int>& tokens,
                                int slot_id) {
     py::gil_scoped_release release;
     return engine.prefill(tokens, slot_id);
 }
 
-QwenForwardResult qwen_decode(QwenEngine& engine, int token, int slot_id) {
+ForwardResult qwen_decode(QwenEngine& engine, int token, int slot_id) {
     py::gil_scoped_release release;
     return engine.decode_step(token, slot_id);
 }
 
-std::vector<QwenForwardResult> qwen_generate(QwenEngine& engine,
+std::vector<ForwardResult> qwen_generate(QwenEngine& engine,
                                              const std::vector<int>& tokens,
                                              int max_new_tokens) {
     py::gil_scoped_release release;
@@ -225,21 +225,21 @@ PYBIND11_MODULE(pocketllm_cpp, module) {
         .def_readwrite("kv_block_size", &QwenEngineOptions::kv_block_size)
         .def_readwrite("kv_cache_bytes", &QwenEngineOptions::kv_cache_bytes);
 
-    py::class_<QwenForwardResult>(module, "QwenForwardResult")
+    py::class_<ForwardResult>(module, "QwenForwardResult")
         .def(py::init<>())
-        .def_readwrite("token", &QwenForwardResult::token)
-        .def_readwrite("layers", &QwenForwardResult::layers)
-        .def_readwrite("dim", &QwenForwardResult::dim)
-        .def_readwrite("logits", &QwenForwardResult::logits)
-        .def_readwrite("top_token", &QwenForwardResult::top_token)
-        .def_readwrite("correct_drafts", &QwenForwardResult::correct_drafts)
-        .def_readwrite("bonus_token", &QwenForwardResult::bonus_token)
-        .def_readwrite("accept_tokens", &QwenForwardResult::accept_tokens)
-        .def_readwrite("accept_logits", &QwenForwardResult::accept_logits)
-        .def_readwrite("accept_checksums", &QwenForwardResult::accept_checksums)
-        .def_readwrite("top_logit", &QwenForwardResult::top_logit)
-        .def_readwrite("checksum", &QwenForwardResult::checksum)
-        .def_readwrite("position", &QwenForwardResult::position)
+        .def_readwrite("token", &ForwardResult::token)
+        .def_readwrite("layers", &ForwardResult::layers)
+        .def_readwrite("dim", &ForwardResult::dim)
+        .def_readwrite("logits", &ForwardResult::logits)
+        .def_readwrite("top_token", &ForwardResult::top_token)
+        .def_readwrite("correct_drafts", &ForwardResult::correct_drafts)
+        .def_readwrite("bonus_token", &ForwardResult::bonus_token)
+        .def_readwrite("accept_tokens", &ForwardResult::accept_tokens)
+        .def_readwrite("accept_logits", &ForwardResult::accept_logits)
+        .def_readwrite("accept_checksums", &ForwardResult::accept_checksums)
+        .def_readwrite("top_logit", &ForwardResult::top_logit)
+        .def_readwrite("checksum", &ForwardResult::checksum)
+        .def_readwrite("position", &ForwardResult::position)
         .def("as_dict", &forward_result_dict);
 
     py::class_<QwenMtpStats>(module, "QwenMtpStats")
@@ -408,19 +408,19 @@ PYBIND11_MODULE(pocketllm_cpp, module) {
         .def("worker_command_speculative_decode", &PersistentEngine::worker_command_speculative_decode)
         .def("worker_command_prime_draft_kv", &PersistentEngine::worker_command_prime_draft_kv);
 
-    // QwenBatchScheduler bindings (Phase 3.4)
-    py::class_<QwenBatchSamplingParams>(module, "QwenBatchSamplingParams")
+    // BatchScheduler bindings (Phase 3.4)
+    py::class_<BatchSamplingParams>(module, "QwenBatchSamplingParams")
         .def(py::init<>())
-        .def_readwrite("temperature", &QwenBatchSamplingParams::temperature)
-        .def_readwrite("top_p", &QwenBatchSamplingParams::top_p)
-        .def_readwrite("top_k", &QwenBatchSamplingParams::top_k)
-        .def_readwrite("seed", &QwenBatchSamplingParams::seed)
-        .def_readwrite("max_new_tokens", &QwenBatchSamplingParams::max_new_tokens)
+        .def_readwrite("temperature", &BatchSamplingParams::temperature)
+        .def_readwrite("top_p", &BatchSamplingParams::top_p)
+        .def_readwrite("top_k", &BatchSamplingParams::top_k)
+        .def_readwrite("seed", &BatchSamplingParams::seed)
+        .def_readwrite("max_new_tokens", &BatchSamplingParams::max_new_tokens)
         // Exposed so a Python benchmark can keep its token counts fixed
         // (ignore_eos) or stop on its own tokenizer's ids (stop_token_ids)
         // instead of the checkpoint's.
-        .def_readwrite("stop_token_ids", &QwenBatchSamplingParams::stop_token_ids)
-        .def_readwrite("ignore_eos", &QwenBatchSamplingParams::ignore_eos);
+        .def_readwrite("stop_token_ids", &BatchSamplingParams::stop_token_ids)
+        .def_readwrite("ignore_eos", &BatchSamplingParams::ignore_eos);
 
     py::class_<SchedulerGenerationResult>(module, "SchedulerGenerationResult")
         .def(py::init<>())
@@ -432,20 +432,20 @@ PYBIND11_MODULE(pocketllm_cpp, module) {
         .def_readwrite("total_seconds", &SchedulerGenerationResult::total_seconds)
         .def_readwrite("ttft_seconds", &SchedulerGenerationResult::ttft_seconds);
 
-    py::class_<QwenBatchScheduler::Stats>(module, "QwenBatchSchedulerStats")
+    py::class_<BatchScheduler::Stats>(module, "QwenBatchSchedulerStats")
         .def(py::init<>())
-        .def_readwrite("waiting_requests", &QwenBatchScheduler::Stats::waiting_requests)
-        .def_readwrite("running_requests", &QwenBatchScheduler::Stats::running_requests)
-        .def_readwrite("completed_requests", &QwenBatchScheduler::Stats::completed_requests)
-        .def_readwrite("cancelled_requests", &QwenBatchScheduler::Stats::cancelled_requests)
-        .def_readwrite("free_slots", &QwenBatchScheduler::Stats::free_slots);
+        .def_readwrite("waiting_requests", &BatchScheduler::Stats::waiting_requests)
+        .def_readwrite("running_requests", &BatchScheduler::Stats::running_requests)
+        .def_readwrite("completed_requests", &BatchScheduler::Stats::completed_requests)
+        .def_readwrite("cancelled_requests", &BatchScheduler::Stats::cancelled_requests)
+        .def_readwrite("free_slots", &BatchScheduler::Stats::free_slots);
 
-    py::class_<QwenBatchScheduler>(module, "QwenBatchScheduler")
+    py::class_<BatchScheduler>(module, "QwenBatchScheduler")
         .def(py::init<QwenEngine*, int>(),
              py::arg("engine"), py::arg("max_batch_size"))
-        .def("submit_request", [](QwenBatchScheduler& scheduler,
+        .def("submit_request", [](BatchScheduler& scheduler,
                                    const std::vector<int>& prompt_tokens,
-                                   const QwenBatchSamplingParams& sampling,
+                                   const BatchSamplingParams& sampling,
                                    py::object callback) {
             // Convert Python callback to C++ std::function
             std::function<void(const SchedulerGenerationResult&)> cpp_callback;
@@ -464,11 +464,11 @@ PYBIND11_MODULE(pocketllm_cpp, module) {
             py::gil_scoped_release release;
             return scheduler.submit_request(prompt_tokens, sampling, cpp_callback);
         }, py::arg("prompt_tokens"), py::arg("sampling"), py::arg("callback") = py::none())
-        .def("cancel_request", [](QwenBatchScheduler& scheduler, uint64_t request_id) {
+        .def("cancel_request", [](BatchScheduler& scheduler, uint64_t request_id) {
             py::gil_scoped_release release;
             return scheduler.cancel_request(request_id);
         }, py::arg("request_id"))
-        .def("poll_result", [](QwenBatchScheduler& scheduler, uint64_t request_id, int timeout_ms) -> py::object {
+        .def("poll_result", [](BatchScheduler& scheduler, uint64_t request_id, int timeout_ms) -> py::object {
             SchedulerGenerationResult result;
             bool success;
             {
@@ -481,11 +481,11 @@ PYBIND11_MODULE(pocketllm_cpp, module) {
                 return py::none();
             }
         }, py::arg("request_id"), py::arg("timeout_ms") = 30000)
-        .def("get_stats", [](QwenBatchScheduler& scheduler) {
+        .def("get_stats", [](BatchScheduler& scheduler) {
             return scheduler.get_stats();
         })
-        .def("is_running", &QwenBatchScheduler::is_running)
-        .def("stop", [](QwenBatchScheduler& scheduler) {
+        .def("is_running", &BatchScheduler::is_running)
+        .def("stop", [](BatchScheduler& scheduler) {
             py::gil_scoped_release release;
             scheduler.stop();
         });

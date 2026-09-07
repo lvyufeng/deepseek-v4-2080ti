@@ -16,7 +16,7 @@
 //        [--decode N] [--slots N] [--block-size N] [--budget-mb N]
 //        [--prefill-budget N] [--layers N]
 
-#include "qwen_batch_scheduler.hpp"
+#include "batch_scheduler.hpp"
 #include "qwen_engine.hpp"
 
 #include <algorithm>
@@ -99,10 +99,10 @@ double percentile(std::vector<double> values, double q) {
 // oversized request is a permanent no, and retrying would hide that.
 Result run_arm(pocket::QwenEngine& engine, const Options& opts,
                const std::vector<std::vector<int>>& prompts) {
-    pocket::QwenBatchScheduler scheduler(&engine, opts.slots);
+    pocket::BatchScheduler scheduler(&engine, opts.slots);
     scheduler.set_prefill_token_budget(opts.prefill_budget);
 
-    pocket::QwenBatchSamplingParams sampling;
+    pocket::BatchSamplingParams sampling;
     sampling.temperature = 0.0f;  // greedy, so both arms do the same work
     sampling.max_new_tokens = opts.decode;
     sampling.ignore_eos = true;   // every request runs its full decode length
