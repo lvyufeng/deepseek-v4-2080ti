@@ -108,10 +108,19 @@ class FakeNativeModule:
 
     def __init__(self) -> None:
         self.constructed: tuple[str, FakeOptions, int, int] | None = None
+        self.detected: list[str] = []
 
     @staticmethod
     def parse_qwen_kv_cache_dtype(value: str) -> str:
         return f"native:{value}"
+
+    @staticmethod
+    def registered_architectures() -> list[str]:
+        return ["deepseek_v4", "qwen3_5"]
+
+    def detect_architecture(self, checkpoint: str) -> str:
+        self.detected.append(checkpoint)
+        return "qwen3_5"
 
     def QwenEngine(
         self,
@@ -360,10 +369,68 @@ def test_cpp_capabilities_match_phase_one_surface() -> None:
     backend, _ = make_backend()
 
     capabilities = backend.capabilities
-    assert capabilities.models == ("qwen3.5",)
+    # The served models come from the native engine registry rather than a
+    # literal here, so a build that links a second engine reports it.
+    assert capabilities.models == ("qwen3_5",)
     assert capabilities.model_formats == ("safetensors",)
     assert capabilities.supports_streaming is True
     assert capabilities.supports_batch is False
+
+
+def test_cpp_capabilities_list_the_registered_architectures() -> None:
+    native = FakeNativeModule()
+    backend = CppBackend(
+        EngineArgs(model="checkpoint", backend="cpp"),
+        native_module=native,
+        tokenizer=FakeTokenizer(),
+    )
+
+    assert backend.capabilities.models == ("deepseek_v4", "qwen3_5")
+    backend.close()
+
+
+def test_cpp_engine_kind_is_detected_from_the_checkpoint() -> None:
+    native = FakeNativeModule()
+    backend = CppBackend(
+        EngineArgs(model="checkpoint", backend="cpp"),
+        native_module=native,
+        tokenizer=FakeTokenizer(),
+    )
+
+    # Detection ran against the checkpoint and picked the Qwen runtime, without
+    # an engine_kind having been supplied.
+    assert native.detected == ["checkpoint"]
+    assert native.constructed is not None
+    backend.close()
+
+
+def test_cpp_unknown_architecture_is_reported_not_guessed() -> None:
+    class UnknownArchModule(FakeNativeModule):
+        def detect_architecture(self, checkpoint: str) -> str:
+            return "llama"
+
+    with pytest.raises(UnsupportedFeatureError, match="llama"):
+        CppBackend(
+            EngineArgs(model="checkpoint", backend="cpp"),
+            native_module=UnknownArchModule(),
+            tokenizer=FakeTokenizer(),
+        )
+
+
+def test_cpp_engine_kind_override_skips_detection() -> None:
+    native = FakeNativeModule()
+    backend = CppBackend(
+        EngineArgs(
+            model="checkpoint",
+            backend="cpp",
+            backend_options={"engine_kind": "qwen"},
+        ),
+        native_module=native,
+        tokenizer=FakeTokenizer(),
+    )
+
+    assert native.detected == []
+    backend.close()
 
 
 def test_cpp_capabilities_follow_the_linked_device_backend() -> None:

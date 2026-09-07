@@ -81,7 +81,7 @@ def test_backend_option_values_are_json_typed() -> None:
     assert args.backend_options["max_state_snapshots"] == 16
     assert args.backend_options["mtp_adaptive"] is True
     assert args.backend_options["dspark_checkpoint"] == "/models/drafter"
-    assert args.backend_options["engine_kind"] == "qwen"
+    assert args.backend_options["engine_kind"] == "auto"
 
 
 def test_backend_option_requires_key_value_form() -> None:

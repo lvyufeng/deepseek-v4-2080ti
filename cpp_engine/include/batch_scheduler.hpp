@@ -99,9 +99,12 @@ public:
     // (0.94x), while 512 drops to 1330 (0.71x). 4096 keeps full prefill
     // throughput while capping a 65K prompt's uninterrupted hold at about 2.2s
     // instead of 56s. 0 disables chunking and restores the previous behaviour of
-    // running each prompt to completion.
+    // running each prompt to completion. An engine that does not declare
+    // chunked_prefill pins this at 0: it would run the whole prompt regardless,
+    // and holding a budget it ignores would only misreport what is happening.
     void set_prefill_token_budget(int tokens) {
-        prefill_token_budget_ = tokens < 0 ? 0 : tokens;
+        prefill_token_budget_ =
+            (!caps_.chunked_prefill || tokens < 0) ? 0 : tokens;
     }
     int prefill_token_budget() const { return prefill_token_budget_; }
 
@@ -109,6 +112,12 @@ public:
     // Returns true if result was populated, false on timeout
     bool poll_result(uint64_t request_id, SchedulerGenerationResult* out,
                      int timeout_ms = 30000);
+
+    // What the engine behind this scheduler declared it can do, read once at
+    // construction. `max_batch_size` may have been clamped to caps().max_slots,
+    // so this is how a caller learns the width it actually got.
+    const Capabilities& engine_caps() const { return caps_; }
+    int max_batch_size() const { return max_batch_size_; }
 
     // Get scheduler statistics
     struct Stats {
@@ -155,6 +164,11 @@ private:
 
     // Internal state
     InferenceEngine* engine_;
+    // Read once in the constructor. Capabilities are fixed by how the engine was
+    // built, so re-reading them per admission would be a virtual call answering
+    // the same question. Every place the scheduler used to infer a capability --
+    // "kv_total_blocks() == 0 means contiguous arena" -- consults this instead.
+    Capabilities caps_;
     int max_batch_size_;
     // Default 4096: the largest chunk that still measured full prefill
     // throughput on TP4 27B, so interleaving costs nothing on the prefill side.

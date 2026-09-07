@@ -38,6 +38,7 @@ set(POCKET_CORE_SOURCES
     core/safetensors_model.cpp
     core/weight_source.cpp
     core/model_config.cpp
+    core/model_registry.cpp
     core/qwen_config.cpp
     core/block_pool.cpp
     core/block_table.cpp
@@ -60,6 +61,8 @@ set(POCKET_ENGINE_SOURCES
     engine/qwen_target_head.cpp
     engine/qwen_engine.cpp
     engine/batch_scheduler.cpp
+    engine/persistent_engine_adapter.cpp
+    engine/engine_registry_builtin.cpp
 )
 
 # Engines that still call CUDA kernels by name. A runtime guard cannot help here:
@@ -887,6 +890,10 @@ set_target_properties(test_persistent_engine PROPERTIES RUNTIME_OUTPUT_DIRECTORY
 add_executable(test_batch_scheduler tests/test_batch_scheduler.cpp)
 target_link_libraries(test_batch_scheduler PRIVATE pocket_cpp_core)
 set_target_properties(test_batch_scheduler PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+
+add_executable(test_model_registry tests/test_model_registry.cpp)
+target_link_libraries(test_model_registry PRIVATE pocket_cpp_core)
+set_target_properties(test_model_registry PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 add_executable(bench_qwen_fp8_batch_crossover tests/bench_qwen_fp8_batch_crossover.cpp)
 target_link_libraries(bench_qwen_fp8_batch_crossover PRIVATE pocket_cpp_core)

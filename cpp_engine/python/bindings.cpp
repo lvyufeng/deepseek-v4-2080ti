@@ -10,6 +10,7 @@
 #include "qwen_weights.hpp"
 #include "batch_scheduler.hpp"
 #include "device_runtime.hpp"
+#include "model_registry.hpp"
 
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
@@ -184,6 +185,18 @@ std::vector<int> persistent_batch_verify(PersistentEngine& engine,
 
 PYBIND11_MODULE(pocketllm_cpp, module) {
     module.doc() = "Optional native PocketLLM C++ backend";
+
+    // Same registry the C++ CLI dispatches on, so a checkpoint reaches the same
+    // engine whichever side opens it. Registration is idempotent.
+    register_builtin_engines();
+
+    // Model selection. The Python backend constructs the concrete engine classes
+    // below directly, because it needs their full option surface, but it asks
+    // this which one a checkpoint wants rather than carrying its own rules.
+    module.def("detect_architecture", &detect_architecture,
+               "Architecture a checkpoint declares, normalized to a registry key");
+    module.def("registered_architectures", &registered_architectures,
+               "Architectures this build has an engine for, in sorted order");
 
     py::enum_<QwenKvCacheDType>(module, "QwenKvCacheDType")
         .value("Fp16", QwenKvCacheDType::Fp16)
