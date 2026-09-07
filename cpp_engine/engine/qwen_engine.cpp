@@ -6,12 +6,12 @@
 #include "cmd_channel.hpp"
 #include "cuda_ops.hpp"
 #include "device_runtime.hpp"
-#include "qwen_block_pool.hpp"
-#include "qwen_block_table.hpp"
+#include "block_pool.hpp"
+#include "block_table.hpp"
 #include "qwen_ops.hpp"
 #include "qwen_dspark.hpp"
 #include "qwen_dflash2.hpp"
-#include "qwen_sampler.hpp"
+#include "sampler_ops.hpp"
 #include "qwen_target_head.hpp"
 #include "tp_comm.hpp"
 
@@ -600,8 +600,8 @@ struct QwenEngine::Impl {
     // bookkeeping and the table owns the per-slot logical-to-physical map; the
     // device arenas stay in the per-layer k_cache/v_cache tensors, sized to the
     // pool rather than to max_batch_size * max_context.
-    std::unique_ptr<QwenBlockPool> block_pool;
-    std::unique_ptr<QwenBlockTable> block_table;
+    std::unique_ptr<BlockPool> block_pool;
+    std::unique_ptr<BlockTable> block_table;
     // Device mirror of the table, `[max_slots, max_blocks_per_seq]` int32.
     QwenDeviceTensor block_table_device;
 
@@ -940,9 +940,9 @@ struct QwenEngine::Impl {
                     "-token sequence needs " + std::to_string(blocks_per_seq) +
                     "; raise QwenEngineOptions::kv_cache_bytes");
             }
-            block_pool = std::make_unique<QwenBlockPool>(
+            block_pool = std::make_unique<BlockPool>(
                 num_blocks, options.kv_block_size);
-            block_table = std::make_unique<QwenBlockTable>(
+            block_table = std::make_unique<BlockTable>(
                 block_pool.get(), options.max_batch_size, max_context);
             const size_t image_elements =
                 static_cast<size_t>(block_table->max_slots()) *
@@ -3340,12 +3340,12 @@ struct QwenEngine::Impl {
                                       int local_vocab, int vocab_start,
                                       int position_after) {
         int top_k = options.top_k;
-        const int max_top_k = qwen_sampler_max_top_k();
+        const int max_top_k = sampler_max_top_k();
         if (top_k <= 0 || top_k > max_top_k) top_k = max_top_k;
         if (top_k > local_vocab) top_k = local_vocab;
 
         allocate(sample_rng_states,
-                 static_cast<size_t>(rows) * qwen_sampler_rng_state_size(),
+                 static_cast<size_t>(rows) * sampler_rng_state_size(),
                  {static_cast<uint64_t>(rows)}, SafeDType::I8);
         allocate_float(sample_uniforms, static_cast<size_t>(rows),
                        {static_cast<uint64_t>(rows)});
@@ -3383,7 +3383,7 @@ struct QwenEngine::Impl {
             allocate_float(sample_merged_logit, cand,
                            {static_cast<uint64_t>(cand)});
 
-            require_launch(qwen_local_topk_candidates(
+            require_launch(local_topk_candidates(
                 local_logits.f32_data(),
                 static_cast<int*>(sample_cand_token.data),
                 sample_cand_logit.f32_data(), rows, local_vocab, vocab_start,
@@ -3398,7 +3398,7 @@ struct QwenEngine::Impl {
                 static_cast<int*>(sample_merged_token.data),
                 sample_merged_logit.f32_data());
 
-            require_launch(qwen_sample_from_candidates(
+            require_launch(sample_from_candidates(
                 static_cast<const int*>(sample_merged_token.data),
                 sample_merged_logit.f32_data(),
                 static_cast<int*>(argmax_token.data), argmax_logit.f32_data(),
@@ -3416,7 +3416,7 @@ struct QwenEngine::Impl {
                     "Qwen TP requires an NCCL-enabled build");
             }
 #endif
-            require_launch(qwen_sample_top_k_top_p_rows(
+            require_launch(sample_top_k_top_p_rows(
                 local_logits.f32_data(),
                 static_cast<int*>(argmax_token.data), argmax_logit.f32_data(),
                 rows, local_vocab, vocab_start, options.temperature,

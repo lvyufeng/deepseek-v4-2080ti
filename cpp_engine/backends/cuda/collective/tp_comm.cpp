@@ -1,12 +1,12 @@
 #include "tp_comm.hpp"
 
 #ifdef POCKET_HAVE_TP_COMM
-// Both are required: qwen_sampler.hpp for the sampler uniforms and
+// Both are required: sampler_ops.hpp for the sampler uniforms and
 // qwen_cuda_ops.hpp for the DFlash2 top-k pack/merge kernels used by the
 // global-top1 collective below. The latter is only visible in NCCL builds,
 // which is why dropping it still compiled with NCCL off.
 #include "qwen_cuda_ops.hpp"
-#include "qwen_sampler.hpp"
+#include "sampler_ops.hpp"
 
 #include <cuda_runtime.h>
 #include <nccl.h>
@@ -304,10 +304,10 @@ void tp_global_topk_rows_device(int world, int rank, int device,
                              ncclFloat, comm, cuda_stream),
                "ncclAllGather device top-k logits");
     check_nccl(ncclGroupEnd(), "ncclGroupEnd device top-k");
-    if (!qwen_merge_topk_candidates(
+    if (!merge_topk_candidates(
             workspace.d_tokens, workspace.d_logits, d_global_tokens,
             d_global_logits, world, rows, top_k, cuda_stream)) {
-        throw std::runtime_error("Qwen sampling device top-k merge launch failed");
+        throw std::runtime_error("sampling device top-k merge launch failed");
     }
 }
 

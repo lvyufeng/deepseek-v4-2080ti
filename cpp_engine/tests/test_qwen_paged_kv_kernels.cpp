@@ -12,8 +12,8 @@
 // fixtures, so that a misaddressed token changes the softmax result instead of
 // being averaged away.
 
-#include "qwen_block_pool.hpp"
-#include "qwen_block_table.hpp"
+#include "block_pool.hpp"
+#include "block_table.hpp"
 #include "qwen_cuda_ops.hpp"
 #include "cuda_ops.hpp"
 
@@ -108,7 +108,7 @@ std::vector<int32_t> fragmented_table(const std::vector<int>& context_lens,
                                       unsigned seed) {
     const size_t slots = context_lens.size();
     std::vector<int32_t> image(slots * static_cast<size_t>(max_blocks_per_seq),
-                              pocket::QwenBlockPool::kInvalidBlock);
+                              pocket::BlockPool::kInvalidBlock);
     std::mt19937 rng(seed);
     int next = 0;
     std::vector<std::vector<int>> rows(slots);

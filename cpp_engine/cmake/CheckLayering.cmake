@@ -67,7 +67,7 @@ if(violations)
     message(FATAL_ERROR
         "Vendor SDK headers leaked into a device-agnostic layer:\n  ${pretty}\n"
         "Move the vendor dependency into backends/<vendor>/ and expose an "
-        "opaque handle instead (see include/qwen_sampler.hpp for the pattern).")
+        "opaque handle instead (see include/sampler_ops.hpp for the pattern).")
 endif()
 
 # Vendor runtime entry points the shared layers must call through
